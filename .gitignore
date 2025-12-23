@@ -94,3 +94,8 @@ mobile/ios/Podfile.lock
 
 # Android Packages
 *.apk
+
+
+*.apk
+.gradle/
+**/build/
