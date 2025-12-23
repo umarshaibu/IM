@@ -98,4 +98,4 @@ mobile/ios/Podfile.lock
 
 *.apk
 .gradle/
-**/build/
+**/build/*firebase-adminsdk*.json
