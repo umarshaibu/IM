@@ -11,6 +11,20 @@ export interface NativeCallEventData {
   conversationId?: string;
 }
 
+/**
+ * End a call from the native side - closes the native incoming call UI
+ */
+export const endNativeCall = (callId: string): void => {
+  if (Platform.OS === 'android' && CallEventModule?.endCall) {
+    try {
+      CallEventModule.endCall(callId);
+      console.log('NativeCallEvent: endCall sent for', callId);
+    } catch (error) {
+      console.log('NativeCallEvent: Error ending call:', error);
+    }
+  }
+};
+
 type CallEventListener = (event: NativeCallEventData) => void;
 
 class NativeCallEventService {

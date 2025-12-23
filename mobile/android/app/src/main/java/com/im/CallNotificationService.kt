@@ -56,6 +56,29 @@ class CallNotificationService : FirebaseMessagingService() {
         }
 
         fun getCurrentCallId(): String? = currentCallId
+
+        /**
+         * Called when a call ends or is cancelled - stops ringtone and closes the incoming call activity
+         */
+        fun endCall(context: Context, callId: String?) {
+            Log.d(TAG, "endCall called for callId: $callId, currentCallId: $currentCallId")
+
+            // Stop ringtone if this is the current call
+            if (callId == null || callId == currentCallId) {
+                stopRingtone()
+
+                // Cancel notification
+                val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                notificationManager.cancel(CALL_NOTIFICATION_ID)
+
+                // Send broadcast to close IncomingCallActivity
+                val closeIntent = Intent("com.im.CLOSE_INCOMING_CALL").apply {
+                    setPackage(context.packageName)
+                }
+                context.sendBroadcast(closeIntent)
+                Log.d(TAG, "Broadcast sent to close IncomingCallActivity")
+            }
+        }
     }
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
@@ -200,17 +223,17 @@ class CallNotificationService : FirebaseMessagingService() {
             notificationManager.createNotificationChannel(channel)
         }
 
-        // Create intent to open app
-        val fullScreenIntent = Intent(this, MainActivity::class.java)
-        fullScreenIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-                Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                Intent.FLAG_ACTIVITY_SINGLE_TOP
-        fullScreenIntent.putExtra("type", "call")
-        fullScreenIntent.putExtra("callId", callId)
-        fullScreenIntent.putExtra("callerId", callerId)
-        fullScreenIntent.putExtra("callerName", callerName)
-        fullScreenIntent.putExtra("callType", callType)
-        fullScreenIntent.putExtra("conversationId", conversationId)
+        // Create intent to open native IncomingCallActivity (lightweight, no React Native)
+        val fullScreenIntent = Intent(this, IncomingCallActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra(IncomingCallActivity.EXTRA_CALL_ID, callId)
+            putExtra(IncomingCallActivity.EXTRA_CALLER_ID, callerId)
+            putExtra(IncomingCallActivity.EXTRA_CALLER_NAME, callerName)
+            putExtra(IncomingCallActivity.EXTRA_CALL_TYPE, callType)
+            putExtra(IncomingCallActivity.EXTRA_CONVERSATION_ID, conversationId)
+        }
 
         val fullScreenPendingIntent = PendingIntent.getActivity(
             this,
@@ -220,9 +243,10 @@ class CallNotificationService : FirebaseMessagingService() {
         )
 
         // Create decline intent
-        val declineIntent = Intent(this, CallActionReceiver::class.java)
-        declineIntent.action = "DECLINE_CALL"
-        declineIntent.putExtra("callId", callId)
+        val declineIntent = Intent(this, CallActionReceiver::class.java).apply {
+            action = "DECLINE_CALL"
+            putExtra("callId", callId)
+        }
 
         val declinePendingIntent = PendingIntent.getBroadcast(
             this,
@@ -231,16 +255,17 @@ class CallNotificationService : FirebaseMessagingService() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // Create answer intent
-        val answerIntent = Intent(this, MainActivity::class.java)
-        answerIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        answerIntent.putExtra("type", "call")
-        answerIntent.putExtra("callId", callId)
-        answerIntent.putExtra("callerId", callerId)
-        answerIntent.putExtra("callerName", callerName)
-        answerIntent.putExtra("callType", callType)
-        answerIntent.putExtra("conversationId", conversationId)
-        answerIntent.putExtra("action", "answer")
+        // Create answer intent - goes to MainActivity to start the actual call
+        val answerIntent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("type", "call")
+            putExtra("callId", callId)
+            putExtra("callerId", callerId)
+            putExtra("callerName", callerName)
+            putExtra("callType", callType)
+            putExtra("conversationId", conversationId)
+            putExtra("action", "answer")
+        }
 
         val answerPendingIntent = PendingIntent.getActivity(
             this,

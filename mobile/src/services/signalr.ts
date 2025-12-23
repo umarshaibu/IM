@@ -11,6 +11,7 @@ import { Message, Call } from '../types';
 import { AppConfig } from '../config';
 import { callSoundService } from './CallSoundService';
 import { NativeCallSound } from './NativeCallSound';
+import { endNativeCall } from './NativeCallEvent';
 
 // SignalR URL is now centralized in AppConfig
 const API_URL = AppConfig.signalRUrl;
@@ -233,6 +234,9 @@ const initializeCallHub = async (accessToken: string): Promise<void> => {
     callSoundService.stopAllSounds();
     NativeCallSound.stopRingtone();
 
+    // Close native incoming call activity if it's showing
+    endNativeCall(callId);
+
     if (incomingCall?.id === callId) {
       useCallStore.getState().setIncomingCall(null);
     }
@@ -261,6 +265,9 @@ const initializeCallHub = async (accessToken: string): Promise<void> => {
     // Stop all sounds (both JS and native) immediately
     callSoundService.stopAllSounds();
     NativeCallSound.stopRingtone();
+
+    // Close native incoming call activity if it's showing
+    endNativeCall(callId);
 
     if (activeCall?.id === callId || incomingCall?.id === callId) {
       console.log('Resetting call state...');

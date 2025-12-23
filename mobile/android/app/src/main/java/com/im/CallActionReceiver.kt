@@ -1,5 +1,6 @@
 package com.im
 
+import android.app.ActivityManager
 import android.app.NotificationManager
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -31,6 +32,9 @@ class CallActionReceiver : BroadcastReceiver() {
                 val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 notificationManager.cancel(CALL_NOTIFICATION_ID)
 
+                // Close IncomingCallActivity if it's open
+                closeIncomingCallActivity(context)
+
                 // Store the decline call ID - this will be handled when the app opens
                 pendingDeclineCallId = callId
 
@@ -39,6 +43,19 @@ class CallActionReceiver : BroadcastReceiver() {
 
                 Log.d(TAG, "Decline stored for call: $callId")
             }
+        }
+    }
+
+    private fun closeIncomingCallActivity(context: Context) {
+        try {
+            // Send broadcast to close IncomingCallActivity
+            val closeIntent = Intent("com.im.CLOSE_INCOMING_CALL").apply {
+                setPackage(context.packageName)
+            }
+            context.sendBroadcast(closeIntent)
+            Log.d(TAG, "Sent close broadcast to IncomingCallActivity")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error closing IncomingCallActivity: ${e.message}")
         }
     }
 }

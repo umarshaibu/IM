@@ -90,3 +90,7 @@ buck-out/
 
 # CocoaPods
 mobile/ios/Podfile.lock
+
+
+# Android Packages
+*.apk

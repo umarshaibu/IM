@@ -120,6 +120,16 @@ class CallEventModule(private val reactContext: ReactApplicationContext) : React
         promise.resolve(null)
     }
 
+    /**
+     * Called by React Native when a call ends (caller hangs up or call is cancelled)
+     * This closes the native incoming call activity if it's showing
+     */
+    @ReactMethod
+    fun endCall(callId: String) {
+        Log.d(TAG, "endCall called from React Native for callId: $callId")
+        CallNotificationService.endCall(reactContext, callId)
+    }
+
     @ReactMethod
     fun addListener(eventName: String) {
         // Required for RN built in Event Emitter Calls

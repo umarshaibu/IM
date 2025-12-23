@@ -70,6 +70,18 @@
         android:resource="@color/primary"
         tools:replace="android:resource" />
 
+      <!-- Native incoming call screen - displays immediately without loading React Native -->
+      <activity
+        android:name=".IncomingCallActivity"
+        android:label="Incoming Call"
+        android:theme="@style/IncomingCallTheme"
+        android:launchMode="singleTop"
+        android:excludeFromRecents="true"
+        android:taskAffinity=""
+        android:exported="false"
+        android:showWhenLocked="true"
+        android:turnScreenOn="true" />
+
       <activity
         android:name=".MainActivity"
         android:label="@string/app_name"
