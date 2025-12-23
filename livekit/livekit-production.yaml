@@ -1,0 +1,62 @@
+port: 7880
+bind_addresses:
+  - "0.0.0.0"  # Listen on all network interfaces
+
+rtc:
+  # Port range for WebRTC connections
+  port_range_start: 50000
+  port_range_end: 60000
+  tcp_port: 7881
+  udp_port: 7882
+  use_external_ip: true  # Important: LiveKit will detect and use your VPS public IP
+
+  # Optional: If auto-detection fails, manually specify your VPS public IP
+  # node_ip: "YOUR_VPS_PUBLIC_IP"
+
+# API Keys for authentication
+# IMPORTANT: Use the same keys as in your backend appsettings.json
+keys:
+  devkey: "yezoAaIJQsQOjYr9ZJobVV/mbGE1a4j+uRXuNjZbkL4="
+
+# Logging configuration
+logging:
+  level: info  # Options: debug, info, warn, error
+  sample: false
+
+# Room settings
+room:
+  auto_create: true  # Automatically create rooms when participants join
+  empty_timeout: 300  # Seconds before empty room is deleted (5 minutes)
+  max_participants: 100  # Maximum participants per room
+
+# TURN server configuration - ENABLED for production
+# Helps clients behind strict firewalls/NAT to connect
+turn:
+  enabled: true
+  # Domain for TURN server (must have valid SSL cert)
+  domain: "test.thrivecoretech.com"
+  # SSL certificate files
+  cert_file: "C:\\LiveKit\\cert.pem"
+  key_file: "C:\\LiveKit\\privkey.pem"
+  # TLS port for TURN over TLS (TURNS)
+  tls_port: 5349
+  # Standard TURN UDP port
+  udp_port: 3478
+
+# Webhook configuration (optional)
+# Use this to receive events from LiveKit
+# webhook:
+#   api_key: "your-webhook-api-key"
+#   urls:
+#     - "http://YOUR_BACKEND_IP:5000/api/livekit/webhook"
+
+# Redis configuration (optional, for multi-node deployment)
+# redis:
+#   address: "localhost:6379"
+#   username: ""
+#   password: ""
+#   db: 0
+
+# Development settings
+# Set to false for production
+development: false

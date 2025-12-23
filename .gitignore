@@ -1,0 +1,92 @@
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Node modules
+node_modules/
+mobile/node_modules/
+
+# Build outputs
+dist/
+build/
+*.js.map
+
+# .NET
+backend/bin/
+backend/obj/
+backend/*/bin/
+backend/*/obj/
+*.user
+*.userosscache
+*.suo
+*.nupkg
+*.snupkg
+.vs/
+*.DotSettings.user
+
+# React Native
+mobile/android/app/build/
+mobile/android/.gradle/
+mobile/android/build/
+mobile/android/local.properties
+mobile/ios/build/
+mobile/ios/Pods/
+mobile/ios/*.xcworkspace/
+mobile/ios/*.xcodeproj/xcuserdata/
+mobile/.expo/
+*.hprof
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Test coverage
+coverage/
+
+# Secrets and credentials
+*.pem
+*.key
+*.crt
+firebase-credentials.json
+google-services.json
+GoogleService-Info.plist
+
+# Docker
+docker-compose.override.yml
+
+# Uploads (in production, these should be in external storage)
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# SSL certificates
+nginx/ssl/*
+!nginx/ssl/.gitkeep
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Metro bundler
+.metro-health-check*
+
+# Buck
+.buckd/
+buck-out/
+
+# CocoaPods
+mobile/ios/Podfile.lock

@@ -1,0 +1,13 @@
+using IM.Core.Entities;
+
+namespace IM.Core.Interfaces;
+
+public interface INotificationService
+{
+    Task SendMessageNotificationAsync(Message message, IEnumerable<Guid> recipientIds);
+    Task SendCallNotificationAsync(Call call, IEnumerable<Guid> recipientIds);
+    Task SendGroupNotificationAsync(Conversation conversation, string message, IEnumerable<Guid> recipientIds);
+    Task RegisterDeviceTokenAsync(Guid userId, string token, string platform, string? deviceId);
+    Task UnregisterDeviceTokenAsync(Guid userId, string token);
+    Task SendBroadcastNotificationAsync(string title, string body);
+}

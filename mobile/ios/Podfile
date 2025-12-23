@@ -1,0 +1,101 @@
+# Resolve react_native_pods.rb with node to allow for hoisting
+require Pod::Executable.execute_command('node', ['-p',
+  'require.resolve(
+    "react-native/scripts/react_native_pods.rb",
+    {paths: [process.argv[1]]},
+  )', __dir__]).strip
+
+platform :ios, min_ios_version_supported
+prepare_react_native_project!
+
+# Enable modular headers for Firebase dependencies
+use_modular_headers!
+pod 'GoogleUtilities', :modular_headers => true
+pod 'FirebaseCore', :modular_headers => true
+pod 'FirebaseCoreInternal', :modular_headers => true
+
+# Fix TOCropViewController compatibility with iOS 18 SDK
+pod 'TOCropViewController', '~> 2.7'
+
+# React Native Config for environment variables
+pod 'react-native-config', :path => '../node_modules/react-native-config'
+
+# If you are using a `react-native-flipper` your iOS build will fail when `NO_FLIPPER=1` is set.
+# because `react-native-flipper` depends on (FlipperKit,...) that will be excluded
+#
+# To fix this you can also exclude `react-native-flipper` using a `react-native.config.js`
+# ```js
+# module.exports = {
+#   dependencies: {
+#     ...(process.env.NO_FLIPPER ? { 'react-native-flipper': { platforms: { ios: null } } } : {}),
+# ```
+flipper_config = ENV['NO_FLIPPER'] == "1" ? FlipperConfiguration.disabled : FlipperConfiguration.enabled
+
+linkage = ENV['USE_FRAMEWORKS']
+if linkage != nil
+  Pod::UI.puts "Configuring Pod with #{linkage}ally linked Frameworks".green
+  use_frameworks! :linkage => linkage.to_sym
+end
+
+target 'IM' do
+  config = use_native_modules!
+
+  use_react_native!(
+    :path => config[:reactNativePath],
+    # Enables Flipper.
+    #
+    # Note that if you have use_frameworks! enabled, Flipper will not work and
+    # you should disable the next line.
+    :flipper_configuration => flipper_config,
+    # An absolute path to your application root.
+    :app_path => "#{Pod::Config.instance.installation_root}/.."
+  )
+
+  target 'IMTests' do
+    inherit! :complete
+    # Pods for testing
+  end
+
+  post_install do |installer|
+    # https://github.com/facebook/react-native/blob/main/packages/react-native/scripts/react_native_pods.rb#L197-L202
+    react_native_post_install(
+      installer,
+      config[:reactNativePath],
+      :mac_catalyst_enabled => false
+    )
+
+    # Fix TOCropViewController compatibility with iOS 18+
+    installer.pods_project.targets.each do |target|
+      if target.name == 'TOCropViewController'
+        target.build_configurations.each do |config|
+          config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.4'
+        end
+      end
+    end
+
+    # Fix duplicate font resources - Use legacy build system for resources
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |config|
+        config.build_settings['VALIDATE_WORKSPACE_SKIPPED_SDK_FRAMEWORKS'] = 'OpenGLES'
+      end
+    end
+
+    # Remove duplicate font files from Copy Pods Resources
+    installer.aggregate_targets.each do |aggregate_target|
+      aggregate_target.user_project.targets.each do |target|
+        if target.name == 'IM'
+          resources_build_phase = target.build_phases.find do |build_phase|
+            build_phase.is_a?(Xcodeproj::Project::Object::PBXShellScriptBuildPhase) &&
+            build_phase.name == '[CP] Copy Pods Resources'
+          end
+
+          if resources_build_phase
+            output_paths = resources_build_phase.output_paths || []
+            unique_paths = output_paths.uniq
+            resources_build_phase.output_paths = unique_paths if output_paths.size != unique_paths.size
+          end
+        end
+      end
+    end
+  end
+end

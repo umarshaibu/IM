@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Background -->
+  <rect width="1024" height="1024" rx="200" fill="#128C7E"/>
+
+  <!-- Chat bubble 1 (left) -->
+  <path d="M280 350 L280 550 Q280 580 310 580 L350 580 L350 650 L420 580 L550 580 Q580 580 580 550 L580 350 Q580 320 550 320 L310 320 Q280 320 280 350 Z" fill="white"/>
+
+  <!-- Chat bubble 2 (right, overlapping) -->
+  <path d="M444 444 L444 644 Q444 674 474 674 L674 674 L744 744 L744 674 L714 674 Q744 674 744 644 L744 444 Q744 414 714 414 L474 414 Q444 414 444 444 Z" fill="rgba(255,255,255,0.85)"/>
+
+  <!-- IM text -->
+  <text x="512" y="540" font-family="Arial, sans-serif" font-size="180" font-weight="bold" fill="#128C7E" text-anchor="middle">IM</text>
+</svg>
