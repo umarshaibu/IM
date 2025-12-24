@@ -15,6 +15,16 @@ using IM.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Configure logging to file for production debugging
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Logging.AddDebug();
+
+// Add file logging for production
+var logPath = Path.Combine(AppContext.BaseDirectory, "logs");
+Directory.CreateDirectory(logPath);
+builder.Logging.AddProvider(new FileLoggerProvider(Path.Combine(logPath, $"im-api-{DateTime.Now:yyyy-MM-dd}.log")));
+
 // Add services to the container
 builder.Services.AddControllers()
     .AddJsonOptions(options =>

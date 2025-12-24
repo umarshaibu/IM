@@ -71,6 +71,11 @@ class MainActivity : ReactActivity() {
     val conversationId = intent.getStringExtra("conversationId") ?: ""
     val action = intent.getStringExtra("action") ?: "incoming"
 
+    // Get room token data if available (from native join call)
+    val roomToken = intent.getStringExtra("roomToken")
+    val roomId = intent.getStringExtra("roomId")
+    val liveKitUrl = intent.getStringExtra("liveKitUrl")
+
     try {
       val params = Arguments.createMap()
       params.putString("action", action)
@@ -79,6 +84,14 @@ class MainActivity : ReactActivity() {
       params.putString("callerName", callerName)
       params.putString("callType", callType)
       params.putString("conversationId", conversationId)
+
+      // Include room token data if the call was already joined via native API
+      if (roomToken != null) {
+        params.putString("roomToken", roomToken)
+        params.putString("roomId", roomId)
+        params.putString("liveKitUrl", liveKitUrl)
+        Log.d(TAG, "Including room token from native join: roomId=$roomId")
+      }
 
       CallEventModule.sendCallEvent(params)
       pendingCallIntent = null

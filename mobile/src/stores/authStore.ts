@@ -8,6 +8,8 @@ import {
   getUserProfile,
   clearAll,
 } from '../utils/storage';
+import { saveNativeCredentials, clearNativeCredentials } from '../services/NativeCallEvent';
+import { AppConfig } from '../config';
 
 interface AuthState {
   isAuthenticated: boolean;
@@ -44,6 +46,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const user = getUserProfile();
 
       if (tokens && user) {
+        // Save credentials for native API calls (Android)
+        saveNativeCredentials(tokens.accessToken, AppConfig.apiUrl);
+
         set({
           isAuthenticated: true,
           isLoading: false,
@@ -68,6 +73,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     });
     saveUserProfile(user);
 
+    // Save credentials for native API calls (Android)
+    saveNativeCredentials(tokens.accessToken, AppConfig.apiUrl);
+
     set({
       isAuthenticated: true,
       userId,
@@ -80,6 +88,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   logout: async () => {
     await clearAuthTokens();
     clearAll();
+
+    // Clear native credentials on logout
+    clearNativeCredentials();
 
     set({
       isAuthenticated: false,
@@ -113,6 +124,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
     });
+
+    // Update native credentials when tokens are refreshed
+    saveNativeCredentials(tokens.accessToken, AppConfig.apiUrl);
+
     set({
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,

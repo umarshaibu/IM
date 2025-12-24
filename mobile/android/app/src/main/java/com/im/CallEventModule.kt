@@ -111,6 +111,12 @@ class CallEventModule(private val reactContext: ReactApplicationContext) : React
                 params.putString("callerName", intent.getStringExtra("callerName") ?: "Unknown")
                 params.putString("callType", intent.getStringExtra("callType") ?: "Voice")
                 params.putString("conversationId", intent.getStringExtra("conversationId") ?: "")
+
+                // Include room token data if available (from native join call)
+                intent.getStringExtra("roomToken")?.let { params.putString("roomToken", it) }
+                intent.getStringExtra("roomId")?.let { params.putString("roomId", it) }
+                intent.getStringExtra("liveKitUrl")?.let { params.putString("liveKitUrl", it) }
+
                 MainActivity.pendingCallIntent = null
                 promise.resolve(params)
                 return
@@ -128,6 +134,25 @@ class CallEventModule(private val reactContext: ReactApplicationContext) : React
     fun endCall(callId: String) {
         Log.d(TAG, "endCall called from React Native for callId: $callId")
         CallNotificationService.endCall(reactContext, callId)
+    }
+
+    /**
+     * Save auth credentials for native API calls
+     * This allows the native IncomingCallActivity to join/decline calls via HTTP
+     */
+    @ReactMethod
+    fun saveCredentials(accessToken: String, apiUrl: String) {
+        Log.d(TAG, "Saving credentials for native API calls")
+        CallApiClient.saveCredentials(reactContext, accessToken, apiUrl)
+    }
+
+    /**
+     * Clear auth credentials on logout
+     */
+    @ReactMethod
+    fun clearCredentials() {
+        Log.d(TAG, "Clearing credentials")
+        CallApiClient.clearCredentials(reactContext)
     }
 
     @ReactMethod

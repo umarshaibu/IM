@@ -294,11 +294,31 @@ public class CallHub : Hub
     {
         var userId = GetUserId();
 
+        // Get the call before ending it to know who to notify
+        var call = await _callService.GetCallByIdAsync(callId);
+
         var success = await _callService.EndCallAsync(callId, userId);
 
         if (success)
         {
             await Clients.Group($"call_{callId}").SendAsync("CallEnded", callId, userId);
+
+            // Send push notification to all other participants to cancel their incoming call
+            // This is important when the receiver's device is locked and showing native incoming call UI
+            if (call != null)
+            {
+                var otherParticipantIds = call.Participants
+                    .Where(p => p.UserId != userId)
+                    .Select(p => p.UserId)
+                    .ToList();
+
+                if (otherParticipantIds.Any())
+                {
+                    _logger.LogInformation("Sending call ended push notification to {Count} participants for call {CallId}",
+                        otherParticipantIds.Count, callId);
+                    await _notificationService.SendCallEndedNotificationAsync(callId, otherParticipantIds);
+                }
+            }
 
             lock (_activeCallParticipants)
             {

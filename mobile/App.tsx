@@ -75,12 +75,17 @@ const App: React.FC = () => {
       } else if (event.action === 'answer' && event.callId) {
         // User answered call from native notification - navigate to call screen
         console.log('Answering call from native notification:', event.callId);
+        console.log('Room token from native:', event.roomToken ? 'present' : 'not present');
         clearIncomingCall();
         navigationRef.current?.navigate('Call', {
           callId: event.callId,
           conversationId: event.conversationId,
           type: event.callType === 'Video' ? 'Video' : 'Voice',
           isIncoming: true,
+          // Pass room token data from native join call (if available)
+          roomToken: event.roomToken,
+          roomId: event.roomId,
+          liveKitUrl: event.liveKitUrl,
         });
       } else if (event.action === 'incoming' && event.callId) {
         // App opened from native notification - show incoming call screen

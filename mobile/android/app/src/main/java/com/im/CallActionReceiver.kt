@@ -35,6 +35,12 @@ class CallActionReceiver : BroadcastReceiver() {
                 // Close IncomingCallActivity if it's open
                 closeIncomingCallActivity(context)
 
+                // Decline the call via HTTP API directly
+                // This ensures the backend knows we declined even if React Native isn't loaded
+                CallApiClient.declineCall(context, callId) { success, error ->
+                    Log.d(TAG, "Decline API call result: success=$success, error=$error")
+                }
+
                 // Store the decline call ID - this will be handled when the app opens
                 pendingDeclineCallId = callId
 

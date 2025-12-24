@@ -9,6 +9,10 @@ export interface NativeCallEventData {
   callerName?: string;
   callType?: 'Voice' | 'Video';
   conversationId?: string;
+  // Room token data from native join call (when call is answered via native UI)
+  roomToken?: string;
+  roomId?: string;
+  liveKitUrl?: string;
 }
 
 /**
@@ -21,6 +25,36 @@ export const endNativeCall = (callId: string): void => {
       console.log('NativeCallEvent: endCall sent for', callId);
     } catch (error) {
       console.log('NativeCallEvent: Error ending call:', error);
+    }
+  }
+};
+
+/**
+ * Save credentials for native API calls
+ * This allows the native IncomingCallActivity to join/decline calls via HTTP
+ * without waiting for React Native to initialize
+ */
+export const saveNativeCredentials = (accessToken: string, apiUrl: string): void => {
+  if (Platform.OS === 'android' && CallEventModule?.saveCredentials) {
+    try {
+      CallEventModule.saveCredentials(accessToken, apiUrl);
+      console.log('NativeCallEvent: Credentials saved for native API calls');
+    } catch (error) {
+      console.log('NativeCallEvent: Error saving credentials:', error);
+    }
+  }
+};
+
+/**
+ * Clear credentials on logout
+ */
+export const clearNativeCredentials = (): void => {
+  if (Platform.OS === 'android' && CallEventModule?.clearCredentials) {
+    try {
+      CallEventModule.clearCredentials();
+      console.log('NativeCallEvent: Credentials cleared');
+    } catch (error) {
+      console.log('NativeCallEvent: Error clearing credentials:', error);
     }
   }
 };

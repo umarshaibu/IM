@@ -86,28 +86,36 @@ class CallNotificationService : FirebaseMessagingService() {
         Log.d(TAG, "Message data: ${remoteMessage.data}")
 
         val data = remoteMessage.data
+        val type = data["type"]
 
-        // Only handle call notifications natively
-        if (data["type"] == "call") {
-            Log.d(TAG, "Handling call notification natively")
+        when (type) {
+            "call" -> {
+                Log.d(TAG, "Handling incoming call notification natively")
 
-            val callId = data["callId"] ?: return
-            val callerName = data["callerName"] ?: "Unknown"
-            val callType = data["callType"] ?: "Voice"
-            val callerId = data["callerId"] ?: ""
-            val conversationId = data["conversationId"] ?: ""
+                val callId = data["callId"] ?: return
+                val callerName = data["callerName"] ?: "Unknown"
+                val callType = data["callType"] ?: "Voice"
+                val callerId = data["callerId"] ?: ""
+                val conversationId = data["conversationId"] ?: ""
 
-            // Wake up the device
-            wakeDevice()
+                // Wake up the device
+                wakeDevice()
 
-            // Start playing ringtone
-            startRingtone(callId)
+                // Start playing ringtone (use default phone ringtone for video calls)
+                startRingtone(callId, callType)
 
-            // Show full-screen notification
-            showCallNotification(callId, callerName, callType, callerId, conversationId)
-        } else {
-            // Let the JS side handle non-call notifications
-            super.onMessageReceived(remoteMessage)
+                // Show full-screen notification
+                showCallNotification(callId, callerName, callType, callerId, conversationId)
+            }
+            "call_ended" -> {
+                Log.d(TAG, "Handling call ended notification")
+                val callId = data["callId"]
+                endCall(applicationContext, callId)
+            }
+            else -> {
+                // Let the JS side handle non-call notifications
+                super.onMessageReceived(remoteMessage)
+            }
         }
     }
 
@@ -130,13 +138,15 @@ class CallNotificationService : FirebaseMessagingService() {
         }
     }
 
-    private fun startRingtone(callId: String) {
+    private fun startRingtone(callId: String, callType: String = "Voice") {
         try {
             // Store current call ID
             currentCallId = callId
 
-            // Get default ringtone URI
+            // Use default device ringtone for all call types (voice and video)
             val ringtoneUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+
+            Log.d(TAG, "Using default ringtone URI: $ringtoneUri for $callType call")
 
             ringtone = RingtoneManager.getRingtone(applicationContext, ringtoneUri)
 
@@ -151,7 +161,7 @@ class CallNotificationService : FirebaseMessagingService() {
             audioManager.setStreamVolume(AudioManager.STREAM_RING, maxVolume, 0)
 
             ringtone?.play()
-            Log.d(TAG, "Ringtone started playing for call: $callId")
+            Log.d(TAG, "Ringtone started playing for call: $callId (type: $callType)")
 
             // Start vibration
             startVibration()

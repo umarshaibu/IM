@@ -88,7 +88,7 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CallScreen: React.FC = () => {
   const route = useRoute<CallScreenRouteProp>();
   const navigation = useNavigation();
-  const { conversationId, type, callId, isIncoming } = route.params;
+  const { conversationId, type, callId, isIncoming, roomToken: preJoinedRoomToken, roomId: preJoinedRoomId, liveKitUrl: preJoinedLiveKitUrl } = route.params;
   const { userId } = useAuthStore();
   const { setActiveCall, clearActiveCall, activeCall } = useCallStore();
   const currentUserId = userId || '';
@@ -215,14 +215,24 @@ const CallScreen: React.FC = () => {
       let liveKitUrl: string;
 
       if (isIncoming && existingCallId) {
-        // Join existing call via SignalR
-        const response = await signalr.joinCall(existingCallId);
-        if (!response) {
-          throw new Error('Failed to join call - SignalR returned null');
+        // Check if we have pre-fetched room token from native code
+        // This happens when the call was answered from the native IncomingCallActivity
+        if (preJoinedRoomToken && preJoinedLiveKitUrl) {
+          console.log('Using pre-fetched room token from native code');
+          call = { id: existingCallId };
+          roomToken = preJoinedRoomToken;
+          liveKitUrl = preJoinedLiveKitUrl;
+        } else {
+          // Join existing call via SignalR (fallback when not answered from native)
+          console.log('Joining call via SignalR');
+          const response = await signalr.joinCall(existingCallId);
+          if (!response) {
+            throw new Error('Failed to join call - SignalR returned null');
+          }
+          call = { id: existingCallId };
+          roomToken = response.roomToken;
+          liveKitUrl = response.liveKitUrl;
         }
-        call = { id: existingCallId };
-        roomToken = response.roomToken;
-        liveKitUrl = response.liveKitUrl;
       } else {
         // Initiate new call via SignalR
         const response = await signalr.initiateCall(currentConversationId, type);

@@ -26,25 +26,22 @@ try {
 const isDev = __DEV__;
 
 // Get API URL based on platform and environment
+// Now respects .env file values even in dev mode
 const getApiUrl = (): string => {
-  if (isDev) {
-    // Development: Use platform-specific localhost
-    return Platform.OS === 'android'
-      ? Config.API_URL_ANDROID || 'http://10.0.2.2:5001'
-      : Config.API_URL || 'http://localhost:5001';
+  // Always use env values if provided (allows testing production backend in dev)
+  if (Platform.OS === 'android') {
+    return Config.API_URL_ANDROID || Config.API_URL || 'http://10.0.2.2:5001';
   }
-  // Production: Use same URL for both platforms
-  return Config.API_URL || 'https://test.thrivecoretech.com';
+  return Config.API_URL || 'http://localhost:5001';
 };
 
 // Get SignalR URL based on platform and environment
+// Now respects .env file values even in dev mode
 const getSignalRUrl = (): string => {
-  if (isDev) {
-    return Platform.OS === 'android'
-      ? Config.SIGNALR_URL_ANDROID || 'http://10.0.2.2:5001'
-      : Config.SIGNALR_URL || 'http://localhost:5001';
+  if (Platform.OS === 'android') {
+    return Config.SIGNALR_URL_ANDROID || Config.SIGNALR_URL || 'http://10.0.2.2:5001';
   }
-  return Config.SIGNALR_URL || 'https://test.thrivecoretech.com';
+  return Config.SIGNALR_URL || 'http://localhost:5001';
 };
 
 // Get LiveKit URL

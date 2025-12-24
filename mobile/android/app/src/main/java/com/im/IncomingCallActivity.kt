@@ -254,39 +254,87 @@ class IncomingCallActivity : AppCompatActivity() {
     private fun acceptCall() {
         Log.d(TAG, "Accepting call: $callId")
 
+        val currentCallId = callId ?: return
+
+        // Disable buttons to prevent double-tap
+        findViewById<ImageButton>(R.id.acceptButton)?.isEnabled = false
+        findViewById<ImageButton>(R.id.declineButton)?.isEnabled = false
+
+        // Update status text
+        findViewById<TextView>(R.id.statusText)?.text = "Connecting..."
+
         // Stop ringtone and cancel notification
         stopRingtoneAndNotification()
 
-        // Launch MainActivity with call data to open the call screen
-        val intent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra("type", "call")
-            putExtra("callId", callId)
-            putExtra("callerId", callerId)
-            putExtra("callerName", callerName)
-            putExtra("callType", callType)
-            putExtra("conversationId", conversationId)
-            putExtra("action", "answer")
-        }
-        startActivity(intent)
+        // Join the call via HTTP API BEFORE launching the app
+        // This ensures the backend knows we answered even if React Native takes time to load
+        CallApiClient.joinCall(this, currentCallId) { result ->
+            runOnUiThread {
+                if (result.success) {
+                    Log.d(TAG, "Call joined via API successfully, launching app")
 
-        // Close this activity
-        finish()
+                    // Launch MainActivity with call data including the room token
+                    val intent = Intent(this, MainActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        putExtra("type", "call")
+                        putExtra("callId", currentCallId)
+                        putExtra("callerId", callerId)
+                        putExtra("callerName", callerName)
+                        putExtra("callType", callType)
+                        putExtra("conversationId", conversationId)
+                        putExtra("action", "answer")
+                        // Pass the room token so React Native can connect directly
+                        putExtra("roomToken", result.roomToken)
+                        putExtra("roomId", result.roomId)
+                        putExtra("liveKitUrl", result.liveKitUrl)
+                    }
+                    startActivity(intent)
+                    finish()
+                } else {
+                    Log.e(TAG, "Failed to join call via API: ${result.error}")
+                    // Still try to launch the app - maybe React Native can handle it
+                    val intent = Intent(this, MainActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        putExtra("type", "call")
+                        putExtra("callId", currentCallId)
+                        putExtra("callerId", callerId)
+                        putExtra("callerName", callerName)
+                        putExtra("callType", callType)
+                        putExtra("conversationId", conversationId)
+                        putExtra("action", "answer")
+                    }
+                    startActivity(intent)
+                    finish()
+                }
+            }
+        }
     }
 
     private fun declineCall() {
         Log.d(TAG, "Declining call: $callId")
 
+        val currentCallId = callId ?: return
+
+        // Disable buttons to prevent double-tap
+        findViewById<ImageButton>(R.id.acceptButton)?.isEnabled = false
+        findViewById<ImageButton>(R.id.declineButton)?.isEnabled = false
+
         // Stop ringtone and cancel notification
         stopRingtoneAndNotification()
 
-        // Store decline for React Native to handle
-        CallActionReceiver.pendingDeclineCallId = callId
+        // Decline the call via HTTP API
+        // This ensures the backend knows we declined even if React Native isn't loaded
+        CallApiClient.declineCall(this, currentCallId) { success, error ->
+            Log.d(TAG, "Decline API call result: success=$success, error=$error")
+        }
+
+        // Also store decline for React Native to handle (in case it's already loaded)
+        CallActionReceiver.pendingDeclineCallId = currentCallId
 
         // Try to send decline event to React Native
-        callId?.let { CallEventModule.sendDeclineEvent(it) }
+        CallEventModule.sendDeclineEvent(currentCallId)
 
-        // Close this activity
+        // Close this activity immediately (don't wait for API response)
         finish()
     }
 

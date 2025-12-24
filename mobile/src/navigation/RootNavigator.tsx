@@ -60,6 +60,10 @@ export type RootStackParamList = {
     conversationId?: string;
     type: 'Voice' | 'Video';
     isIncoming?: boolean;
+    // Pre-fetched room token from native code (when call was answered via native API)
+    roomToken?: string;
+    roomId?: string;
+    liveKitUrl?: string;
   };
   IncomingCall: {
     callId: string;

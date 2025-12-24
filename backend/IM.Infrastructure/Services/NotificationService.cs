@@ -29,21 +29,41 @@ public class NotificationService : INotificationService
         try
         {
             var firebaseCredentialsPath = _configuration["Firebase:CredentialsPath"];
-            if (!string.IsNullOrEmpty(firebaseCredentialsPath) && File.Exists(firebaseCredentialsPath))
+            _logger.LogInformation("Firebase credentials path from config: {Path}", firebaseCredentialsPath ?? "NULL");
+
+            if (string.IsNullOrEmpty(firebaseCredentialsPath))
             {
-                if (FirebaseApp.DefaultInstance == null)
-                {
-                    FirebaseApp.Create(new AppOptions
-                    {
-                        Credential = GoogleCredential.FromFile(firebaseCredentialsPath)
-                    });
-                }
-                _firebaseMessaging = FirebaseMessaging.DefaultInstance;
+                _logger.LogWarning("Firebase credentials path is not configured. Push notifications will be disabled.");
+                return;
             }
+
+            // Try to resolve the path - it might be relative to the app directory
+            var fullPath = Path.IsPathRooted(firebaseCredentialsPath)
+                ? firebaseCredentialsPath
+                : Path.Combine(AppContext.BaseDirectory, firebaseCredentialsPath);
+
+            _logger.LogInformation("Checking Firebase credentials at: {FullPath}", fullPath);
+
+            if (!File.Exists(fullPath))
+            {
+                _logger.LogWarning("Firebase credentials file not found at: {Path}. Push notifications will be disabled.", fullPath);
+                return;
+            }
+
+            if (FirebaseApp.DefaultInstance == null)
+            {
+                _logger.LogInformation("Initializing Firebase with credentials from: {Path}", fullPath);
+                FirebaseApp.Create(new AppOptions
+                {
+                    Credential = GoogleCredential.FromFile(fullPath)
+                });
+            }
+            _firebaseMessaging = FirebaseMessaging.DefaultInstance;
+            _logger.LogInformation("Firebase initialized successfully. Push notifications are enabled.");
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to initialize Firebase. Push notifications will be disabled.");
+            _logger.LogError(ex, "Failed to initialize Firebase. Push notifications will be disabled.");
         }
     }
 
@@ -207,6 +227,79 @@ public class NotificationService : INotificationService
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to send call notification to device");
+            }
+        }
+    }
+
+    public async Task SendCallEndedNotificationAsync(Guid callId, IEnumerable<Guid> recipientIds)
+    {
+        if (_firebaseMessaging == null)
+        {
+            _logger.LogWarning("Firebase messaging not initialized, cannot send call ended notification");
+            return;
+        }
+
+        var devices = await _context.UserDevices
+            .Where(d => recipientIds.Contains(d.UserId) && d.IsActive)
+            .ToListAsync();
+
+        if (!devices.Any())
+        {
+            _logger.LogWarning("No active devices found for call ended notification recipients");
+            return;
+        }
+
+        _logger.LogInformation("Sending call ended notification to {DeviceCount} devices for call {CallId}", devices.Count, callId);
+
+        foreach (var device in devices)
+        {
+            try
+            {
+                // Data-only message to cancel the incoming call
+                var firebaseMessage = new FirebaseMessage
+                {
+                    Token = device.DeviceToken,
+                    Data = new Dictionary<string, string>
+                    {
+                        { "type", "call_ended" },
+                        { "callId", callId.ToString() }
+                    },
+                    Android = new AndroidConfig
+                    {
+                        Priority = Priority.High,
+                        TimeToLive = TimeSpan.FromSeconds(10)
+                    },
+                    Apns = new ApnsConfig
+                    {
+                        Headers = new Dictionary<string, string>
+                        {
+                            { "apns-priority", "10" },
+                            { "apns-expiration", "10" }
+                        },
+                        Aps = new Aps
+                        {
+                            ContentAvailable = true
+                        }
+                    }
+                };
+
+                var messageId = await _firebaseMessaging.SendAsync(firebaseMessage);
+                _logger.LogInformation("Call ended notification sent successfully. MessageId: {MessageId}, CallId: {CallId}",
+                    messageId, callId);
+            }
+            catch (FirebaseMessagingException fex)
+            {
+                _logger.LogError(fex, "Firebase error sending call ended notification. Code: {Code}", fex.ErrorCode);
+
+                if (fex.ErrorCode == ErrorCode.NotFound || fex.ErrorCode == ErrorCode.InvalidArgument)
+                {
+                    device.IsActive = false;
+                    await _context.SaveChangesAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send call ended notification to device");
             }
         }
     }

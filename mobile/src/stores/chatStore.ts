@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { Conversation, Message, Participant } from '../types';
+import { conversationDBService, messageDBService, syncService } from '../database/services';
 
 interface ChatState {
   conversations: Conversation[];
@@ -7,6 +8,9 @@ interface ChatState {
   messages: Record<string, Message[]>;
   typingUsers: Record<string, string[]>; // conversationId -> userIds
   onlineUsers: Set<string>;
+  isLoadingFromCache: boolean;
+  isOnline: boolean;
+  syncStatus: 'idle' | 'syncing' | 'error' | 'offline';
 
   // Actions
   setConversations: (conversations: Conversation[]) => void;
@@ -35,6 +39,13 @@ interface ChatState {
   getConversation: (conversationId: string) => Conversation | undefined;
   getMessages: (conversationId: string) => Message[];
   getUnreadCount: () => number;
+
+  // Offline support
+  loadFromCache: () => Promise<void>;
+  syncWithServer: () => Promise<void>;
+  setSyncStatus: (status: 'idle' | 'syncing' | 'error' | 'offline') => void;
+  saveConversationsToCache: (conversations: Conversation[]) => Promise<void>;
+  saveMessagesToCache: (conversationId: string, messages: Message[]) => Promise<void>;
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -43,9 +54,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
   messages: {},
   typingUsers: {},
   onlineUsers: new Set(),
+  isLoadingFromCache: false,
+  isOnline: true,
+  syncStatus: 'idle',
 
   setConversations: (conversations) => {
     set({ conversations });
+    // Save to local cache in background
+    get().saveConversationsToCache(conversations);
   },
 
   addConversation: (conversation) => {
@@ -60,6 +76,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
         c.id === conversationId ? { ...c, ...updates } : c
       ),
     }));
+
+    // Update in local DB
+    if (updates.lastMessage) {
+      conversationDBService.updateLastMessage(
+        conversationId,
+        updates.lastMessage.content || '',
+        updates.lastMessage.senderId,
+        new Date(updates.lastMessage.createdAt)
+      );
+    }
+    if (updates.unreadCount !== undefined) {
+      conversationDBService.updateUnreadCount(conversationId, updates.unreadCount);
+    }
   },
 
   removeConversation: (conversationId) => {
@@ -79,6 +108,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
         [conversationId]: messages,
       },
     }));
+    // Save to local cache in background
+    get().saveMessagesToCache(conversationId, messages);
   },
 
   addMessage: (conversationId, message) => {
@@ -123,6 +154,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
         ),
       },
     }));
+    // Update in local DB
+    messageDBService.markAsDeleted(messageId);
   },
 
   prependMessages: (conversationId, newMessages) => {
@@ -191,5 +224,127 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   getUnreadCount: () => {
     return get().conversations.reduce((count, conv) => count + conv.unreadCount, 0);
+  },
+
+  // Load conversations and recent messages from local cache
+  loadFromCache: async () => {
+    set({ isLoadingFromCache: true });
+    try {
+      const cachedConversations = await conversationDBService.getAllConversations();
+
+      if (cachedConversations.length > 0) {
+        // Convert WatermelonDB models to plain objects matching the Conversation interface
+        const conversations: Conversation[] = cachedConversations.map(c => ({
+          id: c.serverId,
+          type: c.type === 'direct' ? 'Private' : 'Group',
+          name: c.name || undefined,
+          iconUrl: c.avatarUrl || undefined,
+          participants: [], // Will be loaded separately
+          unreadCount: c.unreadCount,
+          isMuted: c.isMuted,
+          isArchived: false,
+          defaultMessageExpiry: 0 as const,
+          lastMessage: c.lastMessageContent ? {
+            id: '',
+            conversationId: c.serverId,
+            senderId: c.lastMessageSenderId || '',
+            type: 'Text' as const,
+            content: c.lastMessageContent,
+            createdAt: c.lastMessageAt ? new Date(c.lastMessageAt).toISOString() : new Date().toISOString(),
+            isEdited: false,
+            isDeleted: false,
+            isForwarded: false,
+            status: 'Sent' as const,
+            statuses: [],
+          } : undefined,
+          lastMessageAt: c.lastMessageAt ? new Date(c.lastMessageAt).toISOString() : undefined,
+          createdAt: c.createdAt.toISOString(),
+        }));
+
+        set({ conversations });
+        console.log(`Loaded ${conversations.length} conversations from cache`);
+      }
+    } catch (error) {
+      console.error('Error loading from cache:', error);
+    } finally {
+      set({ isLoadingFromCache: false });
+    }
+  },
+
+  // Trigger sync with server
+  syncWithServer: async () => {
+    set({ syncStatus: 'syncing' });
+    try {
+      await syncService.syncAll();
+      set({ syncStatus: 'idle' });
+    } catch (error) {
+      console.error('Error syncing with server:', error);
+      set({ syncStatus: 'error' });
+    }
+  },
+
+  setSyncStatus: (status) => {
+    set({ syncStatus: status, isOnline: status !== 'offline' });
+  },
+
+  // Save conversations to local cache
+  saveConversationsToCache: async (conversations: Conversation[]) => {
+    try {
+      // Convert to server format for the DB service
+      const serverConversations = conversations.map(c => ({
+        id: c.id,
+        type: (c.type === 'Private' ? 'Direct' : 'Group') as 'Direct' | 'Group',
+        name: c.name || null,
+        avatarUrl: c.iconUrl || null,
+        lastMessage: c.lastMessage ? {
+          content: c.lastMessage.content || '',
+          createdAt: c.lastMessage.createdAt,
+          senderId: c.lastMessage.senderId,
+        } : undefined,
+        unreadCount: c.unreadCount,
+        isMuted: c.isMuted || false,
+        isPinned: false,
+        participants: c.participants?.map(p => ({
+          userId: p.userId,
+          role: p.role || 'Member',
+          joinedAt: p.joinedAt || new Date().toISOString(),
+        })) || [],
+        createdAt: c.createdAt,
+        updatedAt: c.createdAt,
+      }));
+
+      await conversationDBService.syncConversations(serverConversations);
+    } catch (error) {
+      console.error('Error saving conversations to cache:', error);
+    }
+  },
+
+  // Save messages to local cache
+  saveMessagesToCache: async (conversationId: string, messages: Message[]) => {
+    try {
+      const serverMessages = messages.map(m => ({
+        id: m.id,
+        conversationId: conversationId,
+        senderId: m.senderId,
+        type: m.type,
+        content: m.content || null,
+        mediaUrl: m.mediaUrl || null,
+        thumbnailUrl: m.mediaThumbnailUrl || null,
+        mimeType: m.mediaMimeType || null,
+        fileSize: m.mediaSize || null,
+        duration: m.mediaDuration || null,
+        replyToId: m.replyToMessageId || null,
+        forwardedFromId: null,
+        isEdited: m.isEdited || false,
+        isDeleted: m.isDeleted || false,
+        expiresAt: m.expiresAt || null,
+        createdAt: m.createdAt,
+        updatedAt: m.editedAt || m.createdAt,
+      }));
+
+      await messageDBService.syncMessages(conversationId, serverMessages);
+    } catch (error) {
+      console.error('Error saving messages to cache:', error);
+    }
   },
 }));

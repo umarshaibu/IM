@@ -232,7 +232,7 @@ const parseNotification = (
     callerId: data?.callerId as string,
     callerName: data?.callerName as string,
     callType: data?.callType as 'Voice' | 'Video',
-    userId: data?.userId || data?.senderId as string,
+    userId: (data?.userId || data?.senderId) as string | undefined,
     title: notification?.title || (data?.callerName as string) || (data?.title as string) || 'IM',
     body: notification?.body || (data?.body as string) || '',
     imageUrl: notification?.android?.imageUrl || (data?.imageUrl as string),

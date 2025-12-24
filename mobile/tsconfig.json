@@ -16,7 +16,9 @@
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
   },
   "include": ["src/**/*", "index.js", "App.tsx"],
   "exclude": ["node_modules", "babel.config.js", "metro.config.js", "jest.config.js"]
