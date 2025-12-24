@@ -1,11 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, StatusBar } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useQuery } from '@tanstack/react-query';
 import { format, isToday, isYesterday } from 'date-fns';
-import LinearGradient from 'react-native-linear-gradient';
 import Avatar from '../../components/Avatar';
 import { callsApi } from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
@@ -15,9 +14,12 @@ import { COLORS, FONTS, SPACING, BORDER_RADIUS } from '../../utils/theme';
 
 type CallsScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
+type FilterType = 'all' | 'missed';
+
 const CallsScreen: React.FC = () => {
   const navigation = useNavigation<CallsScreenNavigationProp>();
   const { userId } = useAuthStore();
+  const [activeFilter, setActiveFilter] = useState<FilterType>('all');
 
   const { data: calls, isLoading, refetch } = useQuery({
     queryKey: ['callHistory'],
@@ -27,6 +29,15 @@ const CallsScreen: React.FC = () => {
     },
   });
 
+  // Filtered calls
+  const filteredCalls = React.useMemo(() => {
+    if (!calls) return [];
+    if (activeFilter === 'missed') {
+      return calls.filter((c) => c.status === 'Missed' || c.status === 'Declined');
+    }
+    return calls;
+  }, [calls, activeFilter]);
+
   const formatCallTime = (dateString: string): string => {
     const date = new Date(dateString);
     if (isToday(date)) {
@@ -35,7 +46,7 @@ const CallsScreen: React.FC = () => {
     if (isYesterday(date)) {
       return 'Yesterday';
     }
-    return format(date, 'dd/MM/yyyy');
+    return format(date, 'dd/MM/yy');
   };
 
   const getCallInfo = (call: Call): { icon: string; color: string; label: string } => {
@@ -46,9 +57,9 @@ const CallsScreen: React.FC = () => {
       return { icon: 'phone-missed', color: COLORS.error, label: 'Missed' };
     }
     if (isOutgoing) {
-      return { icon: 'phone-outgoing', color: COLORS.secondary, label: 'Outgoing' };
+      return { icon: 'phone-outgoing', color: COLORS.textSecondary, label: 'outgoing' };
     }
-    return { icon: 'phone-incoming', color: COLORS.primary, label: 'Incoming' };
+    return { icon: 'phone-incoming', color: COLORS.primary, label: 'incoming' };
   };
 
   const getOtherParticipant = (call: Call) => {
@@ -68,12 +79,15 @@ const CallsScreen: React.FC = () => {
     }
   };
 
+  const handleNewCall = () => {
+    navigation.navigate('NewChat');
+  };
+
   const renderCallItem = ({ item }: { item: Call }) => {
     const otherParticipant = getOtherParticipant(item);
     const callInfo = getCallInfo(item);
-    const duration = item.duration
-      ? `${Math.floor(item.duration / 60)}:${String(item.duration % 60).padStart(2, '0')}`
-      : null;
+    const isMissed = item.status === 'Missed' || item.status === 'Declined';
+    const isVideo = item.type === 'Video';
 
     return (
       <TouchableOpacity
@@ -85,47 +99,35 @@ const CallsScreen: React.FC = () => {
           <Avatar
             uri={otherParticipant?.profilePictureUrl}
             name={otherParticipant?.displayName || ''}
-            size={52}
+            size={50}
           />
-          <View style={[styles.callTypeBadge, { backgroundColor: callInfo.color + '20' }]}>
-            <Icon
-              name={item.type === 'Video' ? 'video' : 'phone'}
-              size={12}
-              color={callInfo.color}
-            />
-          </View>
+          {isVideo && (
+            <View style={styles.videoIndicator}>
+              <Icon name="video" size={10} color={COLORS.textLight} />
+            </View>
+          )}
         </View>
 
         <View style={styles.callInfo}>
-          <Text style={styles.callName}>
+          <Text style={[styles.callName, isMissed && styles.callNameMissed]}>
             {otherParticipant?.displayName || 'Unknown'}
           </Text>
           <View style={styles.callMeta}>
-            <Icon name={callInfo.icon} size={14} color={callInfo.color} />
-            <Text style={[styles.callLabel, { color: callInfo.color }]}>
+            <Icon name="phone" size={12} color={callInfo.color} />
+            <Text style={[styles.callLabel, isMissed && styles.callLabelMissed]}>
               {callInfo.label}
             </Text>
-            {duration && (
-              <>
-                <Text style={styles.dot}>•</Text>
-                <Text style={styles.callDuration}>{duration}</Text>
-              </>
-            )}
           </View>
         </View>
 
         <View style={styles.callRight}>
           <Text style={styles.callTime}>{formatCallTime(item.startedAt)}</Text>
           <TouchableOpacity
-            style={styles.callbackButton}
-            onPress={() => handleCallPress(item)}
+            style={styles.infoButton}
+            onPress={() => {/* Show call info */}}
             activeOpacity={0.7}
           >
-            <Icon
-              name={item.type === 'Video' ? 'video-outline' : 'phone-outline'}
-              size={20}
-              color={COLORS.primary}
-            />
+            <Icon name="information-outline" size={22} color={COLORS.textSecondary} />
           </TouchableOpacity>
         </View>
       </TouchableOpacity>
@@ -146,10 +148,51 @@ const CallsScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+      <StatusBar barStyle="dark-content" backgroundColor={COLORS.surface} />
+
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backButton}>
+          <Icon name="arrow-left" size={24} color={COLORS.text} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Calls</Text>
+        <TouchableOpacity style={styles.newCallButton} onPress={handleNewCall}>
+          <Icon name="phone-plus" size={24} color={COLORS.primary} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Filter Row */}
+      <View style={styles.filterRow}>
+        <Text style={styles.doneText}>Done</Text>
+
+        <View style={styles.filterTabs}>
+          <TouchableOpacity
+            style={[styles.filterTab, activeFilter === 'all' && styles.filterTabActive]}
+            onPress={() => setActiveFilter('all')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.filterTabText, activeFilter === 'all' && styles.filterTabTextActive]}>
+              All
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.filterTab, activeFilter === 'missed' && styles.filterTabActive]}
+            onPress={() => setActiveFilter('missed')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.filterTabText, activeFilter === 'missed' && styles.filterTabTextActive]}>
+              Missed
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity style={styles.newCallIconButton} onPress={handleNewCall}>
+          <Icon name="phone-plus-outline" size={22} color={COLORS.primary} />
+        </TouchableOpacity>
+      </View>
 
       <FlatList
-        data={calls}
+        data={filteredCalls}
         renderItem={renderCallItem}
         keyExtractor={(item) => item.id}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
@@ -162,20 +205,9 @@ const CallsScreen: React.FC = () => {
             tintColor={COLORS.primary}
           />
         }
-        contentContainerStyle={!calls?.length ? styles.emptyListContent : styles.listContent}
+        contentContainerStyle={!filteredCalls?.length ? styles.emptyListContent : styles.listContent}
         showsVerticalScrollIndicator={false}
       />
-
-      <TouchableOpacity style={styles.fab} activeOpacity={0.9}>
-        <LinearGradient
-          colors={[COLORS.secondary, COLORS.primary]}
-          style={styles.fabGradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        >
-          <Icon name="phone-plus" size={26} color={COLORS.textLight} />
-        </LinearGradient>
-      </TouchableOpacity>
     </View>
   );
 };
@@ -184,6 +216,66 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.surface,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.xl + 20,
+    paddingBottom: SPACING.sm,
+    backgroundColor: COLORS.surface,
+  },
+  backButton: {
+    padding: SPACING.xs,
+  },
+  headerTitle: {
+    fontSize: FONTS.sizes.xl,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  newCallButton: {
+    padding: SPACING.xs,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+  },
+  doneText: {
+    fontSize: FONTS.sizes.md,
+    color: COLORS.textSecondary,
+    width: 50,
+  },
+  filterTabs: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.inputBackground,
+    borderRadius: BORDER_RADIUS.lg,
+    padding: 2,
+  },
+  filterTab: {
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.lg,
+    borderRadius: BORDER_RADIUS.md,
+  },
+  filterTabActive: {
+    backgroundColor: COLORS.primary,
+  },
+  filterTabText: {
+    fontSize: FONTS.sizes.sm,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
+  },
+  filterTabTextActive: {
+    color: COLORS.textLight,
+    fontWeight: '600',
+  },
+  newCallIconButton: {
+    padding: SPACING.xs,
+    width: 50,
+    alignItems: 'flex-end',
   },
   listContent: {
     paddingBottom: 100,
@@ -197,13 +289,14 @@ const styles = StyleSheet.create({
   avatarContainer: {
     position: 'relative',
   },
-  callTypeBadge: {
+  videoIndicator: {
     position: 'absolute',
     bottom: -2,
-    right: -2,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    left: -2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: COLORS.error,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
@@ -217,45 +310,39 @@ const styles = StyleSheet.create({
     fontSize: FONTS.sizes.md,
     fontWeight: '600',
     color: COLORS.text,
-    marginBottom: 4,
+    marginBottom: 2,
+  },
+  callNameMissed: {
+    color: COLORS.error,
   },
   callMeta: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
   },
   callLabel: {
     fontSize: FONTS.sizes.sm,
-    marginLeft: 4,
-  },
-  dot: {
-    fontSize: FONTS.sizes.sm,
-    color: COLORS.textMuted,
-    marginHorizontal: 6,
-  },
-  callDuration: {
-    fontSize: FONTS.sizes.sm,
     color: COLORS.textSecondary,
+  },
+  callLabelMissed: {
+    color: COLORS.error,
   },
   callRight: {
-    alignItems: 'flex-end',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
   },
   callTime: {
-    fontSize: FONTS.sizes.xs,
+    fontSize: FONTS.sizes.sm,
     color: COLORS.textSecondary,
-    marginBottom: SPACING.sm,
   },
-  callbackButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: COLORS.primary + '15',
-    justifyContent: 'center',
-    alignItems: 'center',
+  infoButton: {
+    padding: SPACING.xs,
   },
   separator: {
     height: 1,
     backgroundColor: COLORS.divider,
-    marginLeft: 84,
+    marginLeft: 82,
   },
   emptyContainer: {
     flex: 1,
@@ -286,24 +373,6 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
-  },
-  fab: {
-    position: 'absolute',
-    right: SPACING.lg,
-    bottom: SPACING.xl,
-    borderRadius: 30,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  fabGradient: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
 });
 

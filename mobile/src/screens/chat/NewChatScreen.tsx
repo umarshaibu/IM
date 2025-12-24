@@ -3,17 +3,16 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
   StatusBar,
+  SectionList,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useQuery } from '@tanstack/react-query';
-import LinearGradient from 'react-native-linear-gradient';
 import Avatar from '../../components/Avatar';
 import { conversationsApi, usersApi } from '../../services/api';
 import { RootStackParamList } from '../../navigation/RootNavigator';
@@ -23,15 +22,20 @@ import { useAuthStore } from '../../stores/authStore';
 
 type NewChatScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
+interface UserSection {
+  title: string;
+  data: User[];
+}
+
 const NewChatScreen: React.FC = () => {
   const navigation = useNavigation<NewChatScreenNavigationProp>();
   const [searchQuery, setSearchQuery] = useState('');
   const { userId } = useAuthStore();
 
-  const { data: users, isLoading } = useQuery({
+  const { data: users, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['all-users'],
     queryFn: async () => {
-      const response = await usersApi.search('');
+      const response = await usersApi.getAll();
       return (response.data as User[]).filter(user => user.id !== userId);
     },
   });
@@ -40,6 +44,33 @@ const NewChatScreen: React.FC = () => {
     user.displayName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     user.fullName?.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Group users alphabetically like WhatsApp
+  const groupedUsers: UserSection[] = React.useMemo(() => {
+    if (!filteredUsers) return [];
+
+    const groups: { [key: string]: User[] } = {};
+
+    filteredUsers.forEach((user) => {
+      const name = user.displayName || user.fullName || '';
+      const firstLetter = name.charAt(0).toUpperCase() || '#';
+      if (!groups[firstLetter]) {
+        groups[firstLetter] = [];
+      }
+      groups[firstLetter].push(user);
+    });
+
+    return Object.keys(groups)
+      .sort()
+      .map((letter) => ({
+        title: letter,
+        data: groups[letter].sort((a, b) => {
+          const nameA = a.displayName || a.fullName || '';
+          const nameB = b.displayName || b.fullName || '';
+          return nameA.localeCompare(nameB);
+        }),
+      }));
+  }, [filteredUsers]);
 
   const handleUserPress = async (user: User) => {
     try {
@@ -57,83 +88,64 @@ const NewChatScreen: React.FC = () => {
       onPress={() => handleUserPress(item)}
       activeOpacity={0.7}
     >
-      <View style={styles.avatarContainer}>
-        <Avatar
-          uri={item.profilePictureUrl}
-          name={item.displayName || item.fullName || ''}
-          size={52}
-          isOnline={item.isOnline}
-        />
-        {item.isOnline && (
-          <View style={styles.onlineBadge} />
-        )}
-      </View>
+      <Avatar
+        uri={item.profilePictureUrl}
+        name={item.displayName || item.fullName || ''}
+        size={50}
+        isOnline={item.isOnline}
+        showOnline={true}
+      />
       <View style={styles.contactInfo}>
         <Text style={styles.contactName}>
           {item.displayName || item.fullName}
         </Text>
         <Text style={styles.contactAbout} numberOfLines={1}>
-          {item.about || 'Hey there! I am using IM'}
+          {item.about || 'Hey there! I am using NAIM'}
         </Text>
-      </View>
-      <View style={styles.contactAction}>
-        <Icon name="message-outline" size={20} color={COLORS.primary} />
       </View>
     </TouchableOpacity>
   );
 
+  const renderSectionHeader = ({ section }: { section: UserSection }) => (
+    <View style={styles.sectionHeader}>
+      <Text style={styles.sectionTitle}>{section.title}</Text>
+    </View>
+  );
+
   const renderHeader = () => (
     <View style={styles.headerContainer}>
-      {/* Action Items */}
-      <View style={styles.actionsContainer}>
-        <TouchableOpacity
-          style={styles.actionItem}
-          onPress={() => navigation.navigate('NewGroup')}
-          activeOpacity={0.7}
-        >
-          <LinearGradient
-            colors={[COLORS.secondary, COLORS.primary]}
-            style={styles.actionIconGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          >
-            <Icon name="account-group" size={24} color={COLORS.textLight} />
-          </LinearGradient>
-          <View style={styles.actionTextContainer}>
-            <Text style={styles.actionText}>New Group</Text>
-            <Text style={styles.actionSubtext}>Create a group chat</Text>
-          </View>
-          <Icon name="chevron-right" size={22} color={COLORS.textMuted} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.actionItem}
-          onPress={() => {}}
-          activeOpacity={0.7}
-        >
-          <View style={[styles.actionIcon, { backgroundColor: '#FF950015' }]}>
-            <Icon name="broadcast" size={24} color="#FF9500" />
-          </View>
-          <View style={styles.actionTextContainer}>
-            <Text style={styles.actionText}>Broadcast List</Text>
-            <Text style={styles.actionSubtext}>Send to multiple contacts</Text>
-          </View>
-          <Icon name="chevron-right" size={22} color={COLORS.textMuted} />
-        </TouchableOpacity>
-      </View>
-
-      {/* Users Section Header */}
-      <View style={styles.sectionHeader}>
-        <View style={styles.sectionTitleContainer}>
-          <View style={styles.sectionDot} />
-          <Text style={styles.sectionTitle}>Users on IM</Text>
+      {/* New Group */}
+      <TouchableOpacity
+        style={styles.actionItem}
+        onPress={() => navigation.navigate('NewGroup')}
+        activeOpacity={0.7}
+      >
+        <View style={styles.actionIconContainer}>
+          <Icon name="account-group" size={24} color={COLORS.textLight} />
         </View>
-        {users && (
-          <Text style={styles.contactCount}>
-            {users.length} user{users.length !== 1 ? 's' : ''}
+        <Text style={styles.actionText}>New group</Text>
+      </TouchableOpacity>
+
+      {/* New Contact */}
+      <TouchableOpacity
+        style={styles.actionItem}
+        onPress={() => {}}
+        activeOpacity={0.7}
+      >
+        <View style={styles.actionIconContainer}>
+          <Icon name="account-plus" size={24} color={COLORS.textLight} />
+        </View>
+        <Text style={styles.actionText}>New contact</Text>
+      </TouchableOpacity>
+
+      {/* Contacts Count */}
+      {users && users.length > 0 && (
+        <View style={styles.contactsCountContainer}>
+          <Text style={styles.contactsCountText}>
+            Contacts on NAIM
           </Text>
-        )}
-      </View>
+        </View>
+      )}
     </View>
   );
 
@@ -156,7 +168,7 @@ const NewChatScreen: React.FC = () => {
       <View style={styles.loadingContainer}>
         <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
         <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={styles.loadingText}>Loading users...</Text>
+        <Text style={styles.loadingText}>Loading contacts...</Text>
       </View>
     );
   }
@@ -168,10 +180,10 @@ const NewChatScreen: React.FC = () => {
       {/* Search Bar */}
       <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
-          <Icon name="magnify" size={22} color={COLORS.textMuted} />
+          <Icon name="magnify" size={20} color={COLORS.textMuted} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search users..."
+            placeholder="Search name or number"
             placeholderTextColor={COLORS.textMuted}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -181,23 +193,25 @@ const NewChatScreen: React.FC = () => {
               onPress={() => setSearchQuery('')}
               activeOpacity={0.7}
             >
-              <Icon name="close-circle" size={20} color={COLORS.textMuted} />
+              <Icon name="close-circle" size={18} color={COLORS.textMuted} />
             </TouchableOpacity>
           )}
         </View>
       </View>
 
-      <FlatList
-        data={filteredUsers}
+      <SectionList
+        sections={groupedUsers}
         renderItem={renderUser}
+        renderSectionHeader={renderSectionHeader}
         keyExtractor={(item) => item.id}
         ListHeaderComponent={renderHeader}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
-        ListEmptyComponent={renderEmptyList}
+        ListEmptyComponent={!isLoading ? renderEmptyList : null}
         contentContainerStyle={
-          !filteredUsers?.length ? styles.emptyListContent : styles.listContent
+          groupedUsers.length === 0 ? styles.emptyListContent : styles.listContent
         }
         showsVerticalScrollIndicator={false}
+        stickySectionHeadersEnabled={true}
       />
     </View>
   );
@@ -220,17 +234,17 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
   searchContainer: {
-    padding: SPACING.md,
-    paddingTop: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
     backgroundColor: COLORS.surface,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: COLORS.inputBackground,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    borderRadius: BORDER_RADIUS.xl,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: BORDER_RADIUS.lg,
     gap: SPACING.sm,
   },
   searchInput: {
@@ -240,80 +254,48 @@ const styles = StyleSheet.create({
     padding: 0,
   },
   headerContainer: {
-    marginBottom: SPACING.sm,
-  },
-  actionsContainer: {
     backgroundColor: COLORS.surface,
-    marginBottom: SPACING.md,
   },
   actionItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: SPACING.lg,
     paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.lg,
   },
-  actionIconGradient: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
+  actionIconContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  actionIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  actionTextContainer: {
-    flex: 1,
-    marginLeft: SPACING.lg,
   },
   actionText: {
     fontSize: FONTS.sizes.md,
-    fontWeight: '600',
+    fontWeight: '500',
     color: COLORS.text,
-    marginBottom: 2,
+    marginLeft: SPACING.md,
+    flex: 1,
   },
-  actionSubtext: {
-    fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  contactsCountContainer: {
     paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
+    paddingVertical: SPACING.sm,
     backgroundColor: COLORS.background,
   },
-  sectionTitleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  contactsCountText: {
+    fontSize: FONTS.sizes.sm,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
   },
-  sectionDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: COLORS.secondary,
-    marginRight: SPACING.sm,
+  sectionHeader: {
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.xs,
+    backgroundColor: COLORS.background,
   },
   sectionTitle: {
-    fontSize: FONTS.sizes.xs,
-    fontWeight: '700',
-    color: COLORS.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  contactCount: {
-    fontSize: FONTS.sizes.xs,
+    fontSize: FONTS.sizes.sm,
     fontWeight: '600',
     color: COLORS.primary,
-    backgroundColor: COLORS.primary + '15',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
-    borderRadius: BORDER_RADIUS.sm,
   },
   listContent: {
     paddingBottom: SPACING.xxl,
@@ -324,23 +306,9 @@ const styles = StyleSheet.create({
   contactItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: SPACING.md,
+    paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.lg,
     backgroundColor: COLORS.surface,
-  },
-  avatarContainer: {
-    position: 'relative',
-  },
-  onlineBadge: {
-    position: 'absolute',
-    bottom: 2,
-    right: 2,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: '#34C759',
-    borderWidth: 2,
-    borderColor: COLORS.surface,
   },
   contactInfo: {
     flex: 1,
@@ -348,26 +316,18 @@ const styles = StyleSheet.create({
   },
   contactName: {
     fontSize: FONTS.sizes.md,
-    fontWeight: '600',
+    fontWeight: '500',
     color: COLORS.text,
-    marginBottom: 4,
+    marginBottom: 2,
   },
   contactAbout: {
     fontSize: FONTS.sizes.sm,
     color: COLORS.textSecondary,
   },
-  contactAction: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.primary + '15',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   separator: {
     height: 1,
     backgroundColor: COLORS.divider,
-    marginLeft: 84,
+    marginLeft: 82,
   },
   emptyContainer: {
     flex: 1,

@@ -10,15 +10,30 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  StatusBar,
+  Image,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { RootStackParamList } from '../../navigation/RootNavigator';
 import { authApi } from '../../services/api';
-import { COLORS, FONTS, SPACING, BORDER_RADIUS } from '../../utils/theme';
+import { SPACING, BORDER_RADIUS } from '../../utils/theme';
 
 type ServiceNumberScreenProps = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'ServiceNumber'>;
+};
+
+// Theme colors matching the design
+const AUTH_COLORS = {
+  background: '#E8E8E8',
+  inputBackground: '#D0D0D0',
+  primary: '#0D3B2E',
+  text: '#000000',
+  textSecondary: '#666666',
+  textMuted: '#888888',
+  link: '#4A90D9',
+  indicatorActive: '#0D3B2E',
+  indicatorInactive: '#CCCCCC',
 };
 
 const ServiceNumberScreen: React.FC<ServiceNumberScreenProps> = ({ navigation }) => {
@@ -64,64 +79,69 @@ const ServiceNumberScreen: React.FC<ServiceNumberScreenProps> = ({ navigation })
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
+      <StatusBar barStyle="dark-content" backgroundColor={AUTH_COLORS.background} />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.content}>
-          {/* Header */}
-          <View style={styles.header}>
-            <View style={styles.iconContainer}>
-              <Icon name="card-account-details" size={40} color={COLORS.primary} />
-            </View>
-            <Text style={styles.title}>Enter Service Number</Text>
-            <Text style={styles.subtitle}>
-              Enter your service number to receive a verification code via SMS and email
-            </Text>
+          {/* Logo Section */}
+          <View style={styles.logoSection}>
+            <Image
+              source={require('../../assets/images/army_logo.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
           </View>
 
-          {/* Form */}
-          <View style={styles.form}>
+          {/* Welcome Text with Chat Icon */}
+          <View style={styles.brandContainer}>
+            <Icon name="chat" size={28} color={AUTH_COLORS.primary} />
+            <Text style={styles.welcomeText}>Welcome to NAIM</Text>
+          </View>
+
+          {/* Input Section */}
+          <View style={styles.inputSection}>
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Service Number</Text>
-              <View style={styles.inputWrapper}>
-                <Icon name="badge-account-horizontal" size={22} color={COLORS.textMuted} style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  value={serviceNumber}
-                  onChangeText={setServiceNumber}
-                  placeholder="e.g. AP/12345"
-                  placeholderTextColor={COLORS.textMuted}
-                  autoCapitalize="characters"
-                  autoCorrect={false}
-                  autoFocus
-                />
-              </View>
+              <TextInput
+                style={styles.input}
+                value={serviceNumber}
+                onChangeText={setServiceNumber}
+                placeholder="Svc No"
+                placeholderTextColor={AUTH_COLORS.textMuted}
+                autoCapitalize="characters"
+                autoCorrect={false}
+              />
             </View>
 
             <TouchableOpacity
-              style={[styles.continueButton, isLoading && styles.buttonDisabled]}
+              style={[styles.sendButton, isLoading && styles.buttonDisabled]}
               onPress={handleContinue}
               disabled={isLoading}
               activeOpacity={0.8}
             >
               {isLoading ? (
-                <ActivityIndicator color={COLORS.textLight} />
+                <ActivityIndicator color="#FFFFFF" />
               ) : (
-                <>
-                  <Text style={styles.continueButtonText}>Continue</Text>
-                  <Icon name="arrow-right" size={20} color={COLORS.textLight} />
-                </>
+                <Text style={styles.sendButtonText}>Send</Text>
               )}
             </TouchableOpacity>
           </View>
 
-          {/* Info */}
-          <View style={styles.infoSection}>
-            <Icon name="information-outline" size={20} color={COLORS.textSecondary} />
-            <Text style={styles.infoText}>
-              A 6-digit verification code will be sent to your registered email and phone number
-            </Text>
+          {/* Privacy Policy */}
+          <View style={styles.privacySection}>
+            <Text style={styles.privacyText}>Read our </Text>
+            <TouchableOpacity activeOpacity={0.7}>
+              <Text style={styles.privacyLink}>Privacy Policy</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Page Indicator */}
+          <View style={styles.pageIndicator}>
+            <View style={styles.indicatorDot} />
+            <View style={[styles.indicatorDot, styles.indicatorDotActive]} />
+            <View style={styles.indicatorDot} />
+            <View style={styles.indicatorDot} />
           </View>
         </View>
       </ScrollView>
@@ -132,102 +152,90 @@ const ServiceNumberScreen: React.FC<ServiceNumberScreenProps> = ({ navigation })
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.surface,
+    backgroundColor: AUTH_COLORS.background,
   },
   scrollContent: {
     flexGrow: 1,
   },
   content: {
     flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
     padding: SPACING.xl,
-    justifyContent: 'center',
   },
-  header: {
-    alignItems: 'center',
-    marginBottom: SPACING.xxl,
-  },
-  iconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 20,
-    backgroundColor: COLORS.inputBackground,
-    justifyContent: 'center',
-    alignItems: 'center',
+  logoSection: {
     marginBottom: SPACING.lg,
   },
-  title: {
-    fontSize: FONTS.sizes.title,
-    fontWeight: 'bold',
-    color: COLORS.text,
-    marginBottom: SPACING.sm,
-    textAlign: 'center',
+  logo: {
+    width: 140,
+    height: 140,
   },
-  subtitle: {
-    fontSize: FONTS.sizes.md,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    lineHeight: 22,
-    paddingHorizontal: SPACING.lg,
-  },
-  form: {
+  brandContainer: {
+    alignItems: 'center',
+    gap: SPACING.xs,
     marginBottom: SPACING.xxl,
   },
-  inputContainer: {
+  welcomeText: {
+    fontSize: 22,
+    fontWeight: '600',
+    color: AUTH_COLORS.text,
+  },
+  inputSection: {
+    width: '100%',
+    maxWidth: 280,
     marginBottom: SPACING.xl,
   },
-  label: {
-    fontSize: FONTS.sizes.sm,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginBottom: SPACING.sm,
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.inputBackground,
-    borderRadius: BORDER_RADIUS.lg,
-    paddingHorizontal: SPACING.lg,
-  },
-  inputIcon: {
-    marginRight: SPACING.md,
+  inputContainer: {
+    backgroundColor: AUTH_COLORS.inputBackground,
+    borderRadius: BORDER_RADIUS.md,
+    marginBottom: SPACING.lg,
   },
   input: {
-    flex: 1,
-    paddingVertical: SPACING.lg,
-    fontSize: FONTS.sizes.lg,
-    color: COLORS.text,
-    letterSpacing: 1,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+    fontSize: 16,
+    color: AUTH_COLORS.text,
+    textAlign: 'center',
   },
-  continueButton: {
-    flexDirection: 'row',
-    backgroundColor: COLORS.primary,
-    paddingVertical: SPACING.lg,
-    borderRadius: BORDER_RADIUS.lg,
+  sendButton: {
+    backgroundColor: AUTH_COLORS.primary,
+    paddingVertical: SPACING.md,
+    borderRadius: BORDER_RADIUS.xl,
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING.sm,
   },
   buttonDisabled: {
     opacity: 0.6,
   },
-  continueButtonText: {
-    color: COLORS.textLight,
-    fontSize: FONTS.sizes.lg,
-    fontWeight: 'bold',
+  sendButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
-  infoSection: {
+  privacySection: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: COLORS.inputBackground,
-    padding: SPACING.lg,
-    borderRadius: BORDER_RADIUS.lg,
-    gap: SPACING.md,
+    marginBottom: SPACING.xxl,
   },
-  infoText: {
-    flex: 1,
-    fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
-    lineHeight: 20,
+  privacyText: {
+    fontSize: 14,
+    color: AUTH_COLORS.textSecondary,
+  },
+  privacyLink: {
+    fontSize: 14,
+    color: AUTH_COLORS.link,
+    textDecorationLine: 'underline',
+  },
+  pageIndicator: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+  },
+  indicatorDot: {
+    width: 24,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: AUTH_COLORS.indicatorInactive,
+  },
+  indicatorDotActive: {
+    backgroundColor: AUTH_COLORS.indicatorActive,
   },
 });
 

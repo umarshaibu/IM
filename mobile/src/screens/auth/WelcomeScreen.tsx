@@ -5,101 +5,68 @@ import {
   StyleSheet,
   TouchableOpacity,
   StatusBar,
+  Image,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { RootStackParamList } from '../../navigation/RootNavigator';
-import { COLORS, FONTS, SPACING, BORDER_RADIUS } from '../../utils/theme';
+import { SPACING, BORDER_RADIUS } from '../../utils/theme';
 
 type WelcomeScreenProps = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Welcome'>;
 };
 
+// Theme colors matching the design
+const AUTH_COLORS = {
+  background: '#E8E8E8', // Light gray background
+  primary: '#0D3B2E', // Dark green for button
+  text: '#000000',
+  textSecondary: '#666666',
+  indicatorActive: '#0D3B2E',
+  indicatorInactive: '#CCCCCC',
+};
+
 const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ navigation }) => {
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.surface} />
+      <StatusBar barStyle="dark-content" backgroundColor={AUTH_COLORS.background} />
 
-      {/* Header Section */}
-      <View style={styles.header}>
+      {/* Main Content */}
+      <View style={styles.content}>
+        {/* Army Logo */}
         <View style={styles.logoContainer}>
-          <View style={styles.logo}>
-            <Icon name="message-text" size={48} color={COLORS.textLight} />
-          </View>
+          <Image
+            source={require('../../assets/images/army_logo.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
         </View>
-        <Text style={styles.appName}>IM</Text>
-        <Text style={styles.tagline}>Instant Messaging</Text>
-      </View>
 
-      {/* Features Section */}
-      <View style={styles.featuresContainer}>
-        <Text style={styles.featuresTitle}>Secure Communication Platform</Text>
-
-        <View style={styles.featuresList}>
-          <View style={styles.featureItem}>
-            <View style={styles.featureIconContainer}>
-              <Icon name="shield-lock" size={24} color={COLORS.primary} />
-            </View>
-            <View style={styles.featureTextContainer}>
-              <Text style={styles.featureTitle}>End-to-End Encryption</Text>
-              <Text style={styles.featureDescription}>
-                Your messages are secured and private
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.featureItem}>
-            <View style={styles.featureIconContainer}>
-              <Icon name="account-group" size={24} color={COLORS.primary} />
-            </View>
-            <View style={styles.featureTextContainer}>
-              <Text style={styles.featureTitle}>Group Conversations</Text>
-              <Text style={styles.featureDescription}>
-                Create groups for team collaboration
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.featureItem}>
-            <View style={styles.featureIconContainer}>
-              <Icon name="phone-in-talk" size={24} color={COLORS.primary} />
-            </View>
-            <View style={styles.featureTextContainer}>
-              <Text style={styles.featureTitle}>Voice & Video Calls</Text>
-              <Text style={styles.featureDescription}>
-                Crystal clear audio and video calling
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.featureItem}>
-            <View style={styles.featureIconContainer}>
-              <Icon name="file-document-multiple" size={24} color={COLORS.primary} />
-            </View>
-            <View style={styles.featureTextContainer}>
-              <Text style={styles.featureTitle}>File Sharing</Text>
-              <Text style={styles.featureDescription}>
-                Share documents, images, and media
-              </Text>
-            </View>
-          </View>
+        {/* Chat Icon and App Name */}
+        <View style={styles.brandContainer}>
+          <Icon name="chat" size={32} color={AUTH_COLORS.primary} />
+          <Text style={styles.appName}>NAIM</Text>
         </View>
       </View>
 
-      {/* Footer Section */}
+      {/* Footer */}
       <View style={styles.footer}>
+        {/* Page Indicator */}
+        <View style={styles.pageIndicator}>
+          <View style={[styles.indicatorDot, styles.indicatorDotActive]} />
+          <View style={styles.indicatorDot} />
+          <View style={styles.indicatorDot} />
+          <View style={styles.indicatorDot} />
+        </View>
+
+        {/* Get Started Button */}
         <TouchableOpacity
           style={styles.getStartedButton}
           onPress={() => navigation.navigate('ServiceNumber')}
           activeOpacity={0.8}
         >
           <Text style={styles.getStartedButtonText}>Get Started</Text>
-          <Icon name="arrow-right" size={20} color={COLORS.textLight} />
         </TouchableOpacity>
-
-        <Text style={styles.footerText}>
-          For authorized personnel only
-        </Text>
       </View>
     </View>
   );
@@ -108,113 +75,61 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.surface,
+    backgroundColor: AUTH_COLORS.background,
   },
-  header: {
+  content: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: 60,
-    paddingBottom: SPACING.xl,
+    paddingHorizontal: SPACING.xl,
   },
   logoContainer: {
     marginBottom: SPACING.lg,
   },
   logo: {
-    width: 100,
-    height: 100,
-    borderRadius: 25,
-    backgroundColor: COLORS.primary,
-    justifyContent: 'center',
+    width: 180,
+    height: 180,
+  },
+  brandContainer: {
     alignItems: 'center',
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    gap: SPACING.xs,
   },
   appName: {
     fontSize: 36,
     fontWeight: 'bold',
-    color: COLORS.primary,
+    color: AUTH_COLORS.text,
     letterSpacing: 2,
   },
-  tagline: {
-    fontSize: FONTS.sizes.md,
-    color: COLORS.textSecondary,
-    marginTop: SPACING.xs,
-  },
-  featuresContainer: {
-    flex: 1,
-    paddingHorizontal: SPACING.xl,
-    paddingTop: SPACING.xl,
-  },
-  featuresTitle: {
-    fontSize: FONTS.sizes.lg,
-    fontWeight: '600',
-    color: COLORS.text,
-    textAlign: 'center',
-    marginBottom: SPACING.xxl,
-  },
-  featuresList: {
-    gap: SPACING.md,
-  },
-  featureItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.inputBackground,
-    padding: SPACING.lg,
-    borderRadius: BORDER_RADIUS.lg,
-  },
-  featureIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: COLORS.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: SPACING.lg,
-  },
-  featureTextContainer: {
-    flex: 1,
-  },
-  featureTitle: {
-    fontSize: FONTS.sizes.md,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginBottom: 2,
-  },
-  featureDescription: {
-    fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
-  },
   footer: {
-    padding: SPACING.xl,
-    paddingBottom: 40,
+    paddingHorizontal: SPACING.xl,
+    paddingBottom: 50,
   },
-  getStartedButton: {
+  pageIndicator: {
     flexDirection: 'row',
-    backgroundColor: COLORS.primary,
-    paddingVertical: SPACING.lg,
-    paddingHorizontal: SPACING.xxl,
-    borderRadius: BORDER_RADIUS.lg,
-    alignItems: 'center',
     justifyContent: 'center',
     gap: SPACING.sm,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    marginBottom: SPACING.xl,
+  },
+  indicatorDot: {
+    width: 24,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: AUTH_COLORS.indicatorInactive,
+  },
+  indicatorDotActive: {
+    backgroundColor: AUTH_COLORS.indicatorActive,
+  },
+  getStartedButton: {
+    backgroundColor: AUTH_COLORS.primary,
+    paddingVertical: SPACING.lg,
+    borderRadius: BORDER_RADIUS.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   getStartedButtonText: {
-    color: COLORS.textLight,
-    fontSize: FONTS.sizes.lg,
-    fontWeight: 'bold',
-  },
-  footerText: {
-    textAlign: 'center',
-    color: COLORS.textMuted,
-    fontSize: FONTS.sizes.sm,
-    marginTop: SPACING.lg,
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '600',
   },
 });
 

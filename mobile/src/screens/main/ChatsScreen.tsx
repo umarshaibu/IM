@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useState } from 'react';
 import {
   View,
   FlatList,
@@ -12,7 +12,6 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useQuery } from '@tanstack/react-query';
-import LinearGradient from 'react-native-linear-gradient';
 import ConversationItem from '../../components/ConversationItem';
 import { conversationsApi } from '../../services/api';
 import { useChatStore } from '../../stores/chatStore';
@@ -23,10 +22,13 @@ import { COLORS, FONTS, SPACING, BORDER_RADIUS } from '../../utils/theme';
 
 type ChatsScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
+type FilterType = 'all' | 'personal' | 'groups';
+
 const ChatsScreen: React.FC = () => {
   const navigation = useNavigation<ChatsScreenNavigationProp>();
   const { userId } = useAuthStore();
   const { conversations, setConversations } = useChatStore();
+  const [activeFilter, setActiveFilter] = useState<FilterType>('all');
 
   const { data, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['conversations'],
@@ -48,23 +50,25 @@ const ChatsScreen: React.FC = () => {
     }, [refetch])
   );
 
-  React.useLayoutEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
-        <View style={styles.headerRight}>
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={() => navigation.navigate('Search')}
-          >
-            <Icon name="magnify" size={24} color={COLORS.textLight} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.headerButton}>
-            <Icon name="dots-vertical" size={24} color={COLORS.textLight} />
-          </TouchableOpacity>
-        </View>
-      ),
-    });
-  }, [navigation]);
+  // Filter counts
+  const filterCounts = React.useMemo(() => {
+    const all = conversations.length;
+    const personal = conversations.filter((c) => c.type === 'Private').length;
+    const groups = conversations.filter((c) => c.type === 'Group').length;
+    return { all, personal, groups };
+  }, [conversations]);
+
+  // Filtered conversations
+  const filteredConversations = React.useMemo(() => {
+    switch (activeFilter) {
+      case 'personal':
+        return conversations.filter((c) => c.type === 'Private');
+      case 'groups':
+        return conversations.filter((c) => c.type === 'Group');
+      default:
+        return conversations;
+    }
+  }, [conversations, activeFilter]);
 
   const handleConversationPress = (conversation: Conversation) => {
     const title = conversation.type === 'Private'
@@ -74,6 +78,30 @@ const ChatsScreen: React.FC = () => {
       : conversation.name || 'Group';
 
     navigation.navigate('Chat', { conversationId: conversation.id, title });
+  };
+
+  const renderFilterTab = (
+    filter: FilterType,
+    label: string,
+    count: number
+  ) => {
+    const isActive = activeFilter === filter;
+    return (
+      <TouchableOpacity
+        style={[styles.filterTab, isActive && styles.filterTabActive]}
+        onPress={() => setActiveFilter(filter)}
+        activeOpacity={0.7}
+      >
+        <Text style={[styles.filterTabText, isActive && styles.filterTabTextActive]}>
+          {label}
+        </Text>
+        <View style={[styles.filterBadge, isActive && styles.filterBadgeActive]}>
+          <Text style={[styles.filterBadgeText, isActive && styles.filterBadgeTextActive]}>
+            {count}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    );
   };
 
   const renderEmptyList = () => (
@@ -108,18 +136,37 @@ const ChatsScreen: React.FC = () => {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
 
-      {/* Search Bar */}
-      <TouchableOpacity
-        style={styles.searchBar}
-        onPress={() => navigation.navigate('Search')}
-        activeOpacity={0.7}
-      >
-        <Icon name="magnify" size={20} color={COLORS.textMuted} />
-        <Text style={styles.searchPlaceholder}>Search conversations...</Text>
-      </TouchableOpacity>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Chats</Text>
+        <View style={styles.headerRight}>
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={() => {/* Camera action */}}
+          >
+            <Icon name="camera-outline" size={24} color={COLORS.text} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={() => navigation.navigate('Search')}
+          >
+            <Icon name="magnify" size={24} color={COLORS.text} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.headerButton}>
+            <Icon name="dots-vertical" size={24} color={COLORS.text} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Filter Tabs */}
+      <View style={styles.filterContainer}>
+        {renderFilterTab('all', 'All', filterCounts.all)}
+        {renderFilterTab('personal', 'Personal', filterCounts.personal)}
+        {renderFilterTab('groups', 'Groups', filterCounts.groups)}
+      </View>
 
       <FlatList
-        data={conversations}
+        data={filteredConversations}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
@@ -132,23 +179,17 @@ const ChatsScreen: React.FC = () => {
             tintColor={COLORS.primary}
           />
         }
-        contentContainerStyle={conversations.length === 0 ? styles.emptyListContent : styles.listContent}
+        contentContainerStyle={filteredConversations.length === 0 ? styles.emptyListContent : styles.listContent}
         showsVerticalScrollIndicator={false}
       />
 
+      {/* FAB - New Chat Button */}
       <TouchableOpacity
         style={styles.fab}
         onPress={() => navigation.navigate('NewChat')}
-        activeOpacity={0.9}
+        activeOpacity={0.8}
       >
-        <LinearGradient
-          colors={[COLORS.secondary, COLORS.primary]}
-          style={styles.fabGradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        >
-          <Icon name="message-plus" size={26} color={COLORS.textLight} />
-        </LinearGradient>
+        <Icon name="message-plus" size={26} color={COLORS.textLight} />
       </TouchableOpacity>
     </View>
   );
@@ -159,6 +200,20 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.surface,
   },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.xl + 20, // Account for status bar
+    paddingBottom: SPACING.md,
+    backgroundColor: COLORS.surface,
+  },
+  headerTitle: {
+    fontSize: FONTS.sizes.title,
+    fontWeight: 'bold',
+    color: COLORS.text,
+  },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -167,21 +222,49 @@ const styles = StyleSheet.create({
     padding: SPACING.sm,
     marginLeft: SPACING.xs,
   },
-  searchBar: {
+  filterContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.inputBackground,
-    margin: SPACING.md,
-    marginTop: SPACING.sm,
     paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    borderRadius: BORDER_RADIUS.xl,
+    paddingBottom: SPACING.md,
     gap: SPACING.sm,
   },
-  searchPlaceholder: {
-    flex: 1,
-    fontSize: FONTS.sizes.md,
-    color: COLORS.textMuted,
+  filterTab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    borderRadius: BORDER_RADIUS.lg,
+    backgroundColor: 'transparent',
+  },
+  filterTabActive: {
+    backgroundColor: COLORS.primary + '15',
+  },
+  filterTabText: {
+    fontSize: FONTS.sizes.sm,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
+  },
+  filterTabTextActive: {
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
+  filterBadge: {
+    marginLeft: SPACING.xs,
+    backgroundColor: COLORS.textSecondary + '30',
+    borderRadius: BORDER_RADIUS.sm,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  filterBadgeActive: {
+    backgroundColor: COLORS.primary + '20',
+  },
+  filterBadgeText: {
+    fontSize: FONTS.sizes.xs,
+    color: COLORS.textSecondary,
+    fontWeight: '600',
+  },
+  filterBadgeTextActive: {
+    color: COLORS.primary,
   },
   listContent: {
     paddingBottom: 100,
@@ -244,20 +327,18 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     right: SPACING.lg,
-    bottom: SPACING.xl,
-    borderRadius: 30,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  fabGradient: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    bottom: 90, // Above the tab bar
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
 });
 

@@ -20,6 +20,28 @@ public class UsersController : ControllerBase
 
     private Guid GetUserId() => Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
 
+    [HttpGet]
+    public async Task<ActionResult<IEnumerable<UserDto>>> GetAllUsers()
+    {
+        var currentUserId = GetUserId();
+        var users = await _userService.GetAllUsersAsync(currentUserId);
+
+        return Ok(users.Select(u => new UserDto
+        {
+            Id = u.Id,
+            ServiceNumber = u.NominalRoll.ServiceNumber,
+            FullName = u.NominalRoll.FullName,
+            PhoneNumber = u.PhoneNumber,
+            DisplayName = u.DisplayName,
+            ProfilePictureUrl = u.ProfilePictureUrl,
+            About = u.About,
+            LastSeen = u.LastSeen,
+            IsOnline = u.IsOnline,
+            Department = u.NominalRoll.Department,
+            RankPosition = u.NominalRoll.RankPosition
+        }));
+    }
+
     [HttpGet("me")]
     public async Task<ActionResult<UserProfileDto>> GetCurrentUser()
     {

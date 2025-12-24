@@ -26,14 +26,31 @@ public class StaleCallCleanupService : BackgroundService
             try
             {
                 await CleanupStaleCalls();
+                await Task.Delay(_cleanupInterval, stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                // Graceful shutdown - this is expected
+                _logger.LogInformation("Stale call cleanup service stopping");
+                break;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error during stale call cleanup");
-            }
 
-            await Task.Delay(_cleanupInterval, stoppingToken);
+                // Wait before retrying after an error
+                try
+                {
+                    await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+            }
         }
+
+        _logger.LogInformation("Stale call cleanup service stopped");
     }
 
     private async Task CleanupStaleCalls()

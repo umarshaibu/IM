@@ -7,9 +7,8 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
+  StatusBar,
+  Image,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
@@ -17,20 +16,32 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { RootStackParamList } from '../../navigation/RootNavigator';
 import { authApi } from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
-import { COLORS, FONTS, SPACING, BORDER_RADIUS } from '../../utils/theme';
+import { SPACING, BORDER_RADIUS } from '../../utils/theme';
 
 type TokenVerificationScreenProps = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'TokenVerification'>;
   route: RouteProp<RootStackParamList, 'TokenVerification'>;
 };
 
+// Theme colors matching the design
+const AUTH_COLORS = {
+  background: '#E8E8E8',
+  primary: '#0D3B2E',
+  text: '#000000',
+  textSecondary: '#666666',
+  textMuted: '#888888',
+  keypadBg: '#F5F5F5',
+  keypadText: '#000000',
+  indicatorActive: '#0D3B2E',
+  indicatorInactive: '#CCCCCC',
+};
+
 const CODE_LENGTH = 6;
 
 const TokenVerificationScreen: React.FC<TokenVerificationScreenProps> = ({ navigation, route }) => {
-  const { serviceNumber, fullName, maskedEmail, maskedPhone } = route.params;
+  const { serviceNumber, fullName } = route.params;
   const [code, setCode] = useState<string[]>(new Array(CODE_LENGTH).fill(''));
   const [isLoading, setIsLoading] = useState(false);
-  const [isResending, setIsResending] = useState(false);
   const [countdown, setCountdown] = useState(60);
   const [canResend, setCanResend] = useState(false);
 
@@ -46,31 +57,35 @@ const TokenVerificationScreen: React.FC<TokenVerificationScreenProps> = ({ navig
     }
   }, [countdown]);
 
-  const handleCodeChange = (text: string, index: number) => {
-    // Only allow digits
-    const digit = text.replace(/[^0-9]/g, '').slice(-1);
-
-    const newCode = [...code];
-    newCode[index] = digit;
-    setCode(newCode);
-
-    // Auto-focus next input
-    if (digit && index < CODE_LENGTH - 1) {
-      inputRefs.current[index + 1]?.focus();
-    }
-
-    // Auto-submit when all digits are entered
-    if (digit && index === CODE_LENGTH - 1) {
-      const fullCode = newCode.join('');
-      if (fullCode.length === CODE_LENGTH) {
-        handleVerify(fullCode);
+  const handleKeyPress = (key: string) => {
+    if (key === 'backspace') {
+      // Find the last filled position
+      let lastFilledIndex = -1;
+      for (let i = code.length - 1; i >= 0; i--) {
+        if (code[i] !== '') {
+          lastFilledIndex = i;
+          break;
+        }
       }
-    }
-  };
+      if (lastFilledIndex >= 0) {
+        const newCode = [...code];
+        newCode[lastFilledIndex] = '';
+        setCode(newCode);
+      }
+    } else {
+      // Find the first empty position
+      const firstEmptyIndex = code.findIndex(d => d === '');
+      if (firstEmptyIndex >= 0) {
+        const newCode = [...code];
+        newCode[firstEmptyIndex] = key;
+        setCode(newCode);
 
-  const handleKeyPress = (e: any, index: number) => {
-    if (e.nativeEvent.key === 'Backspace' && !code[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus();
+        // Auto-submit when all digits are entered
+        if (firstEmptyIndex === CODE_LENGTH - 1) {
+          const fullCode = newCode.join('');
+          handleVerify(fullCode);
+        }
+      }
     }
   };
 
@@ -78,7 +93,7 @@ const TokenVerificationScreen: React.FC<TokenVerificationScreenProps> = ({ navig
     const codeToVerify = verificationCode || code.join('');
 
     if (codeToVerify.length !== CODE_LENGTH) {
-      Alert.alert('Error', 'Please enter the complete verification code');
+      Alert.alert('Error', 'Please enter the complete activation code');
       return;
     }
 
@@ -109,11 +124,9 @@ const TokenVerificationScreen: React.FC<TokenVerificationScreenProps> = ({ navig
         }
       );
     } catch (error: any) {
-      const message = error.response?.data?.message || 'Invalid verification code. Please try again.';
+      const message = error.response?.data?.message || 'Invalid activation code. Please try again.';
       Alert.alert('Error', message);
-      // Clear the code on error
       setCode(new Array(CODE_LENGTH).fill(''));
-      inputRefs.current[0]?.focus();
     } finally {
       setIsLoading(false);
     }
@@ -122,249 +135,243 @@ const TokenVerificationScreen: React.FC<TokenVerificationScreenProps> = ({ navig
   const handleResend = async () => {
     if (!canResend) return;
 
-    setIsResending(true);
     try {
       await authApi.requestLoginToken(serviceNumber);
-      Alert.alert('Success', 'A new verification code has been sent');
+      Alert.alert('Success', 'A new activation code has been sent');
       setCountdown(60);
       setCanResend(false);
       setCode(new Array(CODE_LENGTH).fill(''));
-      inputRefs.current[0]?.focus();
     } catch (error: any) {
       const message = error.response?.data?.message || 'Failed to resend code. Please try again.';
       Alert.alert('Error', message);
-    } finally {
-      setIsResending(false);
     }
   };
 
-  return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+  const renderKeypadButton = (value: string, subText?: string) => (
+    <TouchableOpacity
+      key={value}
+      style={styles.keypadButton}
+      onPress={() => handleKeyPress(value)}
+      activeOpacity={0.7}
     >
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={styles.content}>
-          {/* Header */}
-          <View style={styles.header}>
-            <View style={styles.iconContainer}>
-              <Icon name="shield-key" size={40} color={COLORS.primary} />
-            </View>
-            <Text style={styles.title}>Verification Code</Text>
-            <Text style={styles.subtitle}>
-              Hi {fullName || 'there'}, enter the 6-digit code sent to:
-            </Text>
+      <Text style={styles.keypadButtonText}>{value}</Text>
+      {subText && <Text style={styles.keypadSubText}>{subText}</Text>}
+    </TouchableOpacity>
+  );
 
-            {/* Contact Info */}
-            <View style={styles.contactInfo}>
-              {maskedEmail && (
-                <View style={styles.contactItem}>
-                  <Icon name="email-outline" size={18} color={COLORS.textSecondary} />
-                  <Text style={styles.contactText}>{maskedEmail}</Text>
-                </View>
+  return (
+    <View style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor={AUTH_COLORS.background} />
+
+      {/* Header with Back Button */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.7}
+        >
+          <Icon name="arrow-left" size={24} color={AUTH_COLORS.text} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Content Section */}
+      <View style={styles.contentSection}>
+        {/* Logo */}
+        <Image
+          source={require('../../assets/images/army_logo.png')}
+          style={styles.logo}
+          resizeMode="contain"
+        />
+
+        {/* Welcome Text with Chat Icon */}
+        <View style={styles.brandContainer}>
+          <Icon name="chat" size={24} color={AUTH_COLORS.primary} />
+          <Text style={styles.welcomeText}>Welcome to NAIM</Text>
+        </View>
+        <Text style={styles.subtitleText}>Enter Activation Code</Text>
+
+        {/* Code Display */}
+        <View style={styles.codeContainer}>
+          {code.map((digit, index) => (
+            <View key={index} style={styles.codeBox}>
+              {digit ? (
+                <Text style={styles.codeDigit}>{digit}</Text>
+              ) : (
+                <Text style={styles.codeDash}>-</Text>
               )}
-              {maskedPhone && (
-                <View style={styles.contactItem}>
-                  <Icon name="phone-outline" size={18} color={COLORS.textSecondary} />
-                  <Text style={styles.contactText}>{maskedPhone}</Text>
-                </View>
-              )}
             </View>
-          </View>
+          ))}
+        </View>
 
-          {/* Code Input */}
-          <View style={styles.codeContainer}>
-            {code.map((digit, index) => (
-              <TextInput
-                key={index}
-                ref={(ref) => (inputRefs.current[index] = ref)}
-                style={[
-                  styles.codeInput,
-                  digit ? styles.codeInputFilled : null,
-                ]}
-                value={digit}
-                onChangeText={(text) => handleCodeChange(text, index)}
-                onKeyPress={(e) => handleKeyPress(e, index)}
-                keyboardType="number-pad"
-                maxLength={1}
-                selectTextOnFocus
-                autoFocus={index === 0}
-              />
-            ))}
-          </View>
+        {/* Activate Button */}
+        <TouchableOpacity
+          style={[styles.activateButton, isLoading && styles.buttonDisabled]}
+          onPress={() => handleVerify()}
+          disabled={isLoading}
+          activeOpacity={0.8}
+        >
+          {isLoading ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.activateButtonText}>Activate</Text>
+          )}
+        </TouchableOpacity>
 
-          {/* Verify Button */}
-          <TouchableOpacity
-            style={[styles.verifyButton, isLoading && styles.buttonDisabled]}
-            onPress={() => handleVerify()}
-            disabled={isLoading}
-            activeOpacity={0.8}
-          >
-            {isLoading ? (
-              <ActivityIndicator color={COLORS.textLight} />
-            ) : (
-              <Text style={styles.verifyButtonText}>Verify & Login</Text>
-            )}
+        {/* Resend */}
+        {canResend ? (
+          <TouchableOpacity onPress={handleResend} activeOpacity={0.7}>
+            <Text style={styles.resendLink}>Resend Code</Text>
           </TouchableOpacity>
+        ) : (
+          <Text style={styles.countdownText}>Resend in {countdown}s</Text>
+        )}
+      </View>
 
-          {/* Resend Section */}
-          <View style={styles.resendSection}>
-            <Text style={styles.resendText}>Didn't receive the code?</Text>
-            {canResend ? (
-              <TouchableOpacity
-                onPress={handleResend}
-                disabled={isResending}
-                activeOpacity={0.7}
-              >
-                {isResending ? (
-                  <ActivityIndicator size="small" color={COLORS.primary} />
-                ) : (
-                  <Text style={styles.resendLink}>Resend Code</Text>
-                )}
-              </TouchableOpacity>
-            ) : (
-              <Text style={styles.countdownText}>
-                Resend in {countdown}s
-              </Text>
-            )}
-          </View>
-
-          {/* Change Number */}
+      {/* Keypad Section */}
+      <View style={styles.keypadSection}>
+        <View style={styles.keypadRow}>
+          {renderKeypadButton('1', '')}
+          {renderKeypadButton('2', 'ABC')}
+          {renderKeypadButton('3', 'DEF')}
+        </View>
+        <View style={styles.keypadRow}>
+          {renderKeypadButton('4', 'GHI')}
+          {renderKeypadButton('5', 'JKL')}
+          {renderKeypadButton('6', 'MNO')}
+        </View>
+        <View style={styles.keypadRow}>
+          {renderKeypadButton('7', 'PQRS')}
+          {renderKeypadButton('8', 'TUV')}
+          {renderKeypadButton('9', 'WXYZ')}
+        </View>
+        <View style={styles.keypadRow}>
+          <TouchableOpacity style={styles.keypadButton} activeOpacity={0.7}>
+            <Text style={styles.keypadButtonText}>*#</Text>
+          </TouchableOpacity>
+          {renderKeypadButton('0', '')}
           <TouchableOpacity
-            style={styles.changeNumberButton}
-            onPress={() => navigation.goBack()}
+            style={styles.keypadButton}
+            onPress={() => handleKeyPress('backspace')}
             activeOpacity={0.7}
           >
-            <Icon name="arrow-left" size={18} color={COLORS.textSecondary} />
-            <Text style={styles.changeNumberText}>Change Service Number</Text>
+            <Icon name="backspace-outline" size={24} color={AUTH_COLORS.keypadText} />
           </TouchableOpacity>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </View>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.surface,
-  },
-  scrollContent: {
-    flexGrow: 1,
-  },
-  content: {
-    flex: 1,
-    padding: SPACING.xl,
-    justifyContent: 'center',
+    backgroundColor: AUTH_COLORS.background,
   },
   header: {
-    alignItems: 'center',
-    marginBottom: SPACING.xxl,
+    paddingTop: 50,
+    paddingHorizontal: SPACING.lg,
   },
-  iconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 20,
-    backgroundColor: COLORS.inputBackground,
+  backButton: {
+    padding: SPACING.sm,
+    alignSelf: 'flex-start',
+  },
+  contentSection: {
+    flex: 1,
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
   },
-  title: {
-    fontSize: FONTS.sizes.title,
-    fontWeight: 'bold',
-    color: COLORS.text,
-    marginBottom: SPACING.sm,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: FONTS.sizes.md,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
+  logo: {
+    width: 100,
+    height: 100,
     marginBottom: SPACING.md,
   },
-  contactInfo: {
-    gap: SPACING.sm,
-  },
-  contactItem: {
-    flexDirection: 'row',
+  brandContainer: {
     alignItems: 'center',
-    gap: SPACING.sm,
+    gap: SPACING.xs,
   },
-  contactText: {
-    fontSize: FONTS.sizes.sm,
-    color: COLORS.text,
-    fontWeight: '500',
+  welcomeText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: AUTH_COLORS.text,
+  },
+  subtitleText: {
+    fontSize: 14,
+    color: AUTH_COLORS.textSecondary,
+    marginTop: SPACING.xs,
+    marginBottom: SPACING.xl,
   },
   codeContainer: {
     flexDirection: 'row',
-    justifyContent: 'center',
     gap: SPACING.md,
-    marginBottom: SPACING.xxl,
-  },
-  codeInput: {
-    width: 48,
-    height: 56,
-    borderRadius: BORDER_RADIUS.lg,
-    backgroundColor: COLORS.inputBackground,
-    fontSize: FONTS.sizes.title,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    color: COLORS.text,
-  },
-  codeInputFilled: {
-    backgroundColor: COLORS.primary + '15',
-    borderWidth: 2,
-    borderColor: COLORS.primary,
-  },
-  verifyButton: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: SPACING.lg,
-    borderRadius: BORDER_RADIUS.lg,
-    alignItems: 'center',
     marginBottom: SPACING.xl,
+  },
+  codeBox: {
+    width: 40,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  codeDigit: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: AUTH_COLORS.text,
+  },
+  codeDash: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: AUTH_COLORS.textMuted,
+  },
+  activateButton: {
+    backgroundColor: AUTH_COLORS.primary,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.xxl * 2,
+    borderRadius: BORDER_RADIUS.xl,
+    marginBottom: SPACING.lg,
   },
   buttonDisabled: {
     opacity: 0.6,
   },
-  verifyButtonText: {
-    color: COLORS.textLight,
-    fontSize: FONTS.sizes.lg,
-    fontWeight: 'bold',
-  },
-  resendSection: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    marginBottom: SPACING.xl,
-  },
-  resendText: {
-    fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
-  },
-  resendLink: {
-    fontSize: FONTS.sizes.sm,
-    color: COLORS.primary,
+  activateButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
     fontWeight: '600',
   },
+  resendLink: {
+    fontSize: 14,
+    color: AUTH_COLORS.primary,
+  },
   countdownText: {
-    fontSize: FONTS.sizes.sm,
-    color: COLORS.textMuted,
+    fontSize: 14,
+    color: AUTH_COLORS.textMuted,
   },
-  changeNumberButton: {
+  keypadSection: {
+    backgroundColor: AUTH_COLORS.keypadBg,
+    paddingVertical: SPACING.lg,
+    paddingHorizontal: SPACING.md,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+  },
+  keypadRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING.sm,
-    padding: SPACING.md,
+    justifyContent: 'space-around',
+    marginBottom: SPACING.sm,
   },
-  changeNumberText: {
-    fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
+  keypadButton: {
+    width: 80,
+    height: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  keypadButtonText: {
+    fontSize: 28,
+    fontWeight: '400',
+    color: AUTH_COLORS.keypadText,
+  },
+  keypadSubText: {
+    fontSize: 10,
+    color: AUTH_COLORS.textMuted,
+    marginTop: -2,
   },
 });
 

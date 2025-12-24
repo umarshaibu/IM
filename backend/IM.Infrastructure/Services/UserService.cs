@@ -35,6 +35,15 @@ public class UserService : IUserService
             .FirstOrDefaultAsync(u => u.NominalRoll.ServiceNumber == serviceNumber);
     }
 
+    public async Task<IEnumerable<User>> GetAllUsersAsync(Guid currentUserId)
+    {
+        return await _context.Users
+            .Include(u => u.NominalRoll)
+            .Where(u => u.Id != currentUserId)
+            .OrderBy(u => u.NominalRoll.FullName)
+            .ToListAsync();
+    }
+
     public async Task<IEnumerable<User>> SearchUsersAsync(string query, Guid currentUserId)
     {
         var lowerQuery = query.ToLower();

@@ -97,6 +97,8 @@ export const authApi = {
 
 // Users API
 export const usersApi = {
+  getAll: () => api.get('/users'),
+
   getMe: () => api.get('/users/me'),
 
   getUser: (id: string) => api.get(`/users/${id}`),
@@ -133,6 +135,9 @@ export const conversationsApi = {
   get: (id: string) => api.get(`/conversations/${id}`),
 
   getOrCreatePrivate: (otherUserId: string) =>
+    api.post(`/conversations/private/${otherUserId}`),
+
+  createPrivate: (otherUserId: string) =>
     api.post(`/conversations/private/${otherUserId}`),
 
   createGroup: (data: {
@@ -276,6 +281,19 @@ export const notificationsApi = {
 
   unregister: (token: string) =>
     api.post('/notifications/unregister', { token }),
+};
+
+// Channels API
+export const channelsApi = {
+  getAll: () => api.get('/channels'),
+
+  get: (id: string) => api.get(`/channels/${id}`),
+
+  follow: (id: string) => api.post(`/channels/${id}/follow`),
+
+  unfollow: (id: string) => api.delete(`/channels/${id}/follow`),
+
+  getFollowing: () => api.get('/channels/following'),
 };
 
 export default api;

@@ -15,6 +15,12 @@ using IM.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Configure background service exception behavior to not stop host
+builder.Services.Configure<HostOptions>(options =>
+{
+    options.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore;
+});
+
 // Configure logging to file for production debugging
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
@@ -209,6 +215,7 @@ public class MessageCleanupService : BackgroundService
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<MessageCleanupService> _logger;
+    private readonly TimeSpan _cleanupInterval = TimeSpan.FromMinutes(5);
 
     public MessageCleanupService(IServiceProvider serviceProvider, ILogger<MessageCleanupService> logger)
     {
@@ -218,6 +225,8 @@ public class MessageCleanupService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        _logger.LogInformation("Message cleanup service started");
+
         while (!stoppingToken.IsCancellationRequested)
         {
             try
@@ -230,13 +239,31 @@ public class MessageCleanupService : BackgroundService
                 await statusService.CleanupExpiredStatusesAsync();
 
                 _logger.LogInformation("Cleaned up expired messages and statuses at {Time}", DateTime.UtcNow);
+
+                await Task.Delay(_cleanupInterval, stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                // Graceful shutdown - this is expected
+                _logger.LogInformation("Message cleanup service stopping");
+                break;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error cleaning up expired content");
-            }
 
-            await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);
+                // Wait before retrying after an error
+                try
+                {
+                    await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+            }
         }
+
+        _logger.LogInformation("Message cleanup service stopped");
     }
 }
