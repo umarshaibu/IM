@@ -15,4 +15,5 @@ public interface ICallService
     Task<Call?> GetCallByIdAsync(Guid callId);
     string GenerateLiveKitToken(Guid userId, string roomId, string userName);
     Task<int> CleanupStaleCallsAsync(TimeSpan maxAge);
+    Task<bool> AddParticipantAsync(Guid callId, Guid userId);
 }

@@ -13,11 +13,13 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import Avatar from '../../components/Avatar';
-import { conversationsApi, messagesApi } from '../../services/api';
+import { conversationsApi } from '../../services/api';
+import { forwardMessageToMultiple } from '../../services/signalr';
 import { useAuthStore } from '../../stores/authStore';
 import { RootStackParamList } from '../../navigation/RootNavigator';
 import { Conversation } from '../../types';
 import { COLORS, FONTS, SPACING, BORDER_RADIUS } from '../../utils/theme';
+import { useTheme } from '../../context';
 
 type ForwardMessageRouteProp = RouteProp<RootStackParamList, 'ForwardMessage'>;
 
@@ -26,9 +28,11 @@ const ForwardMessageScreen: React.FC = () => {
   const navigation = useNavigation();
   const { messageId } = route.params;
   const { userId } = useAuthStore();
+  const { colors } = useTheme();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedConversations, setSelectedConversations] = useState<string[]>([]);
+  const [isForwarding, setIsForwarding] = useState(false);
 
   const { data: conversations, isLoading } = useQuery({
     queryKey: ['conversations'],
@@ -38,18 +42,24 @@ const ForwardMessageScreen: React.FC = () => {
     },
   });
 
-  const forwardMutation = useMutation({
-    mutationFn: async () => {
-      await messagesApi.forward(messageId, selectedConversations);
-    },
-    onSuccess: () => {
-      Alert.alert('Success', 'Message forwarded successfully');
+  const handleForward = async () => {
+    if (selectedConversations.length === 0) return;
+
+    setIsForwarding(true);
+    try {
+      await forwardMessageToMultiple(messageId, selectedConversations);
+      Alert.alert(
+        'Success',
+        `Message forwarded to ${selectedConversations.length} conversation${selectedConversations.length > 1 ? 's' : ''}`
+      );
       navigation.goBack();
-    },
-    onError: () => {
-      Alert.alert('Error', 'Failed to forward message');
-    },
-  });
+    } catch (error) {
+      console.error('Failed to forward message:', error);
+      Alert.alert('Error', 'Failed to forward message. Please try again.');
+    } finally {
+      setIsForwarding(false);
+    }
+  };
 
   const filteredConversations = conversations?.filter((conv) => {
     if (!searchQuery) return true;
@@ -173,11 +183,11 @@ const ForwardMessageScreen: React.FC = () => {
 
       {selectedConversations.length > 0 && (
         <TouchableOpacity
-          style={[styles.forwardButton, forwardMutation.isPending && styles.forwardButtonDisabled]}
-          onPress={() => forwardMutation.mutate()}
-          disabled={forwardMutation.isPending}
+          style={[styles.forwardButton, isForwarding && styles.forwardButtonDisabled]}
+          onPress={handleForward}
+          disabled={isForwarding}
         >
-          {forwardMutation.isPending ? (
+          {isForwarding ? (
             <ActivityIndicator color={COLORS.textLight} />
           ) : (
             <>

@@ -29,4 +29,6 @@ public class User : BaseEntity
     public ICollection<BlockedUser> BlockedUsers { get; set; } = new List<BlockedUser>();
     public ICollection<BlockedUser> BlockedByUsers { get; set; } = new List<BlockedUser>();
     public ICollection<Status> Statuses { get; set; } = new List<Status>();
+    public ICollection<Channel> OwnedChannels { get; set; } = new List<Channel>();
+    public ICollection<ChannelFollower> FollowedChannels { get; set; } = new List<ChannelFollower>();
 }

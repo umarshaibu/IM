@@ -10,6 +10,7 @@ public class UserDevice : BaseEntity
     public string? DeviceId { get; set; }
     public string? DeviceName { get; set; }
     public bool IsActive { get; set; } = true;
+    public bool IsVoipToken { get; set; } = false; // iOS VoIP push token for CallKit
     public DateTime LastActiveAt { get; set; } = DateTime.UtcNow;
 
     // Navigation

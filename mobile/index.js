@@ -14,8 +14,52 @@ import notifee, {
   AndroidVisibility,
   AndroidStyle,
 } from '@notifee/react-native';
+import RNCallKeep from 'react-native-callkeep';
 import App from './App';
 import { name as appName } from './app.json';
+
+// Initialize CallKeep for background calls
+const initializeCallKeep = async () => {
+  try {
+    await RNCallKeep.setup({
+      ios: {
+        appName: 'IM',
+        supportsVideo: true,
+        maximumCallGroups: '1',
+        maximumCallsPerCallGroup: '1',
+        includesCallsInRecents: true,
+        ringtoneSound: 'ringtone.caf',
+      },
+      android: {
+        alertTitle: 'Permissions Required',
+        alertDescription: 'IM needs access to manage phone calls',
+        cancelButton: 'Cancel',
+        okButton: 'OK',
+        imageName: 'ic_launcher',
+        selfManaged: true,
+        additionalPermissions: [],
+        foregroundService: {
+          channelId: 'calls',
+          channelName: 'Incoming Calls',
+          notificationTitle: 'IM Call',
+          notificationIcon: 'ic_call',
+        },
+      },
+    });
+    console.log('CallKeep initialized in background');
+  } catch (error) {
+    console.log('CallKeep initialization failed in background:', error);
+  }
+};
+
+// Generate a UUID for CallKeep
+const generateUUID = () => {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
 
 // Helper to stop native ringtone
 const stopNativeRingtone = async () => {
@@ -29,111 +73,88 @@ const stopNativeRingtone = async () => {
 };
 
 // Handle background messages from Firebase
+// This is called when the app is in background or killed state
 messaging().setBackgroundMessageHandler(async (remoteMessage) => {
-  console.log('Background message received:', remoteMessage);
+  console.log('Background message received:', JSON.stringify(remoteMessage.data));
 
   const { data } = remoteMessage;
   if (!data) return;
 
-  // Handle incoming call notifications
+  // Handle incoming call notifications - use CallKeep for device wake-up
   if (data.type === 'call') {
-    // Delete the old channel if it exists (to update settings)
-    // Then create a new one with proper ringtone settings
+    const callId = data.callId;
+    const callerName = data.callerName || 'Unknown Caller';
+    const isVideo = data.callType === 'Video';
+    const uuid = generateUUID();
+
+    console.log('Background call received:', { callId, callerName, isVideo });
+
     try {
-      await notifee.deleteChannel('calls');
-    } catch (e) {
-      // Channel might not exist, that's OK
+      // Initialize CallKeep in background
+      await initializeCallKeep();
+
+      // Display incoming call via CallKeep - this wakes the device
+      RNCallKeep.displayIncomingCall(
+        uuid,
+        callerName,
+        callerName,
+        'generic',
+        isVideo
+      );
+
+      console.log('CallKeep incoming call displayed:', uuid);
+
+      // Store call UUID mapping for later use
+      // (Note: In a real app, you'd use AsyncStorage or a similar persistent store)
+    } catch (error) {
+      console.error('Failed to display incoming call via CallKeep:', error);
+
+      // Fallback: Use notifee notification with full-screen intent
+      await displayCallNotificationFallback(data);
+    }
+    return;
+  }
+
+  // Handle call ended notification
+  if (data.type === 'call_ended') {
+    const callId = data.callId;
+    console.log('Background call ended:', callId);
+
+    try {
+      // End all active calls (in background, we can't track specific UUIDs)
+      RNCallKeep.endAllCalls();
+    } catch (error) {
+      console.error('Failed to end call via CallKeep:', error);
     }
 
-    // Create the calls channel with ringtone settings
+    // Cancel any call notifications
+    await notifee.cancelNotification(`call-${callId}`);
+    return;
+  }
+
+  // Handle message notifications - with wake-up capability
+  if (data.type === 'message') {
+    // Data-only message from updated backend
+    const senderName = data.senderName || 'New Message';
+    const messagePreview = data.messagePreview || 'You have a new message';
+
+    // Create urgent channel if needed
     await notifee.createChannel({
-      id: 'calls',
-      name: 'Incoming Calls',
+      id: 'messages_urgent',
+      name: 'Urgent Messages',
       importance: AndroidImportance.HIGH,
-      sound: 'ringtone',
+      sound: 'default',
       vibration: true,
-      vibrationPattern: [500, 250, 500, 250],
+      vibrationPattern: [0, 250, 250, 250],
       lights: true,
       lightColor: '#128C7E',
       bypassDnd: true,
+      visibility: AndroidVisibility.PUBLIC,
     });
 
-    // Display a call-style notification
     await notifee.displayNotification({
-      id: `call-${data.callId}`,
-      title: data.callerName || 'Incoming Call',
-      body: `Incoming ${data.callType?.toLowerCase() || 'voice'} call`,
-      data: {
-        type: 'call',
-        callId: data.callId,
-        callerId: data.callerId,
-        callerName: data.callerName,
-        callType: data.callType,
-        conversationId: data.conversationId,
-      },
-      android: {
-        channelId: 'calls',
-        smallIcon: 'ic_call',
-        largeIcon: 'ic_launcher',
-        color: '#128C7E',
-        category: AndroidCategory.CALL,
-        importance: AndroidImportance.HIGH,
-        visibility: AndroidVisibility.PUBLIC,
-        ongoing: true,
-        autoCancel: false,
-        // Sound configuration - loop the ringtone
-        sound: 'ringtone',
-        loopSound: true,
-        vibrationPattern: [500, 250, 500, 250],
-        // Use foreground service for call notifications
-        asForegroundService: true,
-        // Full screen intent - this wakes the device and shows on lock screen
-        fullScreenAction: {
-          id: 'incoming-call',
-          launchActivity: 'com.im.MainActivity',
-        },
-        pressAction: {
-          id: 'answer',
-          launchActivity: 'com.im.MainActivity',
-        },
-        actions: [
-          {
-            title: '❌ Decline',
-            pressAction: { id: 'decline' },
-          },
-          {
-            title: '✓ Answer',
-            pressAction: { id: 'answer', launchActivity: 'com.im.MainActivity' },
-          },
-        ],
-        // Style for call notifications
-        style: {
-          type: AndroidStyle.BIGTEXT,
-          text: `${data.callerName || 'Someone'} is calling you`,
-        },
-        // Show timestamp
-        showTimestamp: true,
-        timestamp: Date.now(),
-        // Keep notification at top
-        onlyAlertOnce: false,
-      },
-      ios: {
-        sound: 'ringtone.caf',
-        critical: true,
-        criticalVolume: 1.0,
-        interruptionLevel: 'timeSensitive',
-      },
-    });
-
-    console.log('Call notification displayed for:', data.callId);
-  }
-
-  // Handle message notifications
-  if (data.type === 'message') {
-    const { notification } = remoteMessage;
-    await notifee.displayNotification({
-      title: notification?.title || 'New Message',
-      body: notification?.body || 'You have a new message',
+      title: senderName,
+      body: messagePreview,
       data: {
         type: 'message',
         conversationId: data.conversationId,
@@ -141,19 +162,113 @@ messaging().setBackgroundMessageHandler(async (remoteMessage) => {
         senderId: data.senderId,
       },
       android: {
-        channelId: 'messages',
+        channelId: 'messages_urgent',
         smallIcon: 'ic_notification',
         color: '#128C7E',
+        importance: AndroidImportance.HIGH,
+        visibility: AndroidVisibility.PUBLIC,
+        lights: true,
+        lightColor: '#128C7E',
+        vibrationPattern: [0, 250, 250, 250],
         pressAction: {
           id: 'default',
+          launchActivity: 'com.im.MainActivity',
         },
+        showTimestamp: true,
+        timestamp: Date.now(),
       },
       ios: {
         sound: 'default',
+        interruptionLevel: 'timeSensitive',
       },
     });
+
+    console.log('Message notification displayed for:', data.messageId);
   }
 });
+
+// Fallback function for call notifications when CallKeep fails
+const displayCallNotificationFallback = async (data) => {
+  try {
+    await notifee.deleteChannel('calls');
+  } catch (e) {
+    // Channel might not exist
+  }
+
+  await notifee.createChannel({
+    id: 'calls',
+    name: 'Incoming Calls',
+    importance: AndroidImportance.HIGH,
+    sound: 'ringtone',
+    vibration: true,
+    vibrationPattern: [500, 250, 500, 250],
+    lights: true,
+    lightColor: '#128C7E',
+    bypassDnd: true,
+  });
+
+  await notifee.displayNotification({
+    id: `call-${data.callId}`,
+    title: data.callerName || 'Incoming Call',
+    body: `Incoming ${data.callType?.toLowerCase() || 'voice'} call`,
+    data: {
+      type: 'call',
+      callId: data.callId,
+      callerId: data.callerId,
+      callerName: data.callerName,
+      callType: data.callType,
+      conversationId: data.conversationId,
+    },
+    android: {
+      channelId: 'calls',
+      smallIcon: 'ic_call',
+      largeIcon: 'ic_launcher',
+      color: '#128C7E',
+      category: AndroidCategory.CALL,
+      importance: AndroidImportance.HIGH,
+      visibility: AndroidVisibility.PUBLIC,
+      ongoing: true,
+      autoCancel: false,
+      sound: 'ringtone',
+      loopSound: true,
+      vibrationPattern: [500, 250, 500, 250],
+      asForegroundService: true,
+      fullScreenAction: {
+        id: 'incoming-call',
+        launchActivity: 'com.im.MainActivity',
+      },
+      pressAction: {
+        id: 'answer',
+        launchActivity: 'com.im.MainActivity',
+      },
+      actions: [
+        {
+          title: '❌ Decline',
+          pressAction: { id: 'decline' },
+        },
+        {
+          title: '✓ Answer',
+          pressAction: { id: 'answer', launchActivity: 'com.im.MainActivity' },
+        },
+      ],
+      style: {
+        type: AndroidStyle.BIGTEXT,
+        text: `${data.callerName || 'Someone'} is calling you`,
+      },
+      showTimestamp: true,
+      timestamp: Date.now(),
+      onlyAlertOnce: false,
+    },
+    ios: {
+      sound: 'ringtone.caf',
+      critical: true,
+      criticalVolume: 1.0,
+      interruptionLevel: 'timeSensitive',
+    },
+  });
+
+  console.log('Fallback call notification displayed for:', data.callId);
+};
 
 // Handle notification background events
 notifee.onBackgroundEvent(async ({ type, detail }) => {

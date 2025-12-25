@@ -143,6 +143,180 @@ namespace IM.Infrastructure.Migrations
                     b.ToTable("CallParticipants");
                 });
 
+            modelBuilder.Entity("IM.Core.Entities.Channel", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("FollowerCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("IconUrl")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsPublic")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsVerified")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("LastPostAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name");
+
+                    b.HasIndex("OwnerId");
+
+                    b.ToTable("Channels");
+                });
+
+            modelBuilder.Entity("IM.Core.Entities.ChannelFollower", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ChannelId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("FollowedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsMuted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("ChannelId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("ChannelFollowers");
+                });
+
+            modelBuilder.Entity("IM.Core.Entities.ChannelPost", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AuthorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ChannelId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Content")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsPinned")
+                        .HasColumnType("boolean");
+
+                    b.Property<int?>("MediaDuration")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("MediaMimeType")
+                        .HasColumnType("text");
+
+                    b.Property<long?>("MediaSize")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("MediaUrl")
+                        .HasColumnType("text");
+
+                    b.Property<int>("ReactionCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ThumbnailUrl")
+                        .HasColumnType("text");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("ViewCount")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AuthorId");
+
+                    b.HasIndex("ChannelId");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.ToTable("ChannelPosts");
+                });
+
+            modelBuilder.Entity("IM.Core.Entities.ChannelPostReaction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Emoji")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("PostId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("PostId", "UserId", "Emoji")
+                        .IsUnique();
+
+                    b.ToTable("ChannelPostReactions");
+                });
+
             modelBuilder.Entity("IM.Core.Entities.Contact", b =>
                 {
                     b.Property<Guid>("Id")
@@ -280,6 +454,105 @@ namespace IM.Infrastructure.Migrations
                     b.ToTable("ConversationParticipants");
                 });
 
+            modelBuilder.Entity("IM.Core.Entities.DeletedMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ConversationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("DeleteType")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("DeletedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("DeletedByServiceNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("DeletionReason")
+                        .HasColumnType("text");
+
+                    b.Property<string>("MediaOriginatorServiceNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("OriginalContent")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("OriginalCreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("OriginalEditedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("OriginalMediaDuration")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("OriginalMediaMimeType")
+                        .HasColumnType("text");
+
+                    b.Property<long?>("OriginalMediaSize")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("OriginalMediaThumbnailUrl")
+                        .HasColumnType("text");
+
+                    b.Property<string>("OriginalMediaUrl")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("OriginalMessageId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("OriginalReplyToMessageId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("OriginalSenderServiceNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<int>("OriginalType")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("SenderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SenderServiceNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("WasForwarded")
+                        .HasColumnType("boolean");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConversationId");
+
+                    b.HasIndex("DeletedAt");
+
+                    b.HasIndex("DeletedById");
+
+                    b.HasIndex("OriginalMessageId");
+
+                    b.HasIndex("SenderId");
+
+                    b.ToTable("DeletedMessages");
+                });
+
             modelBuilder.Entity("IM.Core.Entities.LoginToken", b =>
                 {
                     b.Property<Guid>("Id")
@@ -402,6 +675,9 @@ namespace IM.Infrastructure.Migrations
                     b.Property<int>("ExpiryDuration")
                         .HasColumnType("integer");
 
+                    b.Property<int>("ForwardCount")
+                        .HasColumnType("integer");
+
                     b.Property<Guid?>("ForwardedFromMessageId")
                         .HasColumnType("uuid");
 
@@ -423,6 +699,10 @@ namespace IM.Infrastructure.Migrations
                     b.Property<string>("MediaMimeType")
                         .HasColumnType("text");
 
+                    b.Property<string>("MediaOriginatorServiceNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
                     b.Property<long?>("MediaSize")
                         .HasColumnType("bigint");
 
@@ -432,11 +712,25 @@ namespace IM.Infrastructure.Migrations
                     b.Property<string>("MediaUrl")
                         .HasColumnType("text");
 
+                    b.Property<DateTime?>("OriginalCreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("OriginalMessageId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("OriginalSenderServiceNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
                     b.Property<Guid?>("ReplyToMessageId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("SenderId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("SenderServiceNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.Property<int>("Type")
                         .HasColumnType("integer");
@@ -454,11 +748,99 @@ namespace IM.Infrastructure.Migrations
 
                     b.HasIndex("ForwardedFromMessageId");
 
+                    b.HasIndex("OriginalMessageId");
+
                     b.HasIndex("ReplyToMessageId");
 
                     b.HasIndex("SenderId");
 
                     b.ToTable("Messages");
+                });
+
+            modelBuilder.Entity("IM.Core.Entities.MessageForwardChain", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("ForwardOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("ForwardedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ForwarderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ForwarderServiceNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid>("FromConversationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("MessageId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("OriginalMessageId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ToConversationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ForwarderId");
+
+                    b.HasIndex("FromConversationId");
+
+                    b.HasIndex("MessageId");
+
+                    b.HasIndex("OriginalMessageId");
+
+                    b.HasIndex("ToConversationId");
+
+                    b.ToTable("MessageForwardChains");
+                });
+
+            modelBuilder.Entity("IM.Core.Entities.MessageReaction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Emoji")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("MessageId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("MessageId", "UserId", "Emoji")
+                        .IsUnique();
+
+                    b.ToTable("MessageReactions");
                 });
 
             modelBuilder.Entity("IM.Core.Entities.MessageStatusEntity", b =>
@@ -541,6 +923,77 @@ namespace IM.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("NominalRolls");
+                });
+
+            modelBuilder.Entity("IM.Core.Entities.PinnedMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ConversationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("MessageId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("PinnedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("PinnedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConversationId");
+
+                    b.HasIndex("MessageId");
+
+                    b.HasIndex("PinnedById");
+
+                    b.HasIndex("ConversationId", "MessageId")
+                        .IsUnique();
+
+                    b.ToTable("PinnedMessages");
+                });
+
+            modelBuilder.Entity("IM.Core.Entities.StarredMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("MessageId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("StarredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MessageId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("UserId", "MessageId")
+                        .IsUnique();
+
+                    b.ToTable("StarredMessages");
                 });
 
             modelBuilder.Entity("IM.Core.Entities.Status", b =>
@@ -711,6 +1164,9 @@ namespace IM.Infrastructure.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IsVoipToken")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTime>("LastActiveAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -789,6 +1245,74 @@ namespace IM.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("IM.Core.Entities.Channel", b =>
+                {
+                    b.HasOne("IM.Core.Entities.User", "Owner")
+                        .WithMany("OwnedChannels")
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Owner");
+                });
+
+            modelBuilder.Entity("IM.Core.Entities.ChannelFollower", b =>
+                {
+                    b.HasOne("IM.Core.Entities.Channel", "Channel")
+                        .WithMany("Followers")
+                        .HasForeignKey("ChannelId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("IM.Core.Entities.User", "User")
+                        .WithMany("FollowedChannels")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Channel");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("IM.Core.Entities.ChannelPost", b =>
+                {
+                    b.HasOne("IM.Core.Entities.User", "Author")
+                        .WithMany()
+                        .HasForeignKey("AuthorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IM.Core.Entities.Channel", "Channel")
+                        .WithMany("Posts")
+                        .HasForeignKey("ChannelId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Author");
+
+                    b.Navigation("Channel");
+                });
+
+            modelBuilder.Entity("IM.Core.Entities.ChannelPostReaction", b =>
+                {
+                    b.HasOne("IM.Core.Entities.ChannelPost", "Post")
+                        .WithMany("Reactions")
+                        .HasForeignKey("PostId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("IM.Core.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Post");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("IM.Core.Entities.Contact", b =>
                 {
                     b.HasOne("IM.Core.Entities.User", "ContactUser")
@@ -837,6 +1361,33 @@ namespace IM.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("IM.Core.Entities.DeletedMessage", b =>
+                {
+                    b.HasOne("IM.Core.Entities.Conversation", "Conversation")
+                        .WithMany()
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("IM.Core.Entities.User", "DeletedBy")
+                        .WithMany()
+                        .HasForeignKey("DeletedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IM.Core.Entities.User", "Sender")
+                        .WithMany()
+                        .HasForeignKey("SenderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Conversation");
+
+                    b.Navigation("DeletedBy");
+
+                    b.Navigation("Sender");
+                });
+
             modelBuilder.Entity("IM.Core.Entities.LoginToken", b =>
                 {
                     b.HasOne("IM.Core.Entities.NominalRoll", "NominalRoll")
@@ -879,6 +1430,11 @@ namespace IM.Infrastructure.Migrations
                         .HasForeignKey("ForwardedFromMessageId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("IM.Core.Entities.Message", "OriginalMessage")
+                        .WithMany()
+                        .HasForeignKey("OriginalMessageId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("IM.Core.Entities.Message", "ReplyToMessage")
                         .WithMany()
                         .HasForeignKey("ReplyToMessageId")
@@ -894,15 +1450,125 @@ namespace IM.Infrastructure.Migrations
 
                     b.Navigation("ForwardedFromMessage");
 
+                    b.Navigation("OriginalMessage");
+
                     b.Navigation("ReplyToMessage");
 
                     b.Navigation("Sender");
+                });
+
+            modelBuilder.Entity("IM.Core.Entities.MessageForwardChain", b =>
+                {
+                    b.HasOne("IM.Core.Entities.User", "Forwarder")
+                        .WithMany()
+                        .HasForeignKey("ForwarderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IM.Core.Entities.Conversation", "FromConversation")
+                        .WithMany()
+                        .HasForeignKey("FromConversationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IM.Core.Entities.Message", "Message")
+                        .WithMany("ForwardChain")
+                        .HasForeignKey("MessageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("IM.Core.Entities.Message", "OriginalMessage")
+                        .WithMany()
+                        .HasForeignKey("OriginalMessageId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IM.Core.Entities.Conversation", "ToConversation")
+                        .WithMany()
+                        .HasForeignKey("ToConversationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Forwarder");
+
+                    b.Navigation("FromConversation");
+
+                    b.Navigation("Message");
+
+                    b.Navigation("OriginalMessage");
+
+                    b.Navigation("ToConversation");
+                });
+
+            modelBuilder.Entity("IM.Core.Entities.MessageReaction", b =>
+                {
+                    b.HasOne("IM.Core.Entities.Message", "Message")
+                        .WithMany("Reactions")
+                        .HasForeignKey("MessageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("IM.Core.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Message");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("IM.Core.Entities.MessageStatusEntity", b =>
                 {
                     b.HasOne("IM.Core.Entities.Message", "Message")
                         .WithMany("Statuses")
+                        .HasForeignKey("MessageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("IM.Core.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Message");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("IM.Core.Entities.PinnedMessage", b =>
+                {
+                    b.HasOne("IM.Core.Entities.Conversation", "Conversation")
+                        .WithMany()
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("IM.Core.Entities.Message", "Message")
+                        .WithMany()
+                        .HasForeignKey("MessageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("IM.Core.Entities.User", "PinnedBy")
+                        .WithMany()
+                        .HasForeignKey("PinnedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Conversation");
+
+                    b.Navigation("Message");
+
+                    b.Navigation("PinnedBy");
+                });
+
+            modelBuilder.Entity("IM.Core.Entities.StarredMessage", b =>
+                {
+                    b.HasOne("IM.Core.Entities.Message", "Message")
+                        .WithMany()
                         .HasForeignKey("MessageId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -975,6 +1641,18 @@ namespace IM.Infrastructure.Migrations
                     b.Navigation("Participants");
                 });
 
+            modelBuilder.Entity("IM.Core.Entities.Channel", b =>
+                {
+                    b.Navigation("Followers");
+
+                    b.Navigation("Posts");
+                });
+
+            modelBuilder.Entity("IM.Core.Entities.ChannelPost", b =>
+                {
+                    b.Navigation("Reactions");
+                });
+
             modelBuilder.Entity("IM.Core.Entities.Conversation", b =>
                 {
                     b.Navigation("Messages");
@@ -984,7 +1662,11 @@ namespace IM.Infrastructure.Migrations
 
             modelBuilder.Entity("IM.Core.Entities.Message", b =>
                 {
+                    b.Navigation("ForwardChain");
+
                     b.Navigation("MediaFiles");
+
+                    b.Navigation("Reactions");
 
                     b.Navigation("Statuses");
                 });
@@ -1010,6 +1692,10 @@ namespace IM.Infrastructure.Migrations
                     b.Navigation("ConversationParticipants");
 
                     b.Navigation("Devices");
+
+                    b.Navigation("FollowedChannels");
+
+                    b.Navigation("OwnedChannels");
 
                     b.Navigation("SentMessages");
 

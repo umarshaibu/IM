@@ -14,7 +14,8 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import AudioRecorderPlayer from 'react-native-audio-recorder-player';
-import { COLORS, FONTS, SPACING, BORDER_RADIUS } from '../utils/theme';
+import { useTheme } from '../context';
+import { FONTS, SPACING, BORDER_RADIUS } from '../utils/theme';
 
 const audioRecorderPlayer = new AudioRecorderPlayer();
 
@@ -50,6 +51,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
   onCancelReply,
   disabled = false,
 }) => {
+  const { colors, isDark } = useTheme();
   const [message, setMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -237,32 +239,33 @@ const ChatInput: React.FC<ChatInputProps> = ({
           style={styles.emojiPickerBackdrop}
           onPress={() => setShowEmojiPicker(false)}
         />
-        <View style={styles.emojiPickerContainer}>
-          <View style={styles.emojiPickerHeader}>
-            <Text style={styles.emojiPickerTitle}>Emoji</Text>
+        <View style={[styles.emojiPickerContainer, { backgroundColor: colors.surface }]}>
+          <View style={[styles.emojiPickerHeader, { borderBottomColor: colors.divider }]}>
+            <Text style={[styles.emojiPickerTitle, { color: colors.text }]}>Emoji</Text>
             <TouchableOpacity onPress={() => setShowEmojiPicker(false)}>
-              <Icon name="close" size={24} color={COLORS.textSecondary} />
+              <Icon name="close" size={24} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            style={styles.emojiCategoryTabs}
+            style={[styles.emojiCategoryTabs, { borderBottomColor: colors.divider }]}
           >
             {Object.keys(EMOJI_CATEGORIES).map((category) => (
               <TouchableOpacity
                 key={category}
                 style={[
                   styles.emojiCategoryTab,
-                  selectedEmojiCategory === category && styles.emojiCategoryTabActive,
+                  selectedEmojiCategory === category && [styles.emojiCategoryTabActive, { borderBottomColor: colors.primary }],
                 ]}
                 onPress={() => setSelectedEmojiCategory(category)}
               >
                 <Text
                   style={[
                     styles.emojiCategoryTabText,
-                    selectedEmojiCategory === category && styles.emojiCategoryTabTextActive,
+                    { color: colors.textSecondary },
+                    selectedEmojiCategory === category && { color: colors.primary },
                   ]}
                 >
                   {category}
@@ -292,27 +295,27 @@ const ChatInput: React.FC<ChatInputProps> = ({
   // Recording UI
   if (isRecording) {
     return (
-      <View style={styles.container}>
-        <View style={styles.recordingContainer}>
+      <View style={[styles.container, { backgroundColor: colors.surface, borderTopColor: colors.divider }]}>
+        <View style={[styles.recordingContainer, { backgroundColor: colors.surface }]}>
           <TouchableOpacity style={styles.cancelRecordingButton} onPress={cancelRecording}>
-            <Icon name="delete" size={24} color={COLORS.error} />
+            <Icon name="delete" size={24} color={colors.error} />
           </TouchableOpacity>
 
           <View style={styles.recordingInfo}>
             <Animated.View
               style={[
                 styles.recordingIndicator,
-                { transform: [{ scale: recordingAnimValue }] },
+                { backgroundColor: colors.error, transform: [{ scale: recordingAnimValue }] },
               ]}
             />
-            <Text style={styles.recordingDuration}>
+            <Text style={[styles.recordingDuration, { color: colors.text }]}>
               {formatRecordingTime(recordingDuration)}
             </Text>
-            <Text style={styles.recordingText}>Recording...</Text>
+            <Text style={[styles.recordingText, { color: colors.textSecondary }]}>Recording...</Text>
           </View>
 
-          <TouchableOpacity style={styles.stopRecordingButton} onPress={stopRecording}>
-            <Icon name="send" size={24} color={COLORS.textLight} />
+          <TouchableOpacity style={[styles.stopRecordingButton, { backgroundColor: colors.primary }]} onPress={stopRecording}>
+            <Icon name="send" size={24} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
       </View>
@@ -320,20 +323,20 @@ const ChatInput: React.FC<ChatInputProps> = ({
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.surface, borderTopColor: colors.divider }]}>
       {replyingTo && (
-        <View style={styles.replyContainer}>
+        <View style={[styles.replyContainer, { backgroundColor: colors.inputBackground, borderBottomColor: colors.divider }]}>
           <View style={styles.replyContent}>
-            <View style={styles.replyBar} />
+            <View style={[styles.replyBar, { backgroundColor: colors.primary }]} />
             <View style={styles.replyTextContainer}>
-              <Text style={styles.replySender}>{replyingTo.senderName}</Text>
-              <Text style={styles.replyText} numberOfLines={1}>
+              <Text style={[styles.replySender, { color: colors.primary }]}>{replyingTo.senderName}</Text>
+              <Text style={[styles.replyText, { color: colors.textSecondary }]} numberOfLines={1}>
                 {replyingTo.content}
               </Text>
             </View>
           </View>
           <TouchableOpacity onPress={onCancelReply} style={styles.cancelReply}>
-            <Icon name="close" size={20} color={COLORS.textSecondary} />
+            <Icon name="close" size={20} color={colors.textSecondary} />
           </TouchableOpacity>
         </View>
       )}
@@ -347,18 +350,18 @@ const ChatInput: React.FC<ChatInputProps> = ({
           <Icon
             name="plus"
             size={24}
-            color={COLORS.textSecondary}
+            color={colors.textSecondary}
           />
         </TouchableOpacity>
 
-        <View style={styles.textInputContainer}>
+        <View style={[styles.textInputContainer, { backgroundColor: colors.inputBackground }]}>
           <TextInput
             ref={inputRef}
-            style={styles.textInput}
+            style={[styles.textInput, { color: colors.text }]}
             value={message}
             onChangeText={handleTextChange}
             placeholder="Type a message"
-            placeholderTextColor={COLORS.textMuted}
+            placeholderTextColor={colors.textMuted}
             multiline
             maxLength={4096}
             editable={!disabled}
@@ -373,26 +376,26 @@ const ChatInput: React.FC<ChatInputProps> = ({
             <Icon
               name={showEmojiPicker ? 'keyboard' : 'emoticon-outline'}
               size={24}
-              color={COLORS.textSecondary}
+              color={colors.textSecondary}
             />
           </TouchableOpacity>
         </View>
 
         {message.trim().length > 0 ? (
           <TouchableOpacity
-            style={[styles.sendButton, disabled && styles.sendButtonDisabled]}
+            style={[styles.sendButton, { backgroundColor: colors.primary }, disabled && styles.sendButtonDisabled]}
             onPress={handleSend}
             disabled={disabled}
           >
-            <Icon name="send" size={24} color={COLORS.textLight} />
+            <Icon name="send" size={24} color="#FFFFFF" />
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
-            style={[styles.sendButton, disabled && styles.sendButtonDisabled]}
+            style={[styles.sendButton, { backgroundColor: colors.primary }, disabled && styles.sendButtonDisabled]}
             onPress={handleMicPress}
             disabled={disabled}
           >
-            <Icon name="microphone" size={24} color={COLORS.textLight} />
+            <Icon name="microphone" size={24} color="#FFFFFF" />
           </TouchableOpacity>
         )}
       </View>
@@ -404,17 +407,13 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: COLORS.surface,
     borderTopWidth: 1,
-    borderTopColor: COLORS.divider,
   },
   replyContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: SPACING.sm,
-    backgroundColor: COLORS.inputBackground,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.divider,
   },
   replyContent: {
     flex: 1,
@@ -422,7 +421,6 @@ const styles = StyleSheet.create({
   },
   replyBar: {
     width: 4,
-    backgroundColor: COLORS.primary,
     borderRadius: 2,
     marginRight: SPACING.sm,
   },
@@ -430,12 +428,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   replySender: {
-    color: COLORS.primary,
     fontWeight: 'bold',
     fontSize: FONTS.sizes.sm,
   },
   replyText: {
-    color: COLORS.textSecondary,
     fontSize: FONTS.sizes.sm,
   },
   cancelReply: {
@@ -455,7 +451,6 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'flex-end',
-    backgroundColor: COLORS.inputBackground,
     borderRadius: BORDER_RADIUS.xl,
     paddingHorizontal: SPACING.md,
     paddingVertical: Platform.OS === 'ios' ? SPACING.sm : 0,
@@ -466,7 +461,6 @@ const styles = StyleSheet.create({
   textInput: {
     flex: 1,
     fontSize: FONTS.sizes.md,
-    color: COLORS.text,
     paddingVertical: SPACING.sm,
   },
   emojiButton: {
@@ -477,19 +471,17 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
   sendButtonDisabled: {
-    backgroundColor: COLORS.textMuted,
+    opacity: 0.5,
   },
   // Recording styles
   recordingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: SPACING.md,
-    backgroundColor: COLORS.surface,
   },
   cancelRecordingButton: {
     padding: SPACING.sm,
@@ -504,24 +496,20 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: COLORS.error,
     marginRight: SPACING.sm,
   },
   recordingDuration: {
     fontSize: FONTS.sizes.lg,
-    color: COLORS.text,
     fontWeight: 'bold',
     marginRight: SPACING.sm,
   },
   recordingText: {
     fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
   },
   stopRecordingButton: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -535,7 +523,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
   },
   emojiPickerContainer: {
-    backgroundColor: COLORS.surface,
     borderTopLeftRadius: BORDER_RADIUS.xl,
     borderTopRightRadius: BORDER_RADIUS.xl,
     maxHeight: '50%',
@@ -547,17 +534,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: SPACING.md,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.divider,
   },
   emojiPickerTitle: {
     fontSize: FONTS.sizes.lg,
     fontWeight: 'bold',
-    color: COLORS.text,
   },
   emojiCategoryTabs: {
     flexGrow: 0,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.divider,
   },
   emojiCategoryTab: {
     paddingHorizontal: SPACING.md,
@@ -565,14 +549,11 @@ const styles = StyleSheet.create({
   },
   emojiCategoryTabActive: {
     borderBottomWidth: 2,
-    borderBottomColor: COLORS.primary,
   },
   emojiCategoryTabText: {
     fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
   },
   emojiCategoryTabTextActive: {
-    color: COLORS.primary,
     fontWeight: 'bold',
   },
   emojiGrid: {

@@ -34,6 +34,14 @@ public class NotificationsController : ControllerBase
         await _notificationService.UnregisterDeviceTokenAsync(userId, request.Token);
         return Ok(new { message = "Device unregistered from notifications" });
     }
+
+    [HttpPost("register-voip")]
+    public async Task<ActionResult> RegisterVoipDevice([FromBody] RegisterDeviceRequest request)
+    {
+        var userId = GetUserId();
+        await _notificationService.RegisterVoipTokenAsync(userId, request.Token, request.Platform, request.DeviceId);
+        return Ok(new { message = "VoIP device registered for call notifications" });
+    }
 }
 
 public class RegisterDeviceRequest

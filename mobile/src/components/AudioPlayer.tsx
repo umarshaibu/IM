@@ -1,119 +1,209 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Dimensions } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import AudioRecorderPlayer from 'react-native-audio-recorder-player';
-import { COLORS, FONTS, SPACING } from '../utils/theme';
+import Video from 'react-native-video';
+import { useTheme } from '../context';
+import { FONTS, SPACING, BORDER_RADIUS } from '../utils/theme';
+
+// Types for react-native-video v5
+interface OnProgressData {
+  currentTime: number;
+  playableDuration: number;
+  seekableDuration: number;
+}
+
+interface OnLoadData {
+  duration: number;
+  currentTime: number;
+  naturalSize: { width: number; height: number };
+}
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface AudioPlayerProps {
   uri: string;
   duration?: number;
   isMine?: boolean;
+  waveformData?: number[];
 }
 
-const AudioPlayer: React.FC<AudioPlayerProps> = ({ uri, duration = 0, isMine = false }) => {
+const PLAYBACK_SPEEDS = [1, 1.5, 2];
+
+const AudioPlayer: React.FC<AudioPlayerProps> = ({ uri, duration = 0, isMine = false, waveformData }) => {
+  const { colors, isDark } = useTheme();
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentPosition, setCurrentPosition] = useState(0);
   const [totalDuration, setTotalDuration] = useState(duration);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const [isPaused, setIsPaused] = useState(true);
 
-  const audioRecorderPlayer = useRef(new AudioRecorderPlayer()).current;
+  const videoRef = useRef<any>(null);
   const progressAnim = useRef(new Animated.Value(0)).current;
 
-  useEffect(() => {
-    return () => {
-      audioRecorderPlayer.stopPlayer();
-      audioRecorderPlayer.removePlayBackListener();
-    };
-  }, []);
+  // Generate consistent waveform data based on URI hash or use provided data
+  const waveformBars = useMemo(() => {
+    if (waveformData && waveformData.length > 0) {
+      return waveformData;
+    }
+    // Generate pseudo-random waveform based on uri for consistency
+    const seed = uri.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    return Array.from({ length: 40 }, (_, i) => {
+      const value = Math.sin(seed + i * 0.5) * 0.3 + 0.5 + Math.cos(seed * i * 0.1) * 0.2;
+      return Math.max(0.15, Math.min(1, value));
+    });
+  }, [uri, waveformData]);
 
   useEffect(() => {
     const progress = totalDuration > 0 ? currentPosition / totalDuration : 0;
     progressAnim.setValue(progress);
   }, [currentPosition, totalDuration]);
 
-  const formatTime = (ms: number): string => {
-    const seconds = Math.floor(ms / 1000);
+  const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
+    const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const handlePlayPause = async () => {
-    try {
-      if (isPlaying) {
-        await audioRecorderPlayer.pausePlayer();
-        setIsPlaying(false);
-      } else {
-        if (currentPosition === 0) {
-          await audioRecorderPlayer.startPlayer(uri);
-          audioRecorderPlayer.addPlayBackListener((e) => {
-            setCurrentPosition(e.currentPosition);
-            setTotalDuration(e.duration);
-
-            if (e.currentPosition >= e.duration) {
-              setIsPlaying(false);
-              setCurrentPosition(0);
-              audioRecorderPlayer.stopPlayer();
-            }
-          });
-        } else {
-          await audioRecorderPlayer.resumePlayer();
-        }
-        setIsPlaying(true);
-      }
-    } catch (error) {
-      console.error('Audio playback error:', error);
+  const handlePlayPause = () => {
+    if (isPlaying) {
+      setIsPaused(true);
+      setIsPlaying(false);
+    } else {
+      setIsPaused(false);
+      setIsPlaying(true);
     }
   };
 
-  const handleSeek = async (position: number) => {
-    try {
-      await audioRecorderPlayer.seekToPlayer(position);
-      setCurrentPosition(position);
-    } catch (error) {
-      console.error('Seek error:', error);
-    }
+  const handleProgress = (data: OnProgressData) => {
+    setCurrentPosition(data.currentTime);
   };
 
-  const waveformBars = Array.from({ length: 30 }, (_, i) => {
-    const height = Math.random() * 0.6 + 0.2;
-    return height;
-  });
+  const handleLoad = (data: OnLoadData) => {
+    setTotalDuration(data.duration);
+  };
+
+  const handleEnd = () => {
+    setIsPlaying(false);
+    setIsPaused(true);
+    setCurrentPosition(0);
+    videoRef.current?.seek(0);
+  };
+
+  const handleSeek = (position: number) => {
+    videoRef.current?.seek(position);
+    setCurrentPosition(position);
+  };
+
+  const handleWaveformPress = (event: any) => {
+    const { locationX } = event.nativeEvent;
+    const waveformWidth = SCREEN_WIDTH * 0.7 - 120; // Approximate waveform width
+    const seekPercent = Math.max(0, Math.min(1, locationX / waveformWidth));
+    const seekTime = seekPercent * totalDuration;
+    handleSeek(seekTime);
+  };
+
+  const togglePlaybackSpeed = () => {
+    const currentIndex = PLAYBACK_SPEEDS.indexOf(playbackSpeed);
+    const nextSpeed = PLAYBACK_SPEEDS[(currentIndex + 1) % PLAYBACK_SPEEDS.length];
+    setPlaybackSpeed(nextSpeed);
+  };
+
+  const progress = totalDuration > 0 ? currentPosition / totalDuration : 0;
 
   return (
-    <View style={[styles.container, isMine && styles.containerMine]}>
-      <TouchableOpacity style={styles.playButton} onPress={handlePlayPause}>
+    <View style={[
+      styles.container,
+      { backgroundColor: isMine ? colors.chatBubbleSent : colors.chatBubbleReceived }
+    ]}>
+      {/* Hidden Video component for audio playback with speed control */}
+      <Video
+        ref={videoRef}
+        source={{ uri }}
+        paused={isPaused}
+        rate={playbackSpeed}
+        onProgress={handleProgress}
+        onLoad={handleLoad}
+        onEnd={handleEnd}
+        playInBackground={false}
+        playWhenInactive={false}
+        ignoreSilentSwitch="ignore"
+        style={styles.hiddenVideo}
+      />
+
+      {/* Play/Pause Button */}
+      <TouchableOpacity
+        style={[
+          styles.playButton,
+          { backgroundColor: isMine ? colors.primary : colors.secondary }
+        ]}
+        onPress={handlePlayPause}
+      >
         <Icon
           name={isPlaying ? 'pause' : 'play'}
-          size={28}
-          color={isMine ? COLORS.primary : COLORS.secondary}
+          size={24}
+          color="#FFFFFF"
+          style={isPlaying ? undefined : { marginLeft: 2 }}
         />
       </TouchableOpacity>
 
-      <View style={styles.waveformContainer}>
+      {/* Waveform */}
+      <TouchableOpacity
+        style={styles.waveformContainer}
+        onPress={handleWaveformPress}
+        activeOpacity={0.9}
+      >
         <View style={styles.waveform}>
           {waveformBars.map((height, index) => {
-            const progress = totalDuration > 0 ? currentPosition / totalDuration : 0;
-            const isPlayed = index / waveformBars.length <= progress;
+            const barProgress = index / waveformBars.length;
+            const isPlayed = barProgress <= progress;
 
             return (
               <View
                 key={index}
                 style={[
                   styles.waveformBar,
-                  { height: `${height * 100}%` },
-                  isPlayed && styles.waveformBarPlayed,
-                  isMine && isPlayed && styles.waveformBarPlayedMine,
+                  {
+                    height: Math.max(4, height * 24),
+                    backgroundColor: isPlayed
+                      ? (isMine ? colors.primary : colors.secondary)
+                      : (isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.2)'),
+                  },
                 ]}
               />
             );
           })}
         </View>
 
-        <View style={styles.timeContainer}>
-          <Text style={[styles.time, isMine && styles.timeMine]}>
-            {formatTime(currentPosition || totalDuration)}
+        {/* Time and Speed display */}
+        <View style={styles.timeRow}>
+          <Text style={[styles.time, { color: isMine ? colors.chatBubbleSentText : colors.chatBubbleReceivedText }]}>
+            {isPlaying || currentPosition > 0
+              ? formatTime(currentPosition)
+              : formatTime(totalDuration)}
           </Text>
+
+          {/* Speed control button */}
+          <TouchableOpacity
+            onPress={togglePlaybackSpeed}
+            style={[
+              styles.speedButton,
+              { backgroundColor: isMine ? colors.primary + '20' : colors.secondary + '20' }
+            ]}
+          >
+            <Text style={[styles.speedText, { color: isMine ? colors.primary : colors.secondary }]}>
+              {playbackSpeed}x
+            </Text>
+          </TouchableOpacity>
         </View>
+      </TouchableOpacity>
+
+      {/* Microphone icon (WhatsApp style) */}
+      <View style={[styles.micIcon, { backgroundColor: isMine ? colors.primary + '20' : colors.secondary + '20' }]}>
+        <Icon
+          name="microphone"
+          size={16}
+          color={isMine ? colors.primary : colors.secondary}
+        />
       </View>
     </View>
   );
@@ -123,55 +213,66 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.chatBubbleReceived,
-    borderRadius: 20,
+    borderRadius: 16,
     padding: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-    minWidth: 200,
-    maxWidth: 280,
+    paddingHorizontal: SPACING.sm,
+    minWidth: 220,
+    maxWidth: SCREEN_WIDTH * 0.7,
   },
-  containerMine: {
-    backgroundColor: COLORS.chatBubbleSent,
+  hiddenVideo: {
+    width: 0,
+    height: 0,
+    position: 'absolute',
   },
   playButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: SPACING.sm,
   },
   waveformContainer: {
     flex: 1,
+    marginRight: SPACING.sm,
   },
   waveform: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 32,
+    height: 28,
     gap: 2,
   },
   waveformBar: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    borderRadius: 2,
+    width: 3,
+    borderRadius: 1.5,
     minHeight: 4,
   },
-  waveformBarPlayed: {
-    backgroundColor: COLORS.secondary,
-  },
-  waveformBarPlayedMine: {
-    backgroundColor: COLORS.primary,
-  },
-  timeContainer: {
-    marginTop: SPACING.xs,
+  timeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
   },
   time: {
     fontSize: FONTS.sizes.xs,
-    color: COLORS.textSecondary,
   },
-  timeMine: {
-    color: COLORS.textSecondary,
+  speedButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: BORDER_RADIUS.sm,
+    minWidth: 32,
+    alignItems: 'center',
+  },
+  speedText: {
+    fontSize: FONTS.sizes.xs,
+    fontWeight: '700',
+  },
+  micIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 

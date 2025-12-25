@@ -24,11 +24,22 @@ public class Message : BaseEntity
     public DateTime? ExpiresAt { get; set; }
     public bool IsSystemMessage { get; set; }
 
+    // Service Number Watermark Fields
+    public string? SenderServiceNumber { get; set; }  // Service # of the sender
+    public string? OriginalSenderServiceNumber { get; set; }  // For forwarded messages: original sender's Service #
+    public string? MediaOriginatorServiceNumber { get; set; }  // For media: who originally attached it
+    public Guid? OriginalMessageId { get; set; }  // For forwarded messages: link to original
+    public int ForwardCount { get; set; }  // How many times this message has been forwarded
+    public DateTime? OriginalCreatedAt { get; set; }  // Original message creation time (for forwards)
+
     // Navigation
     public Conversation Conversation { get; set; } = null!;
     public User Sender { get; set; } = null!;
     public Message? ReplyToMessage { get; set; }
     public Message? ForwardedFromMessage { get; set; }
+    public Message? OriginalMessage { get; set; }
     public ICollection<MessageStatusEntity> Statuses { get; set; } = new List<MessageStatusEntity>();
     public ICollection<MediaFile> MediaFiles { get; set; } = new List<MediaFile>();
+    public ICollection<MessageReaction> Reactions { get; set; } = new List<MessageReaction>();
+    public ICollection<MessageForwardChain> ForwardChain { get; set; } = new List<MessageForwardChain>();
 }

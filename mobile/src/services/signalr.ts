@@ -7,7 +7,7 @@ import {
 import { useChatStore } from '../stores/chatStore';
 import { useCallStore } from '../stores/callStore';
 import { useAuthStore } from '../stores/authStore';
-import { Message, Call } from '../types';
+import { Message, Call, MessageReaction, DeleteType } from '../types';
 import { AppConfig } from '../config';
 import { callSoundService } from './CallSoundService';
 import { NativeCallSound } from './NativeCallSound';
@@ -21,6 +21,9 @@ let callConnection: HubConnection | null = null;
 let presenceConnection: HubConnection | null = null;
 
 export const initializeSignalR = async (accessToken: string): Promise<void> => {
+  // Clean up existing connections before reinitializing
+  await disconnectSignalR();
+
   await Promise.all([
     initializeChatHub(accessToken),
     initializeCallHub(accessToken),
@@ -140,6 +143,28 @@ const initializeChatHub = async (accessToken: string): Promise<void> => {
     console.error('Message error:', error);
   });
 
+  // Push-to-Talk (PTT) event handlers
+  chatConnection.on('PTTStarted', (conversationId: string, userId: string, userName: string) => {
+    console.log(`PTT: ${userName} started speaking in conversation ${conversationId}`);
+    useChatStore.getState().setPTTActive(conversationId, userId, userName);
+  });
+
+  chatConnection.on('PTTChunk', (conversationId: string, userId: string, audioChunkBase64: string) => {
+    // Handle incoming audio chunk for real-time playback
+    // This will be processed by the PTT player component
+    useChatStore.getState().addPTTChunk(conversationId, userId, audioChunkBase64);
+  });
+
+  chatConnection.on('PTTEnded', (conversationId: string, userId: string, mediaUrl: string | null, duration: number) => {
+    console.log(`PTT: User ${userId} ended speaking in conversation ${conversationId}, duration: ${duration}ms`);
+    useChatStore.getState().clearPTTActive(conversationId, userId);
+  });
+
+  chatConnection.on('PTTCancelled', (conversationId: string, userId: string) => {
+    console.log(`PTT: User ${userId} cancelled PTT in conversation ${conversationId}`);
+    useChatStore.getState().clearPTTActive(conversationId, userId);
+  });
+
   chatConnection.on('ConversationRead', (conversationId: string, userId: string, timestamp: string) => {
     // Update the unread count for the conversation
     useChatStore.getState().updateConversation(conversationId, { unreadCount: 0 });
@@ -156,6 +181,80 @@ const initializeChatHub = async (accessToken: string): Promise<void> => {
         });
       }
     });
+  });
+
+  // Forward message events
+  chatConnection.on('MessageForwarded', (originalMessageId: string, toConversationId: string, newMessageId: string) => {
+    console.log(`Message ${originalMessageId} forwarded to ${toConversationId} as ${newMessageId}`);
+  });
+
+  chatConnection.on('MessagesForwarded', (originalMessageId: string, count: number) => {
+    console.log(`Message ${originalMessageId} forwarded to ${count} conversations`);
+  });
+
+  chatConnection.on('ForwardError', (error: string) => {
+    console.error('Forward error:', error);
+  });
+
+  // Reaction events
+  chatConnection.on('ReactionAdded', (messageId: string, reaction: MessageReaction) => {
+    const { messages } = useChatStore.getState();
+    Object.keys(messages).forEach((convId) => {
+      const msg = messages[convId].find((m) => m.id === messageId);
+      if (msg) {
+        const existingReactions = msg.reactions || [];
+        useChatStore.getState().updateMessage(convId, messageId, {
+          reactions: [...existingReactions, reaction],
+        });
+      }
+    });
+  });
+
+  chatConnection.on('ReactionRemoved', (messageId: string, userId: string, emoji: string) => {
+    const { messages } = useChatStore.getState();
+    Object.keys(messages).forEach((convId) => {
+      const msg = messages[convId].find((m) => m.id === messageId);
+      if (msg && msg.reactions) {
+        useChatStore.getState().updateMessage(convId, messageId, {
+          reactions: msg.reactions.filter((r) => !(r.userId === userId && r.emoji === emoji)),
+        });
+      }
+    });
+  });
+
+  chatConnection.on('ReactionError', (error: string) => {
+    console.error('Reaction error:', error);
+  });
+
+  // Star/Bookmark events
+  chatConnection.on('MessageStarred', (messageId: string, starredAt: string) => {
+    console.log(`Message ${messageId} starred at ${starredAt}`);
+  });
+
+  chatConnection.on('MessageUnstarred', (messageId: string) => {
+    console.log(`Message ${messageId} unstarred`);
+  });
+
+  chatConnection.on('StarError', (error: string) => {
+    console.error('Star error:', error);
+  });
+
+  // Pin events
+  chatConnection.on('MessagePinned', (pinnedMessage: any) => {
+    console.log(`Message ${pinnedMessage.messageId} pinned in conversation ${pinnedMessage.conversationId}`);
+  });
+
+  chatConnection.on('MessageUnpinned', (conversationId: string, messageId: string, userId: string) => {
+    console.log(`Message ${messageId} unpinned from conversation ${conversationId}`);
+  });
+
+  chatConnection.on('PinError', (error: string) => {
+    console.error('Pin error:', error);
+  });
+
+  // Delete with audit events
+  chatConnection.on('DeleteError', (error: string) => {
+    console.error('Delete error:', error);
   });
 
   try {
@@ -281,6 +380,15 @@ const initializeCallHub = async (accessToken: string): Promise<void> => {
 
   callConnection.on('ParticipantStatusChanged', (callId: string, userId: string, status: any) => {
     useCallStore.getState().updateCallParticipant(userId, status);
+  });
+
+  callConnection.on('CallInvitation', (call: Call, invitedByName: string) => {
+    console.log('=== CALL INVITATION RECEIVED ===');
+    console.log('Call ID:', call.id);
+    console.log('Invited by:', invitedByName);
+    console.log('Type:', call.type);
+    // Treat call invitation the same as incoming call
+    useCallStore.getState().setIncomingCall(call);
   });
 
   callConnection.on('CallError', (error: string) => {
@@ -449,6 +557,31 @@ export const editMessage = async (messageId: string, newContent: string): Promis
   }
 };
 
+// Push-to-Talk (PTT) Methods
+export const startPTT = async (conversationId: string): Promise<void> => {
+  if (chatConnection?.state === HubConnectionState.Connected) {
+    await chatConnection.invoke('StartPTT', conversationId);
+  }
+};
+
+export const sendPTTChunk = async (conversationId: string, audioChunkBase64: string): Promise<void> => {
+  if (chatConnection?.state === HubConnectionState.Connected) {
+    await chatConnection.invoke('SendPTTChunk', conversationId, audioChunkBase64);
+  }
+};
+
+export const endPTT = async (conversationId: string, mediaUrl: string | null, duration: number): Promise<void> => {
+  if (chatConnection?.state === HubConnectionState.Connected) {
+    await chatConnection.invoke('EndPTT', conversationId, mediaUrl, duration);
+  }
+};
+
+export const cancelPTT = async (conversationId: string): Promise<void> => {
+  if (chatConnection?.state === HubConnectionState.Connected) {
+    await chatConnection.invoke('CancelPTT', conversationId);
+  }
+};
+
 // Call Hub Methods
 export const initiateCall = async (
   conversationId: string,
@@ -503,6 +636,12 @@ export const updateCallStatus = async (
   }
 };
 
+export const inviteToCall = async (callId: string, userId: string): Promise<void> => {
+  if (callConnection?.state === HubConnectionState.Connected) {
+    await callConnection.invoke('InviteToCall', callId, userId);
+  }
+};
+
 // Presence Hub Methods
 export const requestPresence = async (userIds: string[]): Promise<void> => {
   if (presenceConnection?.state === HubConnectionState.Connected) {
@@ -513,6 +652,71 @@ export const requestPresence = async (userIds: string[]): Promise<void> => {
 export const ping = async (): Promise<void> => {
   if (presenceConnection?.state === HubConnectionState.Connected) {
     await presenceConnection.invoke('Ping');
+  }
+};
+
+// Forward Message Methods
+export const forwardMessage = async (messageId: string, toConversationId: string): Promise<void> => {
+  if (chatConnection?.state === HubConnectionState.Connected) {
+    await chatConnection.invoke('ForwardMessage', messageId, toConversationId);
+  }
+};
+
+export const forwardMessageToMultiple = async (messageId: string, conversationIds: string[]): Promise<void> => {
+  if (chatConnection?.state === HubConnectionState.Connected) {
+    await chatConnection.invoke('ForwardMessageToMultiple', messageId, conversationIds);
+  }
+};
+
+// Enhanced Delete Methods
+export const deleteMessageWithAudit = async (
+  messageId: string,
+  deleteType: 'ForMe' | 'ForEveryone' | 'AdminDelete',
+  reason?: string
+): Promise<void> => {
+  if (chatConnection?.state === HubConnectionState.Connected) {
+    // Convert string to enum value expected by backend
+    const deleteTypeValue = deleteType === 'ForMe' ? 0 : deleteType === 'ForEveryone' ? 1 : 2;
+    await chatConnection.invoke('DeleteMessageWithAudit', messageId, deleteTypeValue, reason || null);
+  }
+};
+
+// Reaction Methods
+export const addReaction = async (messageId: string, emoji: string): Promise<void> => {
+  if (chatConnection?.state === HubConnectionState.Connected) {
+    await chatConnection.invoke('AddReaction', messageId, emoji);
+  }
+};
+
+export const removeReaction = async (messageId: string, emoji: string): Promise<void> => {
+  if (chatConnection?.state === HubConnectionState.Connected) {
+    await chatConnection.invoke('RemoveReaction', messageId, emoji);
+  }
+};
+
+// Star/Bookmark Methods
+export const starMessage = async (messageId: string): Promise<void> => {
+  if (chatConnection?.state === HubConnectionState.Connected) {
+    await chatConnection.invoke('StarMessage', messageId);
+  }
+};
+
+export const unstarMessage = async (messageId: string): Promise<void> => {
+  if (chatConnection?.state === HubConnectionState.Connected) {
+    await chatConnection.invoke('UnstarMessage', messageId);
+  }
+};
+
+// Pin Methods
+export const pinMessage = async (conversationId: string, messageId: string): Promise<void> => {
+  if (chatConnection?.state === HubConnectionState.Connected) {
+    await chatConnection.invoke('PinMessage', conversationId, messageId);
+  }
+};
+
+export const unpinMessage = async (conversationId: string, messageId: string): Promise<void> => {
+  if (chatConnection?.state === HubConnectionState.Connected) {
+    await chatConnection.invoke('UnpinMessage', conversationId, messageId);
   }
 };
 

@@ -85,7 +85,26 @@ export interface Message {
   createdAt: string;
   expiresAt?: string;
   statuses: MessageStatusInfo[];
+  // Service Number watermarks
+  senderServiceNumber?: string;
+  originalSenderServiceNumber?: string;  // For forwarded messages
+  mediaOriginatorServiceNumber?: string;  // For media attachments
+  forwardCount?: number;
+  originalCreatedAt?: string;
+  // Reactions
+  reactions?: MessageReaction[];
 }
+
+export interface MessageReaction {
+  id: string;
+  userId: string;
+  userName?: string;
+  userServiceNumber?: string;
+  emoji: string;
+  createdAt: string;
+}
+
+export type DeleteType = 'ForMe' | 'ForEveryone' | 'AdminDelete' | 'AutoExpired';
 
 export interface MessageStatusInfo {
   userId: string;

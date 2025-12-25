@@ -3,6 +3,13 @@
 #import <React/RCTBundleURLProvider.h>
 #import <AVFoundation/AVFoundation.h>
 #import <Firebase.h>
+#import <PushKit/PushKit.h>
+#import "RNCallKeep.h"
+#import "RNVoipPushNotificationManager.h"
+
+@interface AppDelegate () <PKPushRegistryDelegate>
+@property (nonatomic, strong) PKPushRegistry *voipRegistry;
+@end
 
 @implementation AppDelegate
 
@@ -34,7 +41,54 @@
     NSLog(@"Failed to activate audio session: %@", error);
   }
 
+  // Register for VoIP push notifications
+  [RNVoipPushNotificationManager voipRegistration];
+
   return [super application:application didFinishLaunchingWithOptions:launchOptions];
+}
+
+#pragma mark - PushKit VoIP Delegates
+
+// Handle updated VoIP push token
+- (void)pushRegistry:(PKPushRegistry *)registry didUpdatePushCredentials:(PKPushCredentials *)credentials forType:(PKPushType)type {
+  // Register VoIP push credentials
+  [RNVoipPushNotificationManager didUpdatePushCredentials:credentials forType:(NSString *)type];
+}
+
+// Handle incoming VoIP push - called when a VoIP push is received (wakes device)
+- (void)pushRegistry:(PKPushRegistry *)registry didReceiveIncomingPushWithPayload:(PKPushPayload *)payload forType:(PKPushType)type withCompletionHandler:(void (^)(void))completion {
+
+  // Extract call info from payload
+  NSDictionary *payloadData = payload.dictionaryPayload;
+  NSString *uuid = [[NSUUID UUID] UUIDString];
+  NSString *callerName = payloadData[@"callerName"] ?: @"Unknown Caller";
+  NSString *callerId = payloadData[@"callerId"] ?: @"";
+  BOOL hasVideo = [payloadData[@"callType"] isEqualToString:@"Video"];
+
+  // Display incoming call using CallKit (MUST be called synchronously)
+  // This is required by Apple - VoIP pushes must report a call immediately
+  [RNCallKeep reportNewIncomingCall:uuid
+                             handle:callerId
+                         handleType:@"generic"
+                           hasVideo:hasVideo
+                localizedCallerName:callerName
+                    supportsHolding:YES
+                       supportsDTMF:YES
+                   supportsGrouping:YES
+                 supportsUngrouping:YES
+                        fromPushKit:YES
+                            payload:payloadData
+              withCompletionHandler:completion];
+
+  // Process the push in React Native
+  [RNVoipPushNotificationManager didReceiveIncomingPushWithPayload:payload forType:(NSString *)type];
+}
+
+#pragma mark - RNCallKeep App Delegate Methods
+
+// Continue user activity for CallKit
+- (BOOL)application:(UIApplication *)application continueUserActivity:(NSUserActivity *)userActivity restorationHandler:(void (^)(NSArray<id<UIUserActivityRestoring>> * _Nullable))restorationHandler {
+  return [RNCallKeep application:application continueUserActivity:userActivity restorationHandler:restorationHandler];
 }
 
 - (NSURL *)sourceURLForBridge:(RCTBridge *)bridge

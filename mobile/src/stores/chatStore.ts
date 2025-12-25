@@ -2,6 +2,14 @@ import { create } from 'zustand';
 import { Conversation, Message, Participant } from '../types';
 import { conversationDBService, messageDBService, syncService } from '../database/services';
 
+// PTT (Push-to-Talk) state for tracking active PTT sessions
+interface PTTSession {
+  userId: string;
+  userName: string;
+  startedAt: number;
+  chunks: string[]; // Base64 audio chunks for playback
+}
+
 interface ChatState {
   conversations: Conversation[];
   activeConversationId: string | null;
@@ -11,6 +19,7 @@ interface ChatState {
   isLoadingFromCache: boolean;
   isOnline: boolean;
   syncStatus: 'idle' | 'syncing' | 'error' | 'offline';
+  pttSessions: Record<string, PTTSession>; // conversationId -> active PTT session
 
   // Actions
   setConversations: (conversations: Conversation[]) => void;
@@ -46,6 +55,12 @@ interface ChatState {
   setSyncStatus: (status: 'idle' | 'syncing' | 'error' | 'offline') => void;
   saveConversationsToCache: (conversations: Conversation[]) => Promise<void>;
   saveMessagesToCache: (conversationId: string, messages: Message[]) => Promise<void>;
+
+  // PTT (Push-to-Talk)
+  setPTTActive: (conversationId: string, userId: string, userName: string) => void;
+  addPTTChunk: (conversationId: string, userId: string, audioChunk: string) => void;
+  clearPTTActive: (conversationId: string, userId: string) => void;
+  getPTTSession: (conversationId: string) => PTTSession | undefined;
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -57,6 +72,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   isLoadingFromCache: false,
   isOnline: true,
   syncStatus: 'idle',
+  pttSessions: {},
 
   setConversations: (conversations) => {
     set({ conversations });
@@ -346,5 +362,51 @@ export const useChatStore = create<ChatState>((set, get) => ({
     } catch (error) {
       console.error('Error saving messages to cache:', error);
     }
+  },
+
+  // PTT (Push-to-Talk) methods
+  setPTTActive: (conversationId, userId, userName) => {
+    set((state) => ({
+      pttSessions: {
+        ...state.pttSessions,
+        [conversationId]: {
+          userId,
+          userName,
+          startedAt: Date.now(),
+          chunks: [],
+        },
+      },
+    }));
+  },
+
+  addPTTChunk: (conversationId, userId, audioChunk) => {
+    set((state) => {
+      const session = state.pttSessions[conversationId];
+      if (!session || session.userId !== userId) return state;
+
+      return {
+        pttSessions: {
+          ...state.pttSessions,
+          [conversationId]: {
+            ...session,
+            chunks: [...session.chunks, audioChunk],
+          },
+        },
+      };
+    });
+  },
+
+  clearPTTActive: (conversationId, userId) => {
+    set((state) => {
+      const session = state.pttSessions[conversationId];
+      if (!session || session.userId !== userId) return state;
+
+      const { [conversationId]: _, ...remainingSessions } = state.pttSessions;
+      return { pttSessions: remainingSessions };
+    });
+  },
+
+  getPTTSession: (conversationId) => {
+    return get().pttSessions[conversationId];
   },
 }));

@@ -259,6 +259,72 @@ public class ChatHub : Hub
         }
     }
 
+    // Push-to-Talk (PTT) Methods
+    public async Task StartPTT(Guid conversationId)
+    {
+        var userId = GetUserId();
+        var user = await _userService.GetUserByIdAsync(userId);
+        var userName = user?.DisplayName ?? user?.NominalRoll.FullName ?? "Unknown";
+
+        _logger.LogInformation("PTT: User {UserId} started PTT in conversation {ConversationId}", userId, conversationId);
+
+        // Notify all participants that PTT has started
+        await Clients.OthersInGroup(conversationId.ToString()).SendAsync("PTTStarted", conversationId, userId, userName);
+    }
+
+    public async Task SendPTTChunk(Guid conversationId, string audioChunkBase64)
+    {
+        var userId = GetUserId();
+
+        // Broadcast the audio chunk to all other participants for real-time playback
+        await Clients.OthersInGroup(conversationId.ToString()).SendAsync("PTTChunk", conversationId, userId, audioChunkBase64);
+    }
+
+    public async Task EndPTT(Guid conversationId, string? mediaUrl, int duration)
+    {
+        var userId = GetUserId();
+
+        _logger.LogInformation("PTT: User {UserId} ended PTT in conversation {ConversationId}, duration: {Duration}ms", userId, conversationId, duration);
+
+        // Notify all participants that PTT has ended
+        await Clients.OthersInGroup(conversationId.ToString()).SendAsync("PTTEnded", conversationId, userId, mediaUrl, duration);
+
+        // If a media URL is provided, save the PTT as a voice message
+        if (!string.IsNullOrEmpty(mediaUrl) && duration > 0)
+        {
+            try
+            {
+                var message = await _messageService.SendMessageAsync(
+                    conversationId,
+                    userId,
+                    MessageType.Audio,
+                    null,
+                    mediaUrl);
+
+                // Update the duration
+                message.MediaDuration = duration;
+                await _messageService.UpdateMessageAsync(message);
+
+                var messageDto = await MapMessageToDto(message);
+                await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", messageDto);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "PTT: Error saving PTT message for user {UserId}", userId);
+            }
+        }
+    }
+
+    public async Task CancelPTT(Guid conversationId)
+    {
+        var userId = GetUserId();
+
+        _logger.LogInformation("PTT: User {UserId} cancelled PTT in conversation {ConversationId}", userId, conversationId);
+
+        // Notify all participants that PTT was cancelled
+        await Clients.OthersInGroup(conversationId.ToString()).SendAsync("PTTCancelled", conversationId, userId);
+    }
+
     private static bool IsUserOnline(Guid userId)
     {
         lock (_userConnections)
@@ -311,7 +377,232 @@ public class ChatHub : Hub
                 Status = s.Status,
                 DeliveredAt = s.DeliveredAt,
                 ReadAt = s.ReadAt
-            }).ToList()
+            }).ToList(),
+            // Service Number watermarks
+            SenderServiceNumber = message.SenderServiceNumber ?? sender?.NominalRoll?.ServiceNumber,
+            OriginalSenderServiceNumber = message.OriginalSenderServiceNumber,
+            MediaOriginatorServiceNumber = message.MediaOriginatorServiceNumber,
+            ForwardCount = message.ForwardCount,
+            OriginalCreatedAt = message.OriginalCreatedAt,
+            // Reactions
+            Reactions = message.Reactions?.Select(r => new MessageReactionDto
+            {
+                Id = r.Id,
+                UserId = r.UserId,
+                UserName = r.User?.DisplayName ?? r.User?.NominalRoll?.FullName,
+                UserServiceNumber = r.User?.NominalRoll?.ServiceNumber,
+                Emoji = r.Emoji,
+                CreatedAt = r.CreatedAt
+            }).ToList() ?? new List<MessageReactionDto>()
         };
+    }
+
+    // Forward Message
+    public async Task ForwardMessage(Guid messageId, Guid toConversationId)
+    {
+        var userId = GetUserId();
+
+        try
+        {
+            var forwardedMessage = await _messageService.ForwardMessageAsync(messageId, userId, toConversationId);
+            var messageDto = await MapMessageToDto(forwardedMessage);
+
+            // Send to target conversation
+            await Clients.Group(toConversationId.ToString()).SendAsync("ReceiveMessage", messageDto);
+
+            // Notify the sender that forward was successful
+            await Clients.Caller.SendAsync("MessageForwarded", messageId, toConversationId, forwardedMessage.Id);
+
+            _logger.LogInformation("Message {MessageId} forwarded to conversation {ConversationId} by user {UserId}",
+                messageId, toConversationId, userId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error forwarding message {MessageId} to conversation {ConversationId}",
+                messageId, toConversationId);
+            await Clients.Caller.SendAsync("ForwardError", ex.Message);
+        }
+    }
+
+    // Forward Message to Multiple Conversations
+    public async Task ForwardMessageToMultiple(Guid messageId, List<Guid> conversationIds)
+    {
+        var userId = GetUserId();
+
+        foreach (var conversationId in conversationIds)
+        {
+            try
+            {
+                var forwardedMessage = await _messageService.ForwardMessageAsync(messageId, userId, conversationId);
+                var messageDto = await MapMessageToDto(forwardedMessage);
+                await Clients.Group(conversationId.ToString()).SendAsync("ReceiveMessage", messageDto);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error forwarding message {MessageId} to conversation {ConversationId}",
+                    messageId, conversationId);
+            }
+        }
+
+        await Clients.Caller.SendAsync("MessagesForwarded", messageId, conversationIds.Count);
+    }
+
+    // Enhanced Delete with Audit Trail
+    public async Task DeleteMessageWithAudit(Guid messageId, DeleteType deleteType, string? reason = null)
+    {
+        var userId = GetUserId();
+        var message = await _messageService.GetMessageByIdAsync(messageId);
+
+        if (message == null)
+        {
+            await Clients.Caller.SendAsync("DeleteError", "Message not found");
+            return;
+        }
+
+        var success = await _messageService.DeleteMessageWithAuditAsync(messageId, userId, deleteType, reason);
+
+        if (success)
+        {
+            if (deleteType == DeleteType.ForMe)
+            {
+                // Only notify the caller
+                await Clients.Caller.SendAsync("MessageDeleted", messageId, userId, deleteType);
+            }
+            else
+            {
+                // Notify all participants
+                await Clients.Group(message.ConversationId.ToString())
+                    .SendAsync("MessageDeleted", messageId, userId, deleteType);
+            }
+
+            _logger.LogInformation("Message {MessageId} deleted by user {UserId} with type {DeleteType}",
+                messageId, userId, deleteType);
+        }
+        else
+        {
+            await Clients.Caller.SendAsync("DeleteError", "Failed to delete message");
+        }
+    }
+
+    // Reactions
+    public async Task AddReaction(Guid messageId, string emoji)
+    {
+        var userId = GetUserId();
+
+        try
+        {
+            var reaction = await _messageService.AddReactionAsync(messageId, userId, emoji);
+            var user = await _userService.GetUserByIdAsync(userId);
+
+            var reactionDto = new MessageReactionDto
+            {
+                Id = reaction.Id,
+                UserId = userId,
+                UserName = user?.DisplayName ?? user?.NominalRoll?.FullName,
+                UserServiceNumber = user?.NominalRoll?.ServiceNumber,
+                Emoji = emoji,
+                CreatedAt = reaction.CreatedAt
+            };
+
+            // Get the message to find its conversation
+            var message = await _messageService.GetMessageByIdAsync(messageId);
+            if (message != null)
+            {
+                await Clients.Group(message.ConversationId.ToString())
+                    .SendAsync("ReactionAdded", messageId, reactionDto);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error adding reaction to message {MessageId}", messageId);
+            await Clients.Caller.SendAsync("ReactionError", ex.Message);
+        }
+    }
+
+    public async Task RemoveReaction(Guid messageId, string emoji)
+    {
+        var userId = GetUserId();
+
+        var message = await _messageService.GetMessageByIdAsync(messageId);
+        if (message == null) return;
+
+        var success = await _messageService.RemoveReactionAsync(messageId, userId, emoji);
+
+        if (success)
+        {
+            await Clients.Group(message.ConversationId.ToString())
+                .SendAsync("ReactionRemoved", messageId, userId, emoji);
+        }
+    }
+
+    // Star/Bookmark Messages
+    public async Task StarMessage(Guid messageId)
+    {
+        var userId = GetUserId();
+
+        try
+        {
+            var starred = await _messageService.StarMessageAsync(messageId, userId);
+            await Clients.Caller.SendAsync("MessageStarred", messageId, starred.StarredAt);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error starring message {MessageId}", messageId);
+            await Clients.Caller.SendAsync("StarError", ex.Message);
+        }
+    }
+
+    public async Task UnstarMessage(Guid messageId)
+    {
+        var userId = GetUserId();
+
+        var success = await _messageService.UnstarMessageAsync(messageId, userId);
+        if (success)
+        {
+            await Clients.Caller.SendAsync("MessageUnstarred", messageId);
+        }
+    }
+
+    // Pin Messages
+    public async Task PinMessage(Guid conversationId, Guid messageId)
+    {
+        var userId = GetUserId();
+
+        try
+        {
+            var pinned = await _messageService.PinMessageAsync(conversationId, messageId, userId);
+            var user = await _userService.GetUserByIdAsync(userId);
+
+            var pinnedDto = new PinnedMessageDto
+            {
+                Id = pinned.Id,
+                ConversationId = conversationId,
+                MessageId = messageId,
+                PinnedById = userId,
+                PinnedByName = user?.DisplayName ?? user?.NominalRoll?.FullName,
+                PinnedByServiceNumber = user?.NominalRoll?.ServiceNumber,
+                PinnedAt = pinned.PinnedAt
+            };
+
+            await Clients.Group(conversationId.ToString())
+                .SendAsync("MessagePinned", pinnedDto);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error pinning message {MessageId}", messageId);
+            await Clients.Caller.SendAsync("PinError", ex.Message);
+        }
+    }
+
+    public async Task UnpinMessage(Guid conversationId, Guid messageId)
+    {
+        var userId = GetUserId();
+
+        var success = await _messageService.UnpinMessageAsync(conversationId, messageId, userId);
+        if (success)
+        {
+            await Clients.Group(conversationId.ToString())
+                .SendAsync("MessageUnpinned", conversationId, messageId, userId);
+        }
     }
 }

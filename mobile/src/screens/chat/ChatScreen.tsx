@@ -9,7 +9,10 @@ import {
   Text,
   TouchableOpacity,
   Alert,
+  Animated,
 } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import Clipboard from '@react-native-clipboard/clipboard';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -18,6 +21,9 @@ import MessageBubble from '../../components/MessageBubble';
 import ChatInput from '../../components/ChatInput';
 import Avatar from '../../components/Avatar';
 import MediaPicker, { SelectedMedia, LocationData, ContactData } from '../../components/MediaPicker';
+import SwipeableMessage from '../../components/SwipeableMessage';
+import MessageSelectionBar from '../../components/MessageSelectionBar';
+import ReactionsPopup from '../../components/ReactionsPopup';
 import { conversationsApi, filesApi } from '../../services/api';
 import {
   sendMessage,
@@ -26,12 +32,17 @@ import {
   markConversationRead,
   joinConversation,
   leaveConversation,
+  deleteMessageWithAudit,
+  addReaction,
+  starMessage,
+  pinMessage,
 } from '../../services/signalr';
 import { useChatStore } from '../../stores/chatStore';
 import { useAuthStore } from '../../stores/authStore';
 import { RootStackParamList } from '../../navigation/RootNavigator';
 import { Message, Conversation } from '../../types';
-import { COLORS, FONTS, SPACING } from '../../utils/theme';
+import { useTheme } from '../../context';
+import { FONTS, SPACING } from '../../utils/theme';
 // TODO: Re-enable when proper E2E encryption is implemented
 // import { encryptForConversation, decryptFromConversation } from '../../services/encryption';
 
@@ -42,6 +53,7 @@ const ChatScreen: React.FC = () => {
   const route = useRoute<ChatScreenRouteProp>();
   const navigation = useNavigation<ChatScreenNavigationProp>();
   const { conversationId } = route.params;
+  const { colors } = useTheme();
 
   const { userId } = useAuthStore();
   const {
@@ -58,6 +70,13 @@ const ChatScreen: React.FC = () => {
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [showMediaPicker, setShowMediaPicker] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [selectedMessages, setSelectedMessages] = useState<Set<string>>(new Set());
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [showReactionsPopup, setShowReactionsPopup] = useState(false);
+  const [reactionsPosition, setReactionsPosition] = useState({ x: 0, y: 0 });
+  const [reactionTargetMessage, setReactionTargetMessage] = useState<Message | null>(null);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+  const highlightAnim = useRef(new Animated.Value(0)).current;
   const flatListRef = useRef<FlatList>(null);
 
   const conversation = getConversation(conversationId);
@@ -114,7 +133,7 @@ const ChatScreen: React.FC = () => {
               onPress={() => navigation.goBack()}
               style={styles.backButton}
             >
-              <Icon name="chevron-left" size={28} color={COLORS.textLight} />
+              <Icon name="chevron-left" size={28} color={colors.headerText} />
             </TouchableOpacity>
           )}
           <TouchableOpacity
@@ -166,7 +185,7 @@ const ChatScreen: React.FC = () => {
               });
             }}
           >
-            <Icon name="video" size={24} color={COLORS.textLight} />
+            <Icon name="video" size={24} color={colors.headerText} />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.headerButton}
@@ -177,7 +196,7 @@ const ChatScreen: React.FC = () => {
               });
             }}
           >
-            <Icon name="phone" size={24} color={COLORS.textLight} />
+            <Icon name="phone" size={24} color={colors.headerText} />
           </TouchableOpacity>
         </View>
       ),
@@ -357,6 +376,191 @@ const ChatScreen: React.FC = () => {
     }
   };
 
+  // Selection mode handlers
+  const enterSelectionMode = (message: Message) => {
+    setIsSelectionMode(true);
+    setSelectedMessages(new Set([message.id]));
+  };
+
+  const exitSelectionMode = () => {
+    setIsSelectionMode(false);
+    setSelectedMessages(new Set());
+  };
+
+  const toggleMessageSelection = (messageId: string) => {
+    const newSelected = new Set(selectedMessages);
+    if (newSelected.has(messageId)) {
+      newSelected.delete(messageId);
+      if (newSelected.size === 0) {
+        exitSelectionMode();
+        return;
+      }
+    } else {
+      newSelected.add(messageId);
+    }
+    setSelectedMessages(newSelected);
+  };
+
+  const getSelectedMessage = (): Message | null => {
+    if (selectedMessages.size === 1) {
+      const messageId = Array.from(selectedMessages)[0];
+      return conversationMessages.find((m) => m.id === messageId) || null;
+    }
+    return null;
+  };
+
+  // Swipe to reply handler
+  const handleSwipeToReply = (message: Message) => {
+    setReplyingTo(message);
+  };
+
+  // Long press for selection/forward mode
+  const handleMessageLongPress = (message: Message) => {
+    if (isSelectionMode) {
+      toggleMessageSelection(message.id);
+    } else {
+      enterSelectionMode(message);
+    }
+  };
+
+  // Double tap for reactions
+  const handleDoubleTap = (message: Message, event: { x: number; y: number }) => {
+    setReactionTargetMessage(message);
+    setReactionsPosition({ x: event.x, y: event.y });
+    setShowReactionsPopup(true);
+  };
+
+  // Action bar handlers
+  const handleReply = () => {
+    const message = getSelectedMessage();
+    if (message) {
+      setReplyingTo(message);
+      exitSelectionMode();
+    }
+  };
+
+  const handleForward = () => {
+    if (selectedMessages.size > 0) {
+      const messageId = Array.from(selectedMessages)[0];
+      exitSelectionMode();
+      navigation.navigate('ForwardMessage', { messageId });
+    }
+  };
+
+  const handleCopy = () => {
+    const message = getSelectedMessage();
+    if (message?.content) {
+      Clipboard.setString(message.content);
+      Alert.alert('Copied', 'Message copied to clipboard');
+    }
+    exitSelectionMode();
+  };
+
+  const handleDelete = async () => {
+    const message = getSelectedMessage();
+    const isMine = message?.senderId === userId;
+
+    Alert.alert(
+      'Delete Message',
+      isMine
+        ? 'Delete this message for everyone or just for yourself?'
+        : 'Delete this message for yourself?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete for me',
+          onPress: async () => {
+            for (const messageId of selectedMessages) {
+              try {
+                await deleteMessageWithAudit(messageId, 'ForMe');
+              } catch (error) {
+                console.error('Failed to delete message:', error);
+              }
+            }
+            exitSelectionMode();
+          },
+        },
+        ...(isMine ? [{
+          text: 'Delete for everyone',
+          style: 'destructive' as const,
+          onPress: async () => {
+            for (const messageId of selectedMessages) {
+              try {
+                await deleteMessageWithAudit(messageId, 'ForEveryone');
+              } catch (error) {
+                console.error('Failed to delete message:', error);
+              }
+            }
+            exitSelectionMode();
+          },
+        }] : []),
+      ]
+    );
+  };
+
+  const handleStar = async () => {
+    for (const messageId of selectedMessages) {
+      try {
+        await starMessage(messageId);
+      } catch (error) {
+        console.error('Failed to star message:', error);
+      }
+    }
+    Alert.alert('Starred', 'Message(s) added to starred messages');
+    exitSelectionMode();
+  };
+
+  const handleReact = async (emoji: string) => {
+    if (reactionTargetMessage) {
+      try {
+        await addReaction(reactionTargetMessage.id, emoji);
+      } catch (error) {
+        console.error('Failed to add reaction:', error);
+      }
+    }
+    setReactionTargetMessage(null);
+  };
+
+  const scrollToAndHighlightMessage = useCallback((messageId: string) => {
+    const messageIndex = conversationMessages.findIndex((m) => m.id === messageId);
+    if (messageIndex !== -1) {
+      // Scroll to the message
+      flatListRef.current?.scrollToIndex({
+        index: messageIndex,
+        animated: true,
+        viewPosition: 0.5,
+      });
+
+      // Highlight the message with animation
+      setHighlightedMessageId(messageId);
+      highlightAnim.setValue(1);
+      Animated.sequence([
+        Animated.timing(highlightAnim, {
+          toValue: 0.3,
+          duration: 300,
+          useNativeDriver: false,
+        }),
+        Animated.timing(highlightAnim, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: false,
+        }),
+        Animated.timing(highlightAnim, {
+          toValue: 0.3,
+          duration: 300,
+          useNativeDriver: false,
+        }),
+        Animated.timing(highlightAnim, {
+          toValue: 0,
+          duration: 500,
+          useNativeDriver: false,
+        }),
+      ]).start(() => {
+        setHighlightedMessageId(null);
+      });
+    }
+  }, [conversationMessages, highlightAnim]);
+
   const renderMessage = ({ item, index }: { item: Message; index: number }) => {
     const isMine = item.senderId === userId;
     const showSenderName =
@@ -365,100 +569,189 @@ const ChatScreen: React.FC = () => {
       (index === conversationMessages.length - 1 ||
         conversationMessages[index + 1]?.senderId !== item.senderId);
 
-    return (
-      <MessageBubble
-        message={item}
-        isMine={isMine}
-        showSenderName={showSenderName}
-        onLongPress={() => {
-          // Show message options
-        }}
-        onReplyPress={() => {
-          if (item.replyToMessage) {
-            // Scroll to reply message
+    const isHighlighted = highlightedMessageId === item.id;
+    const isSelected = selectedMessages.has(item.id);
+    const highlightBackgroundColor = highlightAnim.interpolate({
+      inputRange: [0, 1],
+      outputRange: ['transparent', colors.primary + '30'],
+    });
+
+    const messageContent = (
+      <TouchableOpacity
+        activeOpacity={isSelectionMode ? 0.7 : 1}
+        onPress={() => {
+          if (isSelectionMode) {
+            toggleMessageSelection(item.id);
           }
         }}
-      />
+        onLongPress={() => handleMessageLongPress(item)}
+        delayLongPress={300}
+      >
+        <Animated.View
+          style={[
+            isHighlighted && {
+              backgroundColor: highlightBackgroundColor,
+              borderRadius: 12,
+            },
+            isSelected && {
+              backgroundColor: colors.primary + '20',
+              borderRadius: 12,
+            },
+          ]}
+        >
+          <MessageBubble
+            message={item}
+            isMine={isMine}
+            showSenderName={showSenderName}
+            onLongPress={() => handleMessageLongPress(item)}
+            onReplyPress={() => {
+              if (item.replyToMessageId) {
+                scrollToAndHighlightMessage(item.replyToMessageId);
+              }
+            }}
+          />
+        </Animated.View>
+      </TouchableOpacity>
     );
+
+    // Wrap with swipeable only when not in selection mode
+    if (!isSelectionMode) {
+      return (
+        <SwipeableMessage
+          onSwipeToReply={() => handleSwipeToReply(item)}
+          enabled={!item.isDeleted}
+        >
+          {messageContent}
+        </SwipeableMessage>
+      );
+    }
+
+    return messageContent;
   };
 
   const renderFooter = () => {
     if (!isLoadingMore) return null;
     return (
       <View style={styles.loadingMore}>
-        <ActivityIndicator size="small" color={COLORS.primary} />
+        <ActivityIndicator size="small" color={colors.primary} />
       </View>
     );
   };
 
   if (isLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
+  const selectedMessage = getSelectedMessage();
+  const canCopy = selectedMessage?.type === 'Text' && !!selectedMessage?.content;
+  const canEdit = selectedMessage?.senderId === userId && selectedMessage?.type === 'Text' && !selectedMessage?.isDeleted;
+
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={90}
-    >
-      <View style={styles.messagesContainer}>
-        <FlatList
-          ref={flatListRef}
-          data={conversationMessages}
-          renderItem={renderMessage}
-          keyExtractor={(item) => item.id}
-          inverted
-          onEndReached={loadMoreMessages}
-          onEndReachedThreshold={0.5}
-          ListFooterComponent={renderFooter}
-          contentContainerStyle={styles.messagesList}
+    <GestureHandlerRootView style={styles.flex}>
+      <KeyboardAvoidingView
+        style={[styles.container, { backgroundColor: colors.background }]}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={90}
+      >
+        {/* Selection Mode Top Action Bar */}
+        {isSelectionMode && (
+          <MessageSelectionBar
+            selectedCount={selectedMessages.size}
+            onClose={exitSelectionMode}
+            onDelete={handleDelete}
+            onForward={handleForward}
+            onCopy={handleCopy}
+            onReply={handleReply}
+            onStar={handleStar}
+            canCopy={canCopy}
+            canReply={selectedMessages.size === 1}
+            canEdit={canEdit}
+          />
+        )}
+
+        <View style={styles.messagesContainer}>
+          <FlatList
+            ref={flatListRef}
+            data={conversationMessages}
+            renderItem={renderMessage}
+            keyExtractor={(item) => item.id}
+            inverted
+            onEndReached={loadMoreMessages}
+            onEndReachedThreshold={0.5}
+            ListFooterComponent={renderFooter}
+            contentContainerStyle={styles.messagesList}
+            onScrollToIndexFailed={(info) => {
+              // If scroll fails, wait and try again
+              setTimeout(() => {
+                flatListRef.current?.scrollToIndex({
+                  index: info.index,
+                  animated: true,
+                  viewPosition: 0.5,
+                });
+              }, 100);
+            }}
+          />
+        </View>
+
+        {!isSelectionMode && (
+          <ChatInput
+            onSendMessage={handleSendMessage}
+            onAttachmentPress={handleAttachmentPress}
+            onSendVoiceNote={handleSendVoiceNote}
+            onTypingStart={handleTypingStart}
+            onTypingEnd={handleTypingEnd}
+            replyingTo={
+              replyingTo
+                ? {
+                    id: replyingTo.id,
+                    senderName: replyingTo.senderName || '',
+                    content: replyingTo.content || replyingTo.type,
+                  }
+                : null
+            }
+            onCancelReply={() => setReplyingTo(null)}
+            disabled={isUploading}
+          />
+        )}
+
+        <MediaPicker
+          visible={showMediaPicker}
+          onClose={() => setShowMediaPicker(false)}
+          onMediaSelected={handleMediaSelected}
+          onLocationSelected={handleLocationSelected}
+          onContactSelected={handleContactSelected}
         />
-      </View>
 
-      <ChatInput
-        onSendMessage={handleSendMessage}
-        onAttachmentPress={handleAttachmentPress}
-        onSendVoiceNote={handleSendVoiceNote}
-        onTypingStart={handleTypingStart}
-        onTypingEnd={handleTypingEnd}
-        replyingTo={
-          replyingTo
-            ? {
-                id: replyingTo.id,
-                senderName: replyingTo.senderName || '',
-                content: replyingTo.content || replyingTo.type,
-              }
-            : null
-        }
-        onCancelReply={() => setReplyingTo(null)}
-        disabled={isUploading}
-      />
-
-      <MediaPicker
-        visible={showMediaPicker}
-        onClose={() => setShowMediaPicker(false)}
-        onMediaSelected={handleMediaSelected}
-        onLocationSelected={handleLocationSelected}
-        onContactSelected={handleContactSelected}
-      />
-    </KeyboardAvoidingView>
+        {/* Reactions Popup */}
+        <ReactionsPopup
+          visible={showReactionsPopup}
+          position={reactionsPosition}
+          onReact={handleReact}
+          onClose={() => {
+            setShowReactionsPopup(false);
+            setReactionTargetMessage(null);
+          }}
+        />
+      </KeyboardAvoidingView>
+    </GestureHandlerRootView>
   );
 };
 
 const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+  },
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORS.background,
   },
   headerLeftContainer: {
     flexDirection: 'row',
@@ -475,13 +768,13 @@ const styles = StyleSheet.create({
     marginLeft: SPACING.sm,
   },
   headerName: {
-    color: COLORS.textLight,
+    color: '#FFFFFF',
     fontSize: FONTS.sizes.lg,
     fontWeight: 'bold',
     maxWidth: 150,
   },
   headerStatus: {
-    color: COLORS.textLight,
+    color: '#FFFFFF',
     fontSize: FONTS.sizes.xs,
     opacity: 0.8,
   },

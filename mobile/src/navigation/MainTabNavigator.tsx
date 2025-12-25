@@ -7,12 +7,14 @@ import { useChatStore } from '../stores/chatStore';
 
 import ChatsScreen from '../screens/main/ChatsScreen';
 import CallsScreen from '../screens/main/CallsScreen';
+import PTTScreen from '../screens/main/PTTScreen';
 import ChannelsScreen from '../screens/main/ChannelsScreen';
 import SettingsScreen from '../screens/main/SettingsScreen';
 
 export type MainTabParamList = {
   Chats: undefined;
   Calls: undefined;
+  PTT: undefined;
   Channels: undefined;
   Settings: undefined;
 };
@@ -62,8 +64,11 @@ const MainTabNavigator: React.FC = () => {
             case 'Calls':
               iconName = focused ? 'phone' : 'phone-outline';
               break;
+            case 'PTT':
+              iconName = 'radio-handheld';
+              break;
             case 'Channels':
-              iconName = focused ? 'layers' : 'layers-outline';
+              iconName = focused ? 'bullhorn' : 'bullhorn-outline';
               break;
             case 'Settings':
               iconName = focused ? 'cog' : 'cog-outline';
@@ -101,6 +106,14 @@ const MainTabNavigator: React.FC = () => {
         component={CallsScreen}
         options={{
           title: 'Calls',
+          headerShown: false,
+        }}
+      />
+      <Tab.Screen
+        name="PTT"
+        component={PTTScreen}
+        options={{
+          title: 'PTT',
           headerShown: false,
         }}
       />

@@ -239,6 +239,40 @@ public class CallService : ICallService
             .ToJwt();
     }
 
+    public async Task<bool> AddParticipantAsync(Guid callId, Guid userId)
+    {
+        var call = await _context.Calls
+            .Include(c => c.Participants)
+            .FirstOrDefaultAsync(c => c.Id == callId);
+
+        if (call == null || (call.Status != CallStatus.Ringing && call.Status != CallStatus.Ongoing))
+            return false;
+
+        // Check if user is already a participant
+        var existingParticipant = call.Participants.FirstOrDefault(p => p.UserId == userId);
+        if (existingParticipant != null)
+        {
+            // Already a participant, just update status if needed
+            if (existingParticipant.Status == CallStatus.Declined || existingParticipant.Status == CallStatus.Missed)
+            {
+                existingParticipant.Status = CallStatus.Ringing;
+                await _context.SaveChangesAsync();
+            }
+            return true;
+        }
+
+        // Add new participant
+        call.Participants.Add(new CallParticipant
+        {
+            UserId = userId,
+            Status = CallStatus.Ringing,
+            IsVideoEnabled = call.Type == CallType.Video
+        });
+
+        await _context.SaveChangesAsync();
+        return true;
+    }
+
     public async Task<int> CleanupStaleCallsAsync(TimeSpan maxAge)
     {
         var cutoffTime = DateTime.UtcNow - maxAge;

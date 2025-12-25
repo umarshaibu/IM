@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,8 +8,10 @@ import {
   StatusBar,
   Platform,
   Alert,
+  ScrollView,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useQuery } from '@tanstack/react-query';
 import { registerGlobals, VideoView } from '@livekit/react-native';
@@ -20,16 +22,33 @@ import {
   VideoPresets,
   ConnectionQuality,
   RoomEvent,
+  RemoteParticipant,
 } from 'livekit-client';
 import InCallManager from 'react-native-incall-manager';
 import Avatar from '../../components/Avatar';
+import { GroupCallGrid } from '../../components/call';
 import { conversationsApi } from '../../services/api';
 import * as signalr from '../../services/signalr';
 import { useCallStore } from '../../stores/callStore';
 import { useAuthStore } from '../../stores/authStore';
 import { RootStackParamList } from '../../navigation/RootNavigator';
-import { COLORS, FONTS, SPACING } from '../../utils/theme';
+import { useTheme } from '../../context';
+import { FONTS, SPACING } from '../../utils/theme';
 import { callSoundService } from '../../services/CallSoundService';
+
+// Participant info type for group calls
+interface RemoteParticipantInfo {
+  id: string;
+  name: string;
+  profilePictureUrl?: string;
+  videoTrack: Track | null;
+  audioTrack: Track | null;
+  isMuted: boolean;
+  isVideoEnabled: boolean;
+  isSpeaking: boolean;
+  isLocal: boolean;
+  connectionQuality?: ConnectionQuality;
+}
 
 registerGlobals();
 
@@ -82,12 +101,14 @@ const getQualityIcon = (quality: QualityLevel): string => {
 };
 
 type CallScreenRouteProp = RouteProp<RootStackParamList, 'Call'>;
+type CallScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const CallScreen: React.FC = () => {
   const route = useRoute<CallScreenRouteProp>();
-  const navigation = useNavigation();
+  const navigation = useNavigation<CallScreenNavigationProp>();
+  const { colors } = useTheme();
   const { conversationId, type, callId, isIncoming, roomToken: preJoinedRoomToken, roomId: preJoinedRoomId, liveKitUrl: preJoinedLiveKitUrl } = route.params;
   const { userId } = useAuthStore();
   const { setActiveCall, clearActiveCall, activeCall } = useCallStore();
@@ -111,6 +132,11 @@ const CallScreen: React.FC = () => {
   const isReconnectingRef = useRef(false); // Ref to track reconnection status for callbacks
   const participantDisconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Grace period timeout
 
+  // Group call state - track multiple remote participants
+  const [remoteParticipants, setRemoteParticipants] = useState<Map<string, RemoteParticipantInfo>>(new Map());
+  const [activeSpeakerId, setActiveSpeakerId] = useState<string | null>(null);
+  const [callLayout, setCallLayout] = useState<'grid' | 'spotlight'>('grid');
+
   // Connection quality and reconnection state
   const [connectionQuality, setConnectionQuality] = useState<QualityLevel>('good');
   const [isReconnecting, setIsReconnecting] = useState(false);
@@ -131,6 +157,78 @@ const CallScreen: React.FC = () => {
   const otherParticipant = conversation?.participants?.find(
     (p: any) => p.userId !== currentUserId
   );
+
+  // Determine if this is a group call
+  const isGroupCall = conversation?.type === 'Group';
+  const participantCount = conversation?.participants?.length || 0;
+
+  // Get all other participants for group calls
+  const allOtherParticipants = useMemo(() => {
+    if (!conversation?.participants) return [];
+    return conversation.participants.filter((p: any) => p.userId !== currentUserId);
+  }, [conversation, currentUserId]);
+
+  // Helper to get participant info from conversation
+  const getParticipantInfo = useCallback((participantId: string) => {
+    const participant = conversation?.participants?.find(
+      (p: any) => p.userId === participantId
+    );
+    return participant ? {
+      name: participant.displayName || participant.fullName || 'Unknown',
+      profilePictureUrl: participant.profilePictureUrl,
+    } : { name: 'Unknown', profilePictureUrl: undefined };
+  }, [conversation]);
+
+  // Convert remoteParticipants Map to array for GroupCallGrid
+  const remoteParticipantsArray = useMemo(() => {
+    return Array.from(remoteParticipants.values());
+  }, [remoteParticipants]);
+
+  // Update remote participant info
+  const updateRemoteParticipant = useCallback((
+    participantId: string,
+    updates: Partial<RemoteParticipantInfo>
+  ) => {
+    setRemoteParticipants(prev => {
+      const newMap = new Map(prev);
+      const existing = newMap.get(participantId);
+      if (existing) {
+        newMap.set(participantId, { ...existing, ...updates });
+      }
+      return newMap;
+    });
+  }, []);
+
+  // Add a remote participant
+  const addRemoteParticipant = useCallback((participant: RemoteParticipant) => {
+    const info = getParticipantInfo(participant.identity);
+    const participantInfo: RemoteParticipantInfo = {
+      id: participant.identity,
+      name: info.name,
+      profilePictureUrl: info.profilePictureUrl,
+      videoTrack: null,
+      audioTrack: null,
+      isMuted: !participant.isMicrophoneEnabled,
+      isVideoEnabled: participant.isCameraEnabled,
+      isSpeaking: participant.isSpeaking,
+      isLocal: false,
+      connectionQuality: participant.connectionQuality,
+    };
+    setRemoteParticipants(prev => {
+      const newMap = new Map(prev);
+      newMap.set(participant.identity, participantInfo);
+      return newMap;
+    });
+  }, [getParticipantInfo]);
+
+  // Remove a remote participant
+  const removeRemoteParticipant = useCallback((participantId: string) => {
+    setRemoteParticipants(prev => {
+      const newMap = new Map(prev);
+      newMap.delete(participantId);
+      return newMap;
+    });
+  }, []);
 
   useEffect(() => {
     // Start InCallManager for proper audio routing
@@ -273,6 +371,8 @@ const CallScreen: React.FC = () => {
         hasOtherParticipantRef.current = true;
         setHasOtherParticipant(true);
         setCallStatus('connected');
+        // Add to remote participants map for group calls
+        addRemoteParticipant(participant);
         // Stop the ringing tone when participant joins
         callSoundService.stopAllSounds();
         // Clear the ringing timeout when participant joins
@@ -286,11 +386,20 @@ const CallScreen: React.FC = () => {
         console.log('Participant disconnected:', participant.identity);
         console.log('Remaining remote participants:', newRoom.remoteParticipants.size);
         console.log('Is reconnecting:', isReconnectingRef.current);
-        hasOtherParticipantRef.current = false;
-        setHasOtherParticipant(false);
-        setRemoteVideoTrack(null);
+        // Remove from remote participants map
+        removeRemoteParticipant(participant.identity);
 
-        // In a 1:1 call, if the other participant disconnects, wait for potential reconnection
+        // Update hasOtherParticipant based on remaining participants
+        const stillHasParticipants = newRoom.remoteParticipants.size > 0;
+        hasOtherParticipantRef.current = stillHasParticipants;
+        setHasOtherParticipant(stillHasParticipants);
+
+        // Only clear remote video track if no participants left
+        if (!stillHasParticipants) {
+          setRemoteVideoTrack(null);
+        }
+
+        // If all participants disconnected, wait for potential reconnection
         if (newRoom.remoteParticipants.size === 0) {
           console.log('All remote participants left, waiting for potential reconnection...');
 
@@ -328,15 +437,69 @@ const CallScreen: React.FC = () => {
       newRoom.on('trackSubscribed', (track: Track, publication: any, participant: any) => {
         console.log('Track subscribed:', track.kind, 'from', participant.identity);
         if (track.kind === Track.Kind.Video) {
-          console.log('Setting remote video track');
+          console.log('Setting remote video track for', participant.identity);
+          // Update the participant's video track in the map
+          updateRemoteParticipant(participant.identity, { videoTrack: track });
+          // For backwards compatibility with 1:1 calls, also set the single track
           setRemoteVideoTrack(track);
+        } else if (track.kind === Track.Kind.Audio) {
+          updateRemoteParticipant(participant.identity, { audioTrack: track });
         }
       });
 
-      newRoom.on('trackUnsubscribed', (track: Track) => {
-        console.log('Track unsubscribed:', track.kind);
+      newRoom.on('trackUnsubscribed', (track: Track, publication: any, participant: any) => {
+        console.log('Track unsubscribed:', track.kind, 'from', participant.identity);
         if (track.kind === Track.Kind.Video) {
-          setRemoteVideoTrack(null);
+          updateRemoteParticipant(participant.identity, { videoTrack: null });
+          // Check if there are any other video tracks
+          const hasOtherVideo = Array.from(remoteParticipants.values()).some(
+            p => p.id !== participant.identity && p.videoTrack
+          );
+          if (!hasOtherVideo) {
+            setRemoteVideoTrack(null);
+          }
+        } else if (track.kind === Track.Kind.Audio) {
+          updateRemoteParticipant(participant.identity, { audioTrack: null });
+        }
+      });
+
+      // Track mute/unmute events
+      newRoom.on(RoomEvent.TrackMuted, (publication: any, participant: any) => {
+        if (!participant.isLocal) {
+          if (publication.kind === 'audio') {
+            updateRemoteParticipant(participant.identity, { isMuted: true });
+          } else if (publication.kind === 'video') {
+            updateRemoteParticipant(participant.identity, { isVideoEnabled: false });
+          }
+        }
+      });
+
+      newRoom.on(RoomEvent.TrackUnmuted, (publication: any, participant: any) => {
+        if (!participant.isLocal) {
+          if (publication.kind === 'audio') {
+            updateRemoteParticipant(participant.identity, { isMuted: false });
+          } else if (publication.kind === 'video') {
+            updateRemoteParticipant(participant.identity, { isVideoEnabled: true });
+          }
+        }
+      });
+
+      // Track active speaker
+      newRoom.on(RoomEvent.ActiveSpeakersChanged, (speakers: any[]) => {
+        if (speakers.length > 0) {
+          const topSpeaker = speakers[0];
+          if (!topSpeaker.isLocal) {
+            setActiveSpeakerId(topSpeaker.identity);
+            updateRemoteParticipant(topSpeaker.identity, { isSpeaking: true });
+          }
+          // Mark others as not speaking
+          remoteParticipants.forEach((p, id) => {
+            if (!speakers.some(s => s.identity === id)) {
+              updateRemoteParticipant(id, { isSpeaking: false });
+            }
+          });
+        } else {
+          setActiveSpeakerId(null);
         }
       });
 
@@ -602,6 +765,21 @@ const CallScreen: React.FC = () => {
     }
   };
 
+  // Add participant to the call
+  const handleAddParticipant = () => {
+    if (!activeCall?.id) return;
+    // Navigate to contact picker to add participants
+    // The selected contacts will be invited to the call
+    navigation.navigate('AddToCall', {
+      callId: activeCall.id,
+      callType: type,
+      existingParticipants: [
+        currentUserId,
+        ...Array.from(remoteParticipants.keys()),
+      ],
+    });
+  };
+
   const formatDuration = (seconds: number): string => {
     const hrs = Math.floor(seconds / 3600);
     const mins = Math.floor((seconds % 3600) / 60);
@@ -613,11 +791,76 @@ const CallScreen: React.FC = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Toggle between grid and spotlight layout for group calls
+  const toggleLayout = () => {
+    setCallLayout(prev => prev === 'grid' ? 'spotlight' : 'grid');
+  };
+
+  // Prepare local participant info for grid
+  const localParticipantInfo = useMemo((): RemoteParticipantInfo | undefined => {
+    if (!localVideoTrack && !isVideoEnabled) return undefined;
+    const userInfo = getParticipantInfo(currentUserId);
+    return {
+      id: currentUserId,
+      name: 'You',
+      profilePictureUrl: userInfo.profilePictureUrl,
+      videoTrack: localVideoTrack,
+      audioTrack: null,
+      isMuted,
+      isVideoEnabled,
+      isSpeaking: false,
+      isLocal: true,
+    };
+  }, [localVideoTrack, isMuted, isVideoEnabled, currentUserId, getParticipantInfo]);
+
   const renderVideoCall = () => {
     const showLocalVideoFullscreen = !remoteVideoTrack && localVideoTrack && isVideoEnabled;
+    const hasMultipleParticipants = remoteParticipantsArray.length > 1;
 
-    console.log('renderVideoCall - localVideoTrack:', !!localVideoTrack, 'remoteVideoTrack:', !!remoteVideoTrack, 'isVideoEnabled:', isVideoEnabled);
+    console.log('renderVideoCall - localVideoTrack:', !!localVideoTrack, 'remoteVideoTrack:', !!remoteVideoTrack, 'isVideoEnabled:', isVideoEnabled, 'participants:', remoteParticipantsArray.length);
 
+    // Use group call grid for multiple participants
+    if (hasMultipleParticipants || (isGroupCall && remoteParticipantsArray.length > 0)) {
+      return (
+        <View style={styles.videoContainer}>
+          <GroupCallGrid
+            participants={remoteParticipantsArray}
+            localParticipant={localParticipantInfo}
+            activeSpeakerId={activeSpeakerId || undefined}
+            layout={callLayout}
+          />
+
+          {/* Call duration overlay */}
+          {callStatus === 'connected' && hasOtherParticipant && (
+            <View style={styles.durationOverlay}>
+              <View style={styles.durationBadge}>
+                <View style={styles.recordingDot} />
+                <Text style={styles.durationText}>{formatDuration(callDuration)}</Text>
+              </View>
+            </View>
+          )}
+
+          {/* Layout toggle button for group calls */}
+          <TouchableOpacity style={styles.layoutToggleButton} onPress={toggleLayout}>
+            <Icon
+              name={callLayout === 'grid' ? 'view-grid' : 'spotlight-beam'}
+              size={24}
+              color="#FFFFFF"
+            />
+          </TouchableOpacity>
+
+          {/* Participant count badge */}
+          <View style={styles.participantCountBadge}>
+            <Icon name="account-group" size={16} color="#FFFFFF" />
+            <Text style={styles.participantCountText}>
+              {remoteParticipantsArray.length + 1}
+            </Text>
+          </View>
+        </View>
+      );
+    }
+
+    // Original 1:1 call rendering
     return (
       <View style={styles.videoContainer}>
         {/* Remote video (full screen) or placeholder */}
@@ -645,7 +888,7 @@ const CallScreen: React.FC = () => {
                 size={100}
               />
               <Text style={styles.callerName}>
-                {otherParticipant?.displayName || otherParticipant?.fullName}
+                {isGroupCall ? conversation?.name : (otherParticipant?.displayName || otherParticipant?.fullName)}
               </Text>
               <Text style={styles.callStatus}>
                 {getCallStatusText()}
@@ -674,7 +917,7 @@ const CallScreen: React.FC = () => {
               mirror
             />
             <TouchableOpacity style={styles.flipButton} onPress={flipCamera}>
-              <Icon name="camera-flip" size={20} color={COLORS.textLight} />
+              <Icon name="camera-flip" size={20} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
         )}
@@ -689,7 +932,7 @@ const CallScreen: React.FC = () => {
               mirror
             />
             <TouchableOpacity style={styles.flipButton} onPress={flipCamera}>
-              <Icon name="camera-flip" size={20} color={COLORS.textLight} />
+              <Icon name="camera-flip" size={20} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
         )}
@@ -697,7 +940,7 @@ const CallScreen: React.FC = () => {
         {/* Flip camera button when local video is fullscreen */}
         {showLocalVideoFullscreen && (
           <TouchableOpacity style={styles.flipButtonFullscreen} onPress={flipCamera}>
-            <Icon name="camera-flip" size={24} color={COLORS.textLight} />
+            <Icon name="camera-flip" size={24} color="#FFFFFF" />
           </TouchableOpacity>
         )}
 
@@ -727,21 +970,86 @@ const CallScreen: React.FC = () => {
     return 'Connecting...';
   };
 
-  const renderVoiceCall = () => (
-    <View style={styles.voiceContainer}>
-      <Avatar
-        uri={otherParticipant?.profilePictureUrl}
-        name={otherParticipant?.displayName || otherParticipant?.fullName || ''}
-        size={150}
-      />
-      <Text style={styles.callerName}>
-        {otherParticipant?.displayName || otherParticipant?.fullName}
-      </Text>
-      <Text style={styles.callStatus}>
-        {getCallStatusText()}
-      </Text>
-    </View>
-  );
+  const renderVoiceCall = () => {
+    // For group voice calls, show participant avatars in a scrollable row
+    if (isGroupCall) {
+      return (
+        <View style={styles.voiceContainer}>
+          {/* Group icon/name at top */}
+          <Avatar
+            uri={conversation?.iconUrl}
+            name={conversation?.name || 'Group'}
+            size={100}
+          />
+          <Text style={styles.callerName}>
+            {conversation?.name || 'Group Call'}
+          </Text>
+          <Text style={styles.callStatus}>
+            {getCallStatusText()}
+          </Text>
+
+          {/* Connected participants */}
+          {remoteParticipantsArray.length > 0 && (
+            <View style={styles.voiceParticipantsContainer}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.voiceParticipantsList}
+              >
+                {remoteParticipantsArray.map((participant) => (
+                  <View key={participant.id} style={styles.voiceParticipantItem}>
+                    <Avatar
+                      uri={participant.profilePictureUrl}
+                      name={participant.name}
+                      size={60}
+                    />
+                    {participant.isSpeaking && (
+                      <View style={styles.speakingIndicatorSmall}>
+                        <Icon name="volume-high" size={12} color="#4CAF50" />
+                      </View>
+                    )}
+                    {participant.isMuted && (
+                      <View style={styles.mutedIndicatorSmall}>
+                        <Icon name="microphone-off" size={12} color="#FF5252" />
+                      </View>
+                    )}
+                    <Text style={styles.voiceParticipantName} numberOfLines={1}>
+                      {participant.name}
+                    </Text>
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
+          {/* Participant count */}
+          <View style={styles.voiceParticipantCount}>
+            <Icon name="account-group" size={20} color="#FFFFFF" />
+            <Text style={styles.voiceParticipantCountText}>
+              {remoteParticipantsArray.length + 1} participants
+            </Text>
+          </View>
+        </View>
+      );
+    }
+
+    // Original 1:1 voice call
+    return (
+      <View style={styles.voiceContainer}>
+        <Avatar
+          uri={otherParticipant?.profilePictureUrl}
+          name={otherParticipant?.displayName || otherParticipant?.fullName || ''}
+          size={150}
+        />
+        <Text style={styles.callerName}>
+          {otherParticipant?.displayName || otherParticipant?.fullName}
+        </Text>
+        <Text style={styles.callStatus}>
+          {getCallStatusText()}
+        </Text>
+      </View>
+    );
+  };
 
   // Render connection quality indicator
   const renderConnectionQuality = () => (
@@ -808,7 +1116,7 @@ const CallScreen: React.FC = () => {
             <Icon
               name={isMuted ? 'microphone-off' : 'microphone'}
               size={28}
-              color={isMuted ? COLORS.text : COLORS.textLight}
+              color={isMuted ? '#1a1a2e' : '#FFFFFF'}
             />
           </TouchableOpacity>
 
@@ -820,7 +1128,7 @@ const CallScreen: React.FC = () => {
               <Icon
                 name={isVideoEnabled ? 'video' : 'video-off'}
                 size={28}
-                color={!isVideoEnabled ? COLORS.text : COLORS.textLight}
+                color={!isVideoEnabled ? '#1a1a2e' : '#FFFFFF'}
               />
             </TouchableOpacity>
           )}
@@ -832,13 +1140,23 @@ const CallScreen: React.FC = () => {
             <Icon
               name={isSpeakerOn ? 'volume-high' : 'volume-off'}
               size={28}
-              color={isSpeakerOn ? COLORS.text : COLORS.textLight}
+              color={isSpeakerOn ? '#1a1a2e' : '#FFFFFF'}
             />
           </TouchableOpacity>
+
+          {/* Add participant button - only show when call is connected */}
+          {callStatus === 'connected' && (
+            <TouchableOpacity
+              style={styles.controlButton}
+              onPress={handleAddParticipant}
+            >
+              <Icon name="account-plus" size={28} color="#FFFFFF" />
+            </TouchableOpacity>
+          )}
         </View>
 
         <TouchableOpacity style={styles.endCallButton} onPress={handleEndCall}>
-          <Icon name="phone-hangup" size={32} color={COLORS.textLight} />
+          <Icon name="phone-hangup" size={32} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
     </View>
@@ -896,7 +1214,7 @@ const styles = StyleSheet.create({
   },
   durationText: {
     fontSize: FONTS.sizes.sm,
-    color: COLORS.textLight,
+    color: '#FFFFFF',
     fontWeight: '600',
   },
   localVideoContainer: {
@@ -956,7 +1274,7 @@ const styles = StyleSheet.create({
   },
   remoteInfoName: {
     fontSize: FONTS.sizes.sm,
-    color: COLORS.textLight,
+    color: '#FFFFFF',
     fontWeight: '500',
     marginLeft: 8,
   },
@@ -968,12 +1286,12 @@ const styles = StyleSheet.create({
   callerName: {
     fontSize: FONTS.sizes.xxl,
     fontWeight: 'bold',
-    color: COLORS.textLight,
+    color: '#FFFFFF',
     marginTop: SPACING.lg,
   },
   callStatus: {
     fontSize: FONTS.sizes.lg,
-    color: COLORS.textLight,
+    color: '#FFFFFF',
     opacity: 0.8,
     marginTop: SPACING.sm,
   },
@@ -985,7 +1303,7 @@ const styles = StyleSheet.create({
   },
   duration: {
     fontSize: FONTS.sizes.md,
-    color: COLORS.textLight,
+    color: '#FFFFFF',
     textAlign: 'center',
     marginBottom: SPACING.lg,
   },
@@ -1004,13 +1322,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   controlButtonActive: {
-    backgroundColor: COLORS.textLight,
+    backgroundColor: '#FFFFFF',
   },
   endCallButton: {
     width: 70,
     height: 70,
     borderRadius: 35,
-    backgroundColor: COLORS.error,
+    backgroundColor: '#FF3B30',
     justifyContent: 'center',
     alignItems: 'center',
     alignSelf: 'center',
@@ -1024,6 +1342,81 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 6,
     borderRadius: 12,
+  },
+  // Group call styles
+  layoutToggleButton: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 60 : 20,
+    left: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  participantCountBadge: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 60 : 20,
+    right: 70,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  participantCountText: {
+    color: '#FFFFFF',
+    fontSize: FONTS.sizes.sm,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  // Voice call group styles
+  voiceParticipantsContainer: {
+    marginTop: SPACING.xl,
+    width: '100%',
+  },
+  voiceParticipantsList: {
+    paddingHorizontal: SPACING.md,
+  },
+  voiceParticipantItem: {
+    alignItems: 'center',
+    marginHorizontal: SPACING.sm,
+    width: 80,
+  },
+  voiceParticipantName: {
+    color: '#FFFFFF',
+    fontSize: FONTS.sizes.xs,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  speakingIndicatorSmall: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    backgroundColor: 'rgba(76, 175, 80, 0.3)',
+    borderRadius: 10,
+    padding: 2,
+  },
+  mutedIndicatorSmall: {
+    position: 'absolute',
+    bottom: 20,
+    right: 0,
+    backgroundColor: 'rgba(255, 82, 82, 0.3)',
+    borderRadius: 10,
+    padding: 2,
+  },
+  voiceParticipantCount: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: SPACING.xl,
+  },
+  voiceParticipantCountText: {
+    color: '#FFFFFF',
+    fontSize: FONTS.sizes.md,
+    marginLeft: 8,
+    opacity: 0.8,
   },
   // Reconnecting banner
   reconnectingBanner: {

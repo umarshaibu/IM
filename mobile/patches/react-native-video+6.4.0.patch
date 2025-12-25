@@ -1,0 +1,159 @@
+diff --git a/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/dash/DashMediaSource$Factory.class b/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/dash/DashMediaSource$Factory.class
+new file mode 100644
+index 0000000..2bb27a7
+Binary files /dev/null and b/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/dash/DashMediaSource$Factory.class differ
+diff --git a/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/dash/DashMediaSource.class b/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/dash/DashMediaSource.class
+new file mode 100644
+index 0000000..b6d4f67
+Binary files /dev/null and b/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/dash/DashMediaSource.class differ
+diff --git a/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/dash/DashUtil.class b/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/dash/DashUtil.class
+new file mode 100644
+index 0000000..8e39b9b
+Binary files /dev/null and b/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/dash/DashUtil.class differ
+diff --git a/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/dash/DefaultDashChunkSource$Factory.class b/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/dash/DefaultDashChunkSource$Factory.class
+new file mode 100644
+index 0000000..821a44f
+Binary files /dev/null and b/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/dash/DefaultDashChunkSource$Factory.class differ
+diff --git a/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/dash/DefaultDashChunkSource.class b/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/dash/DefaultDashChunkSource.class
+new file mode 100644
+index 0000000..481ec08
+Binary files /dev/null and b/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/dash/DefaultDashChunkSource.class differ
+diff --git a/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/dash/manifest/AdaptationSet.class b/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/dash/manifest/AdaptationSet.class
+new file mode 100644
+index 0000000..3375b36
+Binary files /dev/null and b/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/dash/manifest/AdaptationSet.class differ
+diff --git a/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/dash/manifest/DashManifest.class b/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/dash/manifest/DashManifest.class
+new file mode 100644
+index 0000000..7bab9ce
+Binary files /dev/null and b/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/dash/manifest/DashManifest.class differ
+diff --git a/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/dash/manifest/Period.class b/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/dash/manifest/Period.class
+new file mode 100644
+index 0000000..5e20d52
+Binary files /dev/null and b/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/dash/manifest/Period.class differ
+diff --git a/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/dash/manifest/Representation.class b/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/dash/manifest/Representation.class
+new file mode 100644
+index 0000000..bea0c46
+Binary files /dev/null and b/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/dash/manifest/Representation.class differ
+diff --git a/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/hls/HlsMediaSource$Factory.class b/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/hls/HlsMediaSource$Factory.class
+new file mode 100644
+index 0000000..3ca6828
+Binary files /dev/null and b/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/hls/HlsMediaSource$Factory.class differ
+diff --git a/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/hls/HlsMediaSource.class b/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/hls/HlsMediaSource.class
+new file mode 100644
+index 0000000..8e0850f
+Binary files /dev/null and b/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/hls/HlsMediaSource.class differ
+diff --git a/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/ima/ImaAdsLoader$Builder.class b/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/ima/ImaAdsLoader$Builder.class
+new file mode 100644
+index 0000000..e8b1673
+Binary files /dev/null and b/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/ima/ImaAdsLoader$Builder.class differ
+diff --git a/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/ima/ImaAdsLoader.class b/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/ima/ImaAdsLoader.class
+new file mode 100644
+index 0000000..9acaf38
+Binary files /dev/null and b/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/ima/ImaAdsLoader.class differ
+diff --git a/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/rtsp/RtspMediaSource$Factory.class b/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/rtsp/RtspMediaSource$Factory.class
+new file mode 100644
+index 0000000..6904a64
+Binary files /dev/null and b/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/rtsp/RtspMediaSource$Factory.class differ
+diff --git a/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/rtsp/RtspMediaSource.class b/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/rtsp/RtspMediaSource.class
+new file mode 100644
+index 0000000..c95d5e5
+Binary files /dev/null and b/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/rtsp/RtspMediaSource.class differ
+diff --git a/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/smoothstreaming/DefaultSsChunkSource$Factory.class b/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/smoothstreaming/DefaultSsChunkSource$Factory.class
+new file mode 100644
+index 0000000..76ab1ad
+Binary files /dev/null and b/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/smoothstreaming/DefaultSsChunkSource$Factory.class differ
+diff --git a/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/smoothstreaming/DefaultSsChunkSource.class b/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/smoothstreaming/DefaultSsChunkSource.class
+new file mode 100644
+index 0000000..3f3cd35
+Binary files /dev/null and b/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/smoothstreaming/DefaultSsChunkSource.class differ
+diff --git a/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/smoothstreaming/SsMediaSource$Factory.class b/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/smoothstreaming/SsMediaSource$Factory.class
+new file mode 100644
+index 0000000..12964d0
+Binary files /dev/null and b/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/smoothstreaming/SsMediaSource$Factory.class differ
+diff --git a/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/smoothstreaming/SsMediaSource.class b/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/smoothstreaming/SsMediaSource.class
+new file mode 100644
+index 0000000..0d15af4
+Binary files /dev/null and b/node_modules/react-native-video/android/bin/src/main/java/androidx/media3/exoplayer/smoothstreaming/SsMediaSource.class differ
+diff --git a/node_modules/react-native-video/android/bin/src/main/java/com/brentvatne/exoplayer/AudioOutput.class b/node_modules/react-native-video/android/bin/src/main/java/com/brentvatne/exoplayer/AudioOutput.class
+new file mode 100644
+index 0000000..66f6397
+Binary files /dev/null and b/node_modules/react-native-video/android/bin/src/main/java/com/brentvatne/exoplayer/AudioOutput.class differ
+diff --git a/node_modules/react-native-video/android/bin/src/main/java/com/brentvatne/exoplayer/ExoPlayerView$ComponentListener.class b/node_modules/react-native-video/android/bin/src/main/java/com/brentvatne/exoplayer/ExoPlayerView$ComponentListener.class
+new file mode 100644
+index 0000000..0db3c20
+Binary files /dev/null and b/node_modules/react-native-video/android/bin/src/main/java/com/brentvatne/exoplayer/ExoPlayerView$ComponentListener.class differ
+diff --git a/node_modules/react-native-video/android/bin/src/main/java/com/brentvatne/exoplayer/ExoPlayerView.class b/node_modules/react-native-video/android/bin/src/main/java/com/brentvatne/exoplayer/ExoPlayerView.class
+new file mode 100644
+index 0000000..b451871
+Binary files /dev/null and b/node_modules/react-native-video/android/bin/src/main/java/com/brentvatne/exoplayer/ExoPlayerView.class differ
+diff --git a/node_modules/react-native-video/android/bin/src/main/java/com/brentvatne/exoplayer/FullScreenPlayerView$KeepScreenOnUpdater.class b/node_modules/react-native-video/android/bin/src/main/java/com/brentvatne/exoplayer/FullScreenPlayerView$KeepScreenOnUpdater.class
+new file mode 100644
+index 0000000..6221edf
+Binary files /dev/null and b/node_modules/react-native-video/android/bin/src/main/java/com/brentvatne/exoplayer/FullScreenPlayerView$KeepScreenOnUpdater.class differ
+diff --git a/node_modules/react-native-video/android/bin/src/main/java/com/brentvatne/exoplayer/FullScreenPlayerView.class b/node_modules/react-native-video/android/bin/src/main/java/com/brentvatne/exoplayer/FullScreenPlayerView.class
+new file mode 100644
+index 0000000..efd79b3
+Binary files /dev/null and b/node_modules/react-native-video/android/bin/src/main/java/com/brentvatne/exoplayer/FullScreenPlayerView.class differ
+diff --git a/node_modules/react-native-video/android/bin/src/main/java/com/brentvatne/exoplayer/ReactExoplayerConfig.class b/node_modules/react-native-video/android/bin/src/main/java/com/brentvatne/exoplayer/ReactExoplayerConfig.class
+new file mode 100644
+index 0000000..c6c4401
+Binary files /dev/null and b/node_modules/react-native-video/android/bin/src/main/java/com/brentvatne/exoplayer/ReactExoplayerConfig.class differ
+diff --git a/node_modules/react-native-video/android/bin/src/main/java/com/brentvatne/exoplayer/ReactExoplayerLoadErrorHandlingPolicy.class b/node_modules/react-native-video/android/bin/src/main/java/com/brentvatne/exoplayer/ReactExoplayerLoadErrorHandlingPolicy.class
+new file mode 100644
+index 0000000..c2beef6
+Binary files /dev/null and b/node_modules/react-native-video/android/bin/src/main/java/com/brentvatne/exoplayer/ReactExoplayerLoadErrorHandlingPolicy.class differ
+diff --git a/node_modules/react-native-video/android/bin/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView$OnAudioFocusChangedListener.class b/node_modules/react-native-video/android/bin/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView$OnAudioFocusChangedListener.class
+new file mode 100644
+index 0000000..0c59e6e
+Binary files /dev/null and b/node_modules/react-native-video/android/bin/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView$OnAudioFocusChangedListener.class differ
+diff --git a/node_modules/react-native-video/android/bin/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView$RNVLoadControl.class b/node_modules/react-native-video/android/bin/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView$RNVLoadControl.class
+new file mode 100644
+index 0000000..75d1210
+Binary files /dev/null and b/node_modules/react-native-video/android/bin/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView$RNVLoadControl.class differ
+diff --git a/node_modules/react-native-video/android/bin/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.class b/node_modules/react-native-video/android/bin/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.class
+new file mode 100644
+index 0000000..cc35cf8
+Binary files /dev/null and b/node_modules/react-native-video/android/bin/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.class differ
+diff --git a/node_modules/react-native-video/android/bin/src/main/java/com/brentvatne/exoplayer/ReactExoplayerViewManager.class b/node_modules/react-native-video/android/bin/src/main/java/com/brentvatne/exoplayer/ReactExoplayerViewManager.class
+new file mode 100644
+index 0000000..a1e01e8
+Binary files /dev/null and b/node_modules/react-native-video/android/bin/src/main/java/com/brentvatne/exoplayer/ReactExoplayerViewManager.class differ
+diff --git a/node_modules/react-native-video/android/bin/src/main/java/com/brentvatne/receiver/AudioBecomingNoisyReceiver.class b/node_modules/react-native-video/android/bin/src/main/java/com/brentvatne/receiver/AudioBecomingNoisyReceiver.class
+new file mode 100644
+index 0000000..b56560e
+Binary files /dev/null and b/node_modules/react-native-video/android/bin/src/main/java/com/brentvatne/receiver/AudioBecomingNoisyReceiver.class differ
+diff --git a/node_modules/react-native-video/android/bin/src/main/java/com/brentvatne/receiver/BecomingNoisyListener.class b/node_modules/react-native-video/android/bin/src/main/java/com/brentvatne/receiver/BecomingNoisyListener.class
+new file mode 100644
+index 0000000..177bb57
+Binary files /dev/null and b/node_modules/react-native-video/android/bin/src/main/java/com/brentvatne/receiver/BecomingNoisyListener.class differ
+diff --git a/node_modules/react-native-video/android/bin/src/main/java/com/google/ads/interactivemedia/v3/api/AdError.class b/node_modules/react-native-video/android/bin/src/main/java/com/google/ads/interactivemedia/v3/api/AdError.class
+new file mode 100644
+index 0000000..aeb2518
+Binary files /dev/null and b/node_modules/react-native-video/android/bin/src/main/java/com/google/ads/interactivemedia/v3/api/AdError.class differ
+diff --git a/node_modules/react-native-video/android/bin/src/main/java/com/google/ads/interactivemedia/v3/api/AdErrorEvent$AdErrorListener.class b/node_modules/react-native-video/android/bin/src/main/java/com/google/ads/interactivemedia/v3/api/AdErrorEvent$AdErrorListener.class
+new file mode 100644
+index 0000000..3975101
+Binary files /dev/null and b/node_modules/react-native-video/android/bin/src/main/java/com/google/ads/interactivemedia/v3/api/AdErrorEvent$AdErrorListener.class differ
+diff --git a/node_modules/react-native-video/android/bin/src/main/java/com/google/ads/interactivemedia/v3/api/AdErrorEvent.class b/node_modules/react-native-video/android/bin/src/main/java/com/google/ads/interactivemedia/v3/api/AdErrorEvent.class
+new file mode 100644
+index 0000000..5196841
+Binary files /dev/null and b/node_modules/react-native-video/android/bin/src/main/java/com/google/ads/interactivemedia/v3/api/AdErrorEvent.class differ
+diff --git a/node_modules/react-native-video/android/bin/src/main/java/com/google/ads/interactivemedia/v3/api/AdEvent$AdEventListener.class b/node_modules/react-native-video/android/bin/src/main/java/com/google/ads/interactivemedia/v3/api/AdEvent$AdEventListener.class
+new file mode 100644
+index 0000000..3613e40
+Binary files /dev/null and b/node_modules/react-native-video/android/bin/src/main/java/com/google/ads/interactivemedia/v3/api/AdEvent$AdEventListener.class differ
+diff --git a/node_modules/react-native-video/android/bin/src/main/java/com/google/ads/interactivemedia/v3/api/AdEvent.class b/node_modules/react-native-video/android/bin/src/main/java/com/google/ads/interactivemedia/v3/api/AdEvent.class
+new file mode 100644
+index 0000000..062ca54
+Binary files /dev/null and b/node_modules/react-native-video/android/bin/src/main/java/com/google/ads/interactivemedia/v3/api/AdEvent.class differ
+diff --git a/node_modules/react-native-video/ios/Video/RCTVideo-Bridging-Header.h b/node_modules/react-native-video/ios/Video/RCTVideo-Bridging-Header.h
+index 6522d5a..29dcdf0 100644
+--- a/node_modules/react-native-video/ios/Video/RCTVideo-Bridging-Header.h
++++ b/node_modules/react-native-video/ios/Video/RCTVideo-Bridging-Header.h
+@@ -1,5 +1,6 @@
+ #import "RCTVideoSwiftLog.h"
+ #import <React/RCTViewManager.h>
++#import <React/RCTEventDispatcher.h>
+ 
+ #if __has_include(<react-native-video/RCTVideoCache.h>)
+ #import "RCTVideoCache.h"

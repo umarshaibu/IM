@@ -9,6 +9,7 @@ public interface INotificationService
     Task SendCallEndedNotificationAsync(Guid callId, IEnumerable<Guid> recipientIds);
     Task SendGroupNotificationAsync(Conversation conversation, string message, IEnumerable<Guid> recipientIds);
     Task RegisterDeviceTokenAsync(Guid userId, string token, string platform, string? deviceId);
+    Task RegisterVoipTokenAsync(Guid userId, string token, string platform, string? deviceId);
     Task UnregisterDeviceTokenAsync(Guid userId, string token);
     Task SendBroadcastNotificationAsync(string title, string body);
 }

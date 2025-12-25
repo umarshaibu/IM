@@ -16,3 +16,13 @@ export { default as MediaPicker } from './MediaPicker';
 export type { SelectedMedia } from './MediaPicker';
 export { default as VoiceRecorder } from './VoiceRecorder';
 export { default as AudioPlayer } from './AudioPlayer';
+
+// PTT Components
+export { default as PTTButton } from './PTTButton';
+export { default as PTTIndicator } from './PTTIndicator';
+
+// Message Action Components
+export { default as SwipeableMessage } from './SwipeableMessage';
+export { default as MessageSelectionBar } from './MessageSelectionBar';
+export { default as ReactionsPopup } from './ReactionsPopup';
+export { default as MessageActions } from './MessageActions';

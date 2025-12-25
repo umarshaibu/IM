@@ -336,6 +336,57 @@ public class CallHub : Hub
         await Clients.OthersInGroup($"call_{callId}").SendAsync("ParticipantStatusChanged", callId, userId, request);
     }
 
+    public async Task InviteToCall(Guid callId, Guid inviteeUserId)
+    {
+        var userId = GetUserId();
+
+        try
+        {
+            // Get the call
+            var call = await _callService.GetCallByIdAsync(callId);
+            if (call == null)
+            {
+                await Clients.Caller.SendAsync("CallError", "Call not found");
+                return;
+            }
+
+            // Verify the inviter is a participant of the call
+            var isParticipant = call.Participants.Any(p => p.UserId == userId);
+            if (!isParticipant)
+            {
+                await Clients.Caller.SendAsync("CallError", "You are not a participant of this call");
+                return;
+            }
+
+            // Add the invitee as a participant if not already
+            await _callService.AddParticipantAsync(callId, inviteeUserId);
+
+            // Get inviter's name for the notification
+            var inviter = await _userService.GetUserByIdAsync(userId);
+            var inviterName = inviter?.DisplayName ?? inviter?.NominalRoll.FullName ?? "Someone";
+
+            var callDto = await MapCallToDto(call);
+
+            // Send invitation to the invitee via SignalR
+            var connections = GetUserConnectionIds(inviteeUserId);
+            _logger.LogInformation("Sending CallInvitation to user {UserId}, connections: {Count}", inviteeUserId, connections.Count());
+            foreach (var connectionId in connections)
+            {
+                await Clients.Client(connectionId).SendAsync("CallInvitation", callDto, inviterName);
+            }
+
+            // Also send push notification
+            await _notificationService.SendCallNotificationAsync(call, new List<Guid> { inviteeUserId });
+
+            _logger.LogInformation("User {UserId} invited user {InviteeId} to call {CallId}", userId, inviteeUserId, callId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error inviting user {InviteeId} to call {CallId}", inviteeUserId, callId);
+            await Clients.Caller.SendAsync("CallError", "Failed to send invitation");
+        }
+    }
+
     public async Task SendCallSignal(Guid callId, Guid targetUserId, string signal)
     {
         var userId = GetUserId();

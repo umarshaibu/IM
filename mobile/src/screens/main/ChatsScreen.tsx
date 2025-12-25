@@ -7,11 +7,12 @@ import {
   RefreshControl,
   Text,
   StatusBar,
+  Alert,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import ConversationItem from '../../components/ConversationItem';
 import { conversationsApi } from '../../services/api';
 import { useChatStore } from '../../stores/chatStore';
@@ -29,6 +30,7 @@ const ChatsScreen: React.FC = () => {
   const { userId } = useAuthStore();
   const { conversations, setConversations } = useChatStore();
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
+  const queryClient = useQueryClient();
 
   const { data, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['conversations'],
@@ -50,25 +52,49 @@ const ChatsScreen: React.FC = () => {
     }, [refetch])
   );
 
-  // Filter counts
-  const filterCounts = React.useMemo(() => {
-    const all = conversations.length;
-    const personal = conversations.filter((c) => c.type === 'Private').length;
-    const groups = conversations.filter((c) => c.type === 'Group').length;
-    return { all, personal, groups };
+  // Archive mutation
+  const archiveMutation = useMutation({
+    mutationFn: async (conversationId: string) => {
+      await conversationsApi.archive(conversationId, true);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    },
+    onError: (error) => {
+      console.error('Failed to archive:', error);
+      Alert.alert('Error', 'Failed to archive conversation');
+    },
+  });
+
+  // Filter out archived conversations
+  const nonArchivedConversations = React.useMemo(() => {
+    return conversations.filter((c) => !c.isArchived);
   }, [conversations]);
 
-  // Filtered conversations
+  // Count archived conversations
+  const archivedCount = React.useMemo(() => {
+    return conversations.filter((c) => c.isArchived).length;
+  }, [conversations]);
+
+  // Filter counts (only non-archived)
+  const filterCounts = React.useMemo(() => {
+    const all = nonArchivedConversations.length;
+    const personal = nonArchivedConversations.filter((c) => c.type === 'Private').length;
+    const groups = nonArchivedConversations.filter((c) => c.type === 'Group').length;
+    return { all, personal, groups };
+  }, [nonArchivedConversations]);
+
+  // Filtered conversations (only non-archived)
   const filteredConversations = React.useMemo(() => {
     switch (activeFilter) {
       case 'personal':
-        return conversations.filter((c) => c.type === 'Private');
+        return nonArchivedConversations.filter((c) => c.type === 'Private');
       case 'groups':
-        return conversations.filter((c) => c.type === 'Group');
+        return nonArchivedConversations.filter((c) => c.type === 'Group');
       default:
-        return conversations;
+        return nonArchivedConversations;
     }
-  }, [conversations, activeFilter]);
+  }, [nonArchivedConversations, activeFilter]);
 
   const handleConversationPress = (conversation: Conversation) => {
     const title = conversation.type === 'Private'
@@ -78,6 +104,26 @@ const ChatsScreen: React.FC = () => {
       : conversation.name || 'Group';
 
     navigation.navigate('Chat', { conversationId: conversation.id, title });
+  };
+
+  const handleConversationLongPress = (conversation: Conversation) => {
+    const title = conversation.type === 'Private'
+      ? conversation.participants.find((p) => p.userId !== userId)?.displayName ||
+        conversation.participants.find((p) => p.userId !== userId)?.fullName ||
+        'Chat'
+      : conversation.name || 'Group';
+
+    Alert.alert(
+      title,
+      'What would you like to do?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Archive',
+          onPress: () => archiveMutation.mutate(conversation.id),
+        },
+      ]
+    );
   };
 
   const renderFilterTab = (
@@ -100,6 +146,27 @@ const ChatsScreen: React.FC = () => {
             {count}
           </Text>
         </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderArchivedButton = () => {
+    if (archivedCount === 0) return null;
+
+    return (
+      <TouchableOpacity
+        style={styles.archivedButton}
+        onPress={() => navigation.navigate('ArchivedChats')}
+        activeOpacity={0.7}
+      >
+        <View style={styles.archivedIconContainer}>
+          <Icon name="archive-outline" size={20} color={COLORS.primary} />
+        </View>
+        <Text style={styles.archivedText}>Archived</Text>
+        <View style={styles.archivedBadge}>
+          <Text style={styles.archivedBadgeText}>{archivedCount}</Text>
+        </View>
+        <Icon name="chevron-right" size={20} color={COLORS.textSecondary} />
       </TouchableOpacity>
     );
   };
@@ -129,6 +196,7 @@ const ChatsScreen: React.FC = () => {
       conversation={item}
       currentUserId={userId || ''}
       onPress={() => handleConversationPress(item)}
+      onLongPress={() => handleConversationLongPress(item)}
     />
   );
 
@@ -169,6 +237,7 @@ const ChatsScreen: React.FC = () => {
         data={filteredConversations}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
+        ListHeaderComponent={renderArchivedButton}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         ListEmptyComponent={!isLoading ? renderEmptyList : null}
         refreshControl={
@@ -179,7 +248,7 @@ const ChatsScreen: React.FC = () => {
             tintColor={COLORS.primary}
           />
         }
-        contentContainerStyle={filteredConversations.length === 0 ? styles.emptyListContent : styles.listContent}
+        contentContainerStyle={filteredConversations.length === 0 && archivedCount === 0 ? styles.emptyListContent : styles.listContent}
         showsVerticalScrollIndicator={false}
       />
 
@@ -265,6 +334,45 @@ const styles = StyleSheet.create({
   },
   filterBadgeTextActive: {
     color: COLORS.primary,
+  },
+  archivedButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    backgroundColor: COLORS.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.divider,
+  },
+  archivedIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.primary + '15',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: SPACING.md,
+  },
+  archivedText: {
+    flex: 1,
+    fontSize: FONTS.sizes.md,
+    color: COLORS.text,
+    fontWeight: '500',
+  },
+  archivedBadge: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 12,
+    minWidth: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.xs,
+    marginRight: SPACING.sm,
+  },
+  archivedBadgeText: {
+    color: COLORS.textLight,
+    fontSize: FONTS.sizes.xs,
+    fontWeight: 'bold',
   },
   listContent: {
     paddingBottom: 100,

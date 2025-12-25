@@ -88,37 +88,40 @@ public class NotificationService : INotificationService
             ? (message.Content?.Length > 100 ? message.Content[..100] + "..." : message.Content)
             : GetMessageTypePreview(message.Type);
 
+        // Use data-only messages with high priority to ensure device wake-up
+        // The mobile app will handle displaying the notification locally
         var notifications = devices.Select(device => new FirebaseMessage
         {
             Token = device.DeviceToken,
-            Notification = new Notification
-            {
-                Title = senderName,
-                Body = messagePreview
-            },
+            // Data-only message ensures the app's background handler is invoked
             Data = new Dictionary<string, string>
             {
                 { "type", "message" },
                 { "conversationId", message.ConversationId.ToString() },
                 { "messageId", message.Id.ToString() },
-                { "senderId", message.SenderId.ToString() }
+                { "senderId", message.SenderId.ToString() },
+                { "senderName", senderName },
+                { "messagePreview", messagePreview ?? "New message" },
+                { "messageType", message.Type.ToString() }
             },
             Android = new AndroidConfig
             {
+                // High priority ensures immediate delivery even when device is in Doze mode
                 Priority = Priority.High,
-                Notification = new AndroidNotification
-                {
-                    ChannelId = "messages",
-                    Priority = NotificationPriority.HIGH
-                }
+                // Short TTL for messages - they should be delivered promptly
+                TimeToLive = TimeSpan.FromHours(1)
             },
             Apns = new ApnsConfig
             {
+                Headers = new Dictionary<string, string>
+                {
+                    { "apns-priority", "10" }, // High priority
+                    { "apns-push-type", "background" }
+                },
                 Aps = new Aps
                 {
-                    Badge = 1,
-                    Sound = "default",
-                    ContentAvailable = true
+                    ContentAvailable = true, // Enables background processing
+                    MutableContent = true // Allows notification modification
                 }
             }
         }).ToList();
@@ -371,6 +374,40 @@ public class NotificationService : INotificationService
         }
 
         await _context.SaveChangesAsync();
+    }
+
+    public async Task RegisterVoipTokenAsync(Guid userId, string token, string platform, string? deviceId)
+    {
+        // VoIP tokens are stored separately or with a special flag
+        // For iOS, VoIP pushes use a different APNS topic and certificate
+        var existingDevice = await _context.UserDevices
+            .FirstOrDefaultAsync(d => d.DeviceToken == token);
+
+        if (existingDevice != null)
+        {
+            existingDevice.UserId = userId;
+            existingDevice.IsActive = true;
+            existingDevice.LastActiveAt = DateTime.UtcNow;
+            existingDevice.IsVoipToken = true;
+        }
+        else
+        {
+            var device = new UserDevice
+            {
+                UserId = userId,
+                DeviceToken = token,
+                Platform = Enum.Parse<DevicePlatform>(platform, true),
+                DeviceId = deviceId,
+                IsActive = true,
+                IsVoipToken = true,
+                LastActiveAt = DateTime.UtcNow
+            };
+
+            await _context.UserDevices.AddAsync(device);
+        }
+
+        await _context.SaveChangesAsync();
+        _logger.LogInformation("Registered VoIP token for user {UserId}", userId);
     }
 
     public async Task UnregisterDeviceTokenAsync(Guid userId, string token)

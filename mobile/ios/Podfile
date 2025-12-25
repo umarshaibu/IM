@@ -5,6 +5,9 @@ require Pod::Executable.execute_command('node', ['-p',
     {paths: [process.argv[1]]},
   )', __dir__]).strip
 
+# Add CDN source for simdjson (required by WatermelonDB)
+source 'https://cdn.cocoapods.org/'
+
 platform :ios, min_ios_version_supported
 prepare_react_native_project!
 
@@ -16,6 +19,9 @@ pod 'FirebaseCoreInternal', :modular_headers => true
 
 # Fix TOCropViewController compatibility with iOS 18 SDK
 pod 'TOCropViewController', '~> 2.7'
+
+# Add simdjson for WatermelonDB (using local fixed podspec)
+pod 'simdjson', :podspec => './simdjson.podspec'
 
 # React Native Config for environment variables
 pod 'react-native-config', :path => '../node_modules/react-native-config'
@@ -29,7 +35,8 @@ pod 'react-native-config', :path => '../node_modules/react-native-config'
 #   dependencies: {
 #     ...(process.env.NO_FLIPPER ? { 'react-native-flipper': { platforms: { ios: null } } } : {}),
 # ```
-flipper_config = ENV['NO_FLIPPER'] == "1" ? FlipperConfiguration.disabled : FlipperConfiguration.enabled
+# Flipper disabled to fix Xcode 16+ compilation errors
+flipper_config = FlipperConfiguration.disabled
 
 linkage = ENV['USE_FRAMEWORKS']
 if linkage != nil

@@ -268,6 +268,20 @@ export const filesApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
 
+  // Upload file from path - creates FormData internally
+  uploadFile: async (filePath: string, mimeType: string) => {
+    const formData = new FormData();
+    const fileName = filePath.split('/').pop() || 'file';
+    formData.append('file', {
+      uri: filePath,
+      type: mimeType,
+      name: fileName,
+    } as any);
+    return api.post('/files/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
   delete: (id: string) => api.delete(`/files/${id}`),
 
   getConversationMedia: (conversationId: string, page: number = 1, pageSize: number = 20) =>
@@ -281,6 +295,10 @@ export const notificationsApi = {
 
   unregister: (token: string) =>
     api.post('/notifications/unregister', { token }),
+
+  // Register VoIP push token (iOS only) - for incoming calls that wake the device
+  registerVoip: (token: string, platform: string, deviceId?: string) =>
+    api.post('/notifications/register-voip', { token, platform, deviceId }),
 };
 
 // Channels API

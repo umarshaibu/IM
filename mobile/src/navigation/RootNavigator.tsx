@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, View, Platform, PermissionsAndroid } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { request, PERMISSIONS, RESULTS } from 'react-native-permissions';
 import { useAuthStore } from '../stores/authStore';
 import { COLORS } from '../utils/theme';
 
@@ -20,13 +21,18 @@ import MediaViewerScreen from '../screens/chat/MediaViewerScreen';
 import SearchScreen from '../screens/chat/SearchScreen';
 import ForwardMessageScreen from '../screens/chat/ForwardMessageScreen';
 import MediaGalleryScreen from '../screens/chat/MediaGalleryScreen';
+import ArchivedChatsScreen from '../screens/chat/ArchivedChatsScreen';
 import CallScreen from '../screens/call/CallScreen';
 import IncomingCallScreen from '../screens/call/IncomingCallScreen';
 import ProfileScreen from '../screens/settings/ProfileScreen';
 import PrivacyScreen from '../screens/settings/PrivacyScreen';
 import BlockedUsersScreen from '../screens/settings/BlockedUsersScreen';
+import StorageManagementScreen from '../screens/settings/StorageManagementScreen';
+import ChatBackupScreen from '../screens/settings/ChatBackupScreen';
+import QRCodeScreen from '../screens/settings/QRCodeScreen';
 import StatusViewerScreen from '../screens/status/StatusViewerScreen';
 import CreateStatusScreen from '../screens/status/CreateStatusScreen';
+import AddToCallScreen from '../screens/call/AddToCallScreen';
 
 export type RootStackParamList = {
   // Auth
@@ -77,9 +83,63 @@ export type RootStackParamList = {
   BlockedUsers: undefined;
   StatusViewer: { userId: string };
   CreateStatus: undefined;
+  AddToCall: {
+    callId: string;
+    existingParticipants?: string[];
+    callType: 'Voice' | 'Video';
+  };
+  ArchivedChats: undefined;
+  StorageManagement: undefined;
+  ChatBackup: undefined;
+  QRCode: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
+
+// Request essential permissions via native popups
+const requestPermissions = async () => {
+  if (Platform.OS === 'android') {
+    const permissions = [
+      PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+      PermissionsAndroid.PERMISSIONS.CAMERA,
+      PermissionsAndroid.PERMISSIONS.READ_CONTACTS,
+    ];
+
+    // Add notification permission for Android 13+
+    if (Platform.Version >= 33) {
+      permissions.push(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
+    }
+
+    // Add storage permissions based on Android version
+    if (Platform.Version >= 33) {
+      permissions.push(
+        PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES,
+        PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO
+      );
+    } else {
+      permissions.push(
+        PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+        PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE
+      );
+    }
+
+    try {
+      await PermissionsAndroid.requestMultiple(permissions);
+    } catch (error) {
+      console.error('Error requesting permissions:', error);
+    }
+  } else {
+    // iOS - request permissions one by one
+    try {
+      await request(PERMISSIONS.IOS.MICROPHONE);
+      await request(PERMISSIONS.IOS.CAMERA);
+      await request(PERMISSIONS.IOS.CONTACTS);
+      await request(PERMISSIONS.IOS.PHOTO_LIBRARY);
+    } catch (error) {
+      console.error('Error requesting iOS permissions:', error);
+    }
+  }
+};
 
 const RootNavigator: React.FC = () => {
   const { isAuthenticated, isLoading, initialize } = useAuthStore();
@@ -92,6 +152,13 @@ const RootNavigator: React.FC = () => {
     };
     init();
   }, [initialize]);
+
+  // Request permissions when user becomes authenticated
+  useEffect(() => {
+    if (isAuthenticated && isInitialized) {
+      requestPermissions();
+    }
+  }, [isAuthenticated, isInitialized]);
 
   if (!isInitialized || isLoading) {
     return (
@@ -118,7 +185,7 @@ const RootNavigator: React.FC = () => {
           <Stack.Screen name="TokenVerification" component={TokenVerificationScreen} options={{ title: 'Verification' }} />
         </>
       ) : (
-        // Main Stack
+        // Main Stack - permissions requested via native popups
         <>
           <Stack.Screen name="MainTabs" component={MainTabNavigator} options={{ headerShown: false }} />
           <Stack.Screen name="Chat" component={ChatScreen} options={({ route }) => ({ title: route.params?.title || 'Chat' })} />
@@ -141,6 +208,11 @@ const RootNavigator: React.FC = () => {
           <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} options={{ title: 'Blocked Users' }} />
           <Stack.Screen name="StatusViewer" component={StatusViewerScreen} options={{ headerShown: false }} />
           <Stack.Screen name="CreateStatus" component={CreateStatusScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="AddToCall" component={AddToCallScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="ArchivedChats" component={ArchivedChatsScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="StorageManagement" component={StorageManagementScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="ChatBackup" component={ChatBackupScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="QRCode" component={QRCodeScreen} options={{ headerShown: false }} />
         </>
       )}
     </Stack.Navigator>

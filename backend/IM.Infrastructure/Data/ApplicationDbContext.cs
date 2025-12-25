@@ -24,6 +24,15 @@ public class ApplicationDbContext : DbContext
     public DbSet<Status> Statuses => Set<Status>();
     public DbSet<StatusView> StatusViews => Set<StatusView>();
     public DbSet<LoginToken> LoginTokens => Set<LoginToken>();
+    public DbSet<DeletedMessage> DeletedMessages => Set<DeletedMessage>();
+    public DbSet<MessageForwardChain> MessageForwardChains => Set<MessageForwardChain>();
+    public DbSet<MessageReaction> MessageReactions => Set<MessageReaction>();
+    public DbSet<StarredMessage> StarredMessages => Set<StarredMessage>();
+    public DbSet<PinnedMessage> PinnedMessages => Set<PinnedMessage>();
+    public DbSet<Channel> Channels => Set<Channel>();
+    public DbSet<ChannelFollower> ChannelFollowers => Set<ChannelFollower>();
+    public DbSet<ChannelPost> ChannelPosts => Set<ChannelPost>();
+    public DbSet<ChannelPostReaction> ChannelPostReactions => Set<ChannelPostReaction>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -144,6 +153,16 @@ public class ApplicationDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.ForwardedFromMessageId)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(e => e.OriginalMessage)
+                .WithMany()
+                .HasForeignKey(e => e.OriginalMessageId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // Service Number fields
+            entity.Property(e => e.SenderServiceNumber).HasMaxLength(50);
+            entity.Property(e => e.OriginalSenderServiceNumber).HasMaxLength(50);
+            entity.Property(e => e.MediaOriginatorServiceNumber).HasMaxLength(50);
         });
 
         // MessageStatusEntity
@@ -270,6 +289,196 @@ public class ApplicationDbContext : DbContext
             entity.HasOne(e => e.NominalRoll)
                 .WithMany()
                 .HasForeignKey(e => e.NominalRollId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // DeletedMessage (Audit table for soft-deleted messages)
+        modelBuilder.Entity<DeletedMessage>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.OriginalMessageId);
+            entity.HasIndex(e => e.ConversationId);
+            entity.HasIndex(e => e.DeletedById);
+            entity.HasIndex(e => e.DeletedAt);
+            entity.Property(e => e.SenderServiceNumber).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.DeletedByServiceNumber).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.OriginalSenderServiceNumber).HasMaxLength(50);
+            entity.Property(e => e.MediaOriginatorServiceNumber).HasMaxLength(50);
+
+            entity.HasOne(e => e.Conversation)
+                .WithMany()
+                .HasForeignKey(e => e.ConversationId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Sender)
+                .WithMany()
+                .HasForeignKey(e => e.SenderId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.DeletedBy)
+                .WithMany()
+                .HasForeignKey(e => e.DeletedById)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // MessageForwardChain (Track forward history)
+        modelBuilder.Entity<MessageForwardChain>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.MessageId);
+            entity.HasIndex(e => e.OriginalMessageId);
+            entity.HasIndex(e => e.ForwarderId);
+            entity.Property(e => e.ForwarderServiceNumber).HasMaxLength(50).IsRequired();
+
+            entity.HasOne(e => e.Message)
+                .WithMany(m => m.ForwardChain)
+                .HasForeignKey(e => e.MessageId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.OriginalMessage)
+                .WithMany()
+                .HasForeignKey(e => e.OriginalMessageId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.Forwarder)
+                .WithMany()
+                .HasForeignKey(e => e.ForwarderId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.FromConversation)
+                .WithMany()
+                .HasForeignKey(e => e.FromConversationId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.ToConversation)
+                .WithMany()
+                .HasForeignKey(e => e.ToConversationId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // MessageReaction
+        modelBuilder.Entity<MessageReaction>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => new { e.MessageId, e.UserId, e.Emoji }).IsUnique();
+            entity.Property(e => e.Emoji).HasMaxLength(20).IsRequired();
+
+            entity.HasOne(e => e.Message)
+                .WithMany(m => m.Reactions)
+                .HasForeignKey(e => e.MessageId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // StarredMessage
+        modelBuilder.Entity<StarredMessage>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => new { e.UserId, e.MessageId }).IsUnique();
+            entity.HasIndex(e => e.UserId);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Message)
+                .WithMany()
+                .HasForeignKey(e => e.MessageId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // PinnedMessage
+        modelBuilder.Entity<PinnedMessage>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => new { e.ConversationId, e.MessageId }).IsUnique();
+            entity.HasIndex(e => e.ConversationId);
+
+            entity.HasOne(e => e.Conversation)
+                .WithMany()
+                .HasForeignKey(e => e.ConversationId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Message)
+                .WithMany()
+                .HasForeignKey(e => e.MessageId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.PinnedBy)
+                .WithMany()
+                .HasForeignKey(e => e.PinnedById)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // Channel
+        modelBuilder.Entity<Channel>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.Name);
+            entity.Property(e => e.Name).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.Description).HasMaxLength(500);
+
+            entity.HasOne(e => e.Owner)
+                .WithMany(e => e.OwnedChannels)
+                .HasForeignKey(e => e.OwnerId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ChannelFollower
+        modelBuilder.Entity<ChannelFollower>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => new { e.ChannelId, e.UserId }).IsUnique();
+
+            entity.HasOne(e => e.Channel)
+                .WithMany(e => e.Followers)
+                .HasForeignKey(e => e.ChannelId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.User)
+                .WithMany(e => e.FollowedChannels)
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ChannelPost
+        modelBuilder.Entity<ChannelPost>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.ChannelId);
+            entity.HasIndex(e => e.CreatedAt);
+
+            entity.HasOne(e => e.Channel)
+                .WithMany(e => e.Posts)
+                .HasForeignKey(e => e.ChannelId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Author)
+                .WithMany()
+                .HasForeignKey(e => e.AuthorId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ChannelPostReaction
+        modelBuilder.Entity<ChannelPostReaction>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => new { e.PostId, e.UserId, e.Emoji }).IsUnique();
+            entity.Property(e => e.Emoji).HasMaxLength(20).IsRequired();
+
+            entity.HasOne(e => e.Post)
+                .WithMany(e => e.Reactions)
+                .HasForeignKey(e => e.PostId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
     }

@@ -9,20 +9,23 @@ import RootNavigator, { RootStackParamList } from './src/navigation/RootNavigato
 import IncomingCallListener from './src/components/IncomingCallListener';
 import { useAuthStore } from './src/stores/authStore';
 import { useCallStore } from './src/stores/callStore';
-import { initializeSignalR, declineCall } from './src/services/signalr';
+import { initializeSignalR, declineCall, joinCall } from './src/services/signalr';
 import {
   initializeNotifications,
   setupForegroundHandler,
   setupNotificationListeners,
   NotificationData,
 } from './src/services/notifications';
+import { CallManager } from './src/services/CallManager';
+import { initializeVoipPush, setVoipCallHandler, VoipCallData } from './src/services/VoipPushService';
 import { nativeCallEventService, NativeCallEventData } from './src/services/NativeCallEvent';
-import { COLORS } from './src/utils/theme';
+import { ThemeProvider, useTheme, NotificationProvider } from './src/context';
 
 // Ignore specific warnings in development
 LogBox.ignoreLogs([
   'Non-serializable values were found in the navigation state',
   'could not determine track dimensions',
+  '[🍉] JSI SQLiteAdapter not available',
 ]);
 
 const queryClient = new QueryClient({
@@ -34,18 +37,80 @@ const queryClient = new QueryClient({
   },
 });
 
-const App: React.FC = () => {
+// Inner app component that can use theme context
+const AppContent: React.FC = () => {
   const { isAuthenticated, accessToken } = useAuthStore();
   const { setIncomingCall, clearIncomingCall } = useCallStore();
+  const { colors, isDark } = useTheme();
   const navigationRef = useRef<NavigationContainerRef<RootStackParamList>>(null);
   const appState = useRef(AppState.currentState);
 
-  // Initialize notifications
+  // Initialize notifications, CallManager, and VoIP push
   useEffect(() => {
     const initNotifications = async () => {
       try {
         await initializeNotifications();
         console.log('Notifications initialized successfully');
+
+        // Initialize CallManager for CallKit/ConnectionService
+        await CallManager.initialize();
+        console.log('CallManager initialized successfully');
+
+        // Set up CallManager callbacks
+        CallManager.setCallbacks({
+          onAnswerCall: async (callId: string) => {
+            console.log('CallManager: Answer call', callId);
+            try {
+              const result = await joinCall(callId);
+              clearIncomingCall();
+              navigationRef.current?.navigate('Call', {
+                callId,
+                conversationId: result.conversationId || '',
+                type: result.type === 'Video' ? 'Video' : 'Voice',
+                isIncoming: true,
+                roomToken: result.roomToken,
+                roomId: result.roomId,
+                liveKitUrl: result.liveKitUrl,
+              });
+            } catch (error) {
+              console.error('Failed to join call from CallManager:', error);
+            }
+          },
+          onEndCall: async (callId: string) => {
+            console.log('CallManager: End call', callId);
+            try {
+              await declineCall(callId);
+              clearIncomingCall();
+            } catch (error) {
+              console.error('Failed to decline call from CallManager:', error);
+            }
+          },
+          onMuteCall: (callId: string, muted: boolean) => {
+            console.log('CallManager: Mute call', callId, muted);
+            // This will be handled by the CallScreen component
+          },
+        });
+
+        // Initialize VoIP push for iOS
+        if (Platform.OS === 'ios') {
+          await initializeVoipPush();
+          console.log('VoIP push initialized successfully');
+
+          // Handle VoIP call events
+          setVoipCallHandler((callData: VoipCallData) => {
+            console.log('VoIP call received:', callData);
+            setIncomingCall({
+              id: callData.callId,
+              conversationId: callData.conversationId,
+              initiatorId: callData.callerId,
+              initiatorName: callData.callerName,
+              type: callData.callType,
+              status: 'Ringing',
+              participants: [],
+              startedAt: new Date().toISOString(),
+            });
+          });
+        }
       } catch (error) {
         console.error('Failed to initialize notifications:', error);
       }
@@ -54,7 +119,11 @@ const App: React.FC = () => {
     if (isAuthenticated) {
       initNotifications();
     }
-  }, [isAuthenticated]);
+
+    return () => {
+      CallManager.cleanup();
+    };
+  }, [isAuthenticated, clearIncomingCall, setIncomingCall]);
 
   // Handle native call events (from Android native notification actions)
   useEffect(() => {
@@ -199,17 +268,30 @@ const App: React.FC = () => {
   }, [isAuthenticated, accessToken]);
 
   return (
+    <>
+      <StatusBar
+        barStyle={isDark ? 'light-content' : 'light-content'}
+        backgroundColor={colors.header}
+      />
+      <NavigationContainer ref={navigationRef}>
+        {isAuthenticated && <IncomingCallListener />}
+        <RootNavigator />
+      </NavigationContainer>
+    </>
+  );
+};
+
+// Main App component with all providers
+const App: React.FC = () => {
+  return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <QueryClientProvider client={queryClient}>
         <SafeAreaProvider>
-          <NavigationContainer ref={navigationRef}>
-            <StatusBar
-              barStyle="light-content"
-              backgroundColor={COLORS.primary}
-            />
-            {isAuthenticated && <IncomingCallListener />}
-            <RootNavigator />
-          </NavigationContainer>
+          <ThemeProvider>
+            <NotificationProvider>
+              <AppContent />
+            </NotificationProvider>
+          </ThemeProvider>
         </SafeAreaProvider>
       </QueryClientProvider>
     </GestureHandlerRootView>

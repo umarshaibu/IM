@@ -71,3 +71,11 @@ public enum DevicePlatform
     iOS,
     Android
 }
+
+public enum DeleteType
+{
+    ForMe,
+    ForEveryone,
+    AdminDelete,
+    AutoExpired
+}

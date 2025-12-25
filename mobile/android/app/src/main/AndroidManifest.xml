@@ -19,6 +19,14 @@
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 
+    <!-- CallKeep / ConnectionService permissions for VoIP calls -->
+    <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
+    <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
+    <uses-permission android:name="android.permission.BIND_TELECOM_CONNECTION_SERVICE" />
+
     <application
       android:name=".MainApplication"
       android:label="@string/app_name"
@@ -51,6 +59,23 @@
         android:name="app.notifee.core.ForegroundService"
         android:foregroundServiceType="phoneCall"
         tools:replace="android:foregroundServiceType" />
+
+      <!-- CallKeep VoIP Connection Service - required for self-managed calls -->
+      <service
+        android:name="io.wazo.callkeep.VoiceConnectionService"
+        android:label="IM Calls"
+        android:permission="android.permission.BIND_TELECOM_CONNECTION_SERVICE"
+        android:exported="true"
+        android:foregroundServiceType="phoneCall">
+        <intent-filter>
+          <action android:name="android.telecom.ConnectionService" />
+        </intent-filter>
+      </service>
+
+      <!-- CallKeep Ringtone Service for playing ringtone -->
+      <service
+        android:name="io.wazo.callkeep.RNCallKeepBackgroundMessagingService"
+        android:exported="false" />
 
       <!-- High priority notification channel for calls -->
       <meta-data

@@ -1,15 +1,27 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, StatusBar } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
+  Switch,
+  Dimensions,
+} from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import LinearGradient from 'react-native-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Avatar from '../../components/Avatar';
 import { authApi } from '../../services/api';
 import { disconnectSignalR } from '../../services/signalr';
 import { useAuthStore } from '../../stores/authStore';
 import { RootStackParamList } from '../../navigation/RootNavigator';
-import { COLORS, FONTS, SPACING, BORDER_RADIUS } from '../../utils/theme';
+import { useTheme, ThemeMode } from '../../context';
+import { FONTS, SPACING, BORDER_RADIUS } from '../../utils/theme';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 type SettingsScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -19,34 +31,52 @@ interface SettingItemProps {
   iconBgColor?: string;
   label: string;
   subtitle?: string;
-  onPress: () => void;
+  onPress?: () => void;
   showChevron?: boolean;
+  rightComponent?: React.ReactNode;
+  disabled?: boolean;
 }
-
-const SettingItem: React.FC<SettingItemProps> = ({
-  icon,
-  iconColor = COLORS.primary,
-  iconBgColor = COLORS.primary + '15',
-  label,
-  subtitle,
-  onPress,
-  showChevron = true,
-}) => (
-  <TouchableOpacity style={styles.settingItem} onPress={onPress} activeOpacity={0.7}>
-    <View style={[styles.settingIconContainer, { backgroundColor: iconBgColor }]}>
-      <Icon name={icon} size={20} color={iconColor} />
-    </View>
-    <View style={styles.settingContent}>
-      <Text style={styles.settingLabel}>{label}</Text>
-      {subtitle && <Text style={styles.settingSubtitle}>{subtitle}</Text>}
-    </View>
-    {showChevron && <Icon name="chevron-right" size={22} color={COLORS.textMuted} />}
-  </TouchableOpacity>
-);
 
 const SettingsScreen: React.FC = () => {
   const navigation = useNavigation<SettingsScreenNavigationProp>();
   const { user, logout } = useAuthStore();
+  const { colors, isDark, themeMode, setThemeMode } = useTheme();
+  const insets = useSafeAreaInsets();
+
+  // Setting item component with theme support
+  const SettingItem: React.FC<SettingItemProps> = ({
+    icon,
+    iconColor = colors.primary,
+    iconBgColor,
+    label,
+    subtitle,
+    onPress,
+    showChevron = true,
+    rightComponent,
+    disabled = false,
+  }) => (
+    <TouchableOpacity
+      style={[styles.settingItem, disabled && styles.settingItemDisabled]}
+      onPress={onPress}
+      activeOpacity={onPress ? 0.7 : 1}
+      disabled={disabled || !onPress}
+    >
+      <View style={[styles.settingIconContainer, { backgroundColor: iconBgColor || iconColor + '15' }]}>
+        <Icon name={icon} size={20} color={iconColor} />
+      </View>
+      <View style={styles.settingContent}>
+        <Text style={[styles.settingLabel, { color: colors.text }]}>{label}</Text>
+        {subtitle && (
+          <Text style={[styles.settingSubtitle, { color: colors.textSecondary }]}>
+            {subtitle}
+          </Text>
+        )}
+      </View>
+      {rightComponent || (showChevron && onPress && (
+        <Icon name="chevron-right" size={22} color={colors.textTertiary} />
+      ))}
+    </TouchableOpacity>
+  );
 
   const handleLogout = () => {
     Alert.alert(
@@ -71,193 +101,329 @@ const SettingsScreen: React.FC = () => {
     );
   };
 
+  const handleThemeChange = (mode: ThemeMode) => {
+    setThemeMode(mode);
+  };
+
+  const getThemeSubtitle = () => {
+    switch (themeMode) {
+      case 'light':
+        return 'Light';
+      case 'dark':
+        return 'Dark';
+      case 'system':
+        return `System (${isDark ? 'Dark' : 'Light'})`;
+    }
+  };
+
+  const showThemeOptions = () => {
+    Alert.alert(
+      'Choose Theme',
+      'Select your preferred appearance',
+      [
+        {
+          text: 'Light',
+          onPress: () => handleThemeChange('light'),
+        },
+        {
+          text: 'Dark',
+          onPress: () => handleThemeChange('dark'),
+        },
+        {
+          text: 'System Default',
+          onPress: () => handleThemeChange('system'),
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ]
+    );
+  };
+
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* Header */}
+      <View style={[styles.header, { backgroundColor: colors.header, paddingTop: insets.top }]}>
+        <Text style={[styles.headerTitle, { color: colors.headerText }]}>Settings</Text>
+      </View>
 
-      {/* Profile Card */}
-      <TouchableOpacity
-        style={styles.profileCard}
-        onPress={() => navigation.navigate('Profile')}
-        activeOpacity={0.9}
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
       >
-        <LinearGradient
-          colors={[COLORS.primary, COLORS.secondary]}
-          style={styles.profileGradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
+        {/* Profile Card */}
+        <TouchableOpacity
+          style={[styles.profileCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+          onPress={() => navigation.navigate('Profile')}
+          activeOpacity={0.7}
         >
-          <View style={styles.profileContent}>
-            <View style={styles.avatarContainer}>
-              <Avatar
-                uri={user?.profilePictureUrl}
-                name={user?.displayName || user?.fullName || ''}
-                size={80}
-              />
-              <View style={styles.editBadge}>
-                <Icon name="pencil" size={14} color={COLORS.primary} />
-              </View>
-            </View>
-            <View style={styles.profileInfo}>
-              <Text style={styles.profileName}>
-                {user?.displayName || user?.fullName}
-              </Text>
-              <Text style={styles.profileAbout} numberOfLines={1}>
-                {user?.about || 'Hey there! I am using IM'}
-              </Text>
-            </View>
-            <Icon name="chevron-right" size={24} color="rgba(255,255,255,0.7)" />
+          <Avatar
+            uri={user?.profilePictureUrl}
+            name={user?.displayName || user?.fullName || ''}
+            size={72}
+          />
+          <View style={styles.profileInfo}>
+            <Text style={[styles.profileName, { color: colors.text }]}>
+              {user?.displayName || user?.fullName || 'User'}
+            </Text>
+            <Text style={[styles.profileAbout, { color: colors.textSecondary }]} numberOfLines={1}>
+              {user?.about || 'Hey there! I am using IM'}
+            </Text>
           </View>
-        </LinearGradient>
-      </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.qrButton, { backgroundColor: colors.primary + '15' }]}
+            onPress={() => navigation.navigate('QRCode')}
+          >
+            <Icon name="qrcode-scan" size={22} color={colors.primary} />
+          </TouchableOpacity>
+        </TouchableOpacity>
 
-      {/* Account Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Account</Text>
-        <View style={styles.sectionContent}>
-          <SettingItem
-            icon="key-variant"
-            label="Privacy"
-            subtitle="Last seen, profile photo, about"
-            onPress={() => navigation.navigate('Privacy')}
-          />
-          <View style={styles.divider} />
-          <SettingItem
-            icon="cancel"
-            iconColor={COLORS.error}
-            iconBgColor={COLORS.error + '15'}
-            label="Blocked Users"
-            subtitle="Manage blocked contacts"
-            onPress={() => navigation.navigate('BlockedUsers')}
-          />
+        {/* Account Section */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Account</Text>
+          <View style={[styles.sectionContent, { backgroundColor: colors.card }]}>
+            <SettingItem
+              icon="key-variant"
+              label="Privacy"
+              subtitle="Last seen, profile photo, about"
+              onPress={() => navigation.navigate('Privacy')}
+            />
+            <View style={[styles.divider, { backgroundColor: colors.divider }]} />
+            <SettingItem
+              icon="shield-check-outline"
+              iconColor="#34C759"
+              label="Security"
+              subtitle="Two-step verification, encryption"
+              onPress={() => {}}
+            />
+            <View style={[styles.divider, { backgroundColor: colors.divider }]} />
+            <SettingItem
+              icon="cancel"
+              iconColor={colors.error}
+              label="Blocked Users"
+              subtitle="Manage blocked contacts"
+              onPress={() => navigation.navigate('BlockedUsers')}
+            />
+          </View>
         </View>
-      </View>
 
-      {/* App Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>App</Text>
-        <View style={styles.sectionContent}>
-          <SettingItem
-            icon="bell-outline"
-            iconColor="#FF9500"
-            iconBgColor="#FF950015"
-            label="Notifications"
-            subtitle="Message, group & call tones"
-            onPress={() => {}}
-          />
-          <View style={styles.divider} />
-          <SettingItem
-            icon="database-outline"
-            iconColor="#5856D6"
-            iconBgColor="#5856D615"
-            label="Storage and Data"
-            subtitle="Network usage, auto-download"
-            onPress={() => {}}
-          />
-          <View style={styles.divider} />
-          <SettingItem
-            icon="translate"
-            iconColor="#34C759"
-            iconBgColor="#34C75915"
-            label="Language"
-            subtitle="English"
-            onPress={() => {}}
-          />
+        {/* Appearance Section */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Appearance</Text>
+          <View style={[styles.sectionContent, { backgroundColor: colors.card }]}>
+            <SettingItem
+              icon={isDark ? 'weather-night' : 'white-balance-sunny'}
+              iconColor={isDark ? '#FFD60A' : '#FF9F0A'}
+              label="Theme"
+              subtitle={getThemeSubtitle()}
+              onPress={showThemeOptions}
+            />
+            <View style={[styles.divider, { backgroundColor: colors.divider }]} />
+            <SettingItem
+              icon="wallpaper"
+              iconColor="#AF52DE"
+              label="Chat Wallpaper"
+              subtitle="Change chat background"
+              onPress={() => {}}
+            />
+          </View>
         </View>
-      </View>
 
-      {/* Support Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Support</Text>
-        <View style={styles.sectionContent}>
-          <SettingItem
-            icon="help-circle-outline"
-            iconColor="#007AFF"
-            iconBgColor="#007AFF15"
-            label="Help Center"
-            subtitle="FAQ, contact us"
-            onPress={() => {}}
-          />
-          <View style={styles.divider} />
-          <SettingItem
-            icon="information-outline"
-            iconColor="#8E8E93"
-            iconBgColor="#8E8E9315"
-            label="About"
-            subtitle="App info, licenses"
-            onPress={() => {}}
-          />
+        {/* Chats Section */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Chats</Text>
+          <View style={[styles.sectionContent, { backgroundColor: colors.card }]}>
+            <SettingItem
+              icon="message-text-outline"
+              iconColor="#007AFF"
+              label="Chat Settings"
+              subtitle="Font size, enter key sends"
+              onPress={() => {}}
+            />
+            <View style={[styles.divider, { backgroundColor: colors.divider }]} />
+            <SettingItem
+              icon="cloud-upload-outline"
+              iconColor="#5856D6"
+              label="Chat Backup"
+              subtitle="Backup and restore chats"
+              onPress={() => navigation.navigate('ChatBackup')}
+            />
+            <View style={[styles.divider, { backgroundColor: colors.divider }]} />
+            <SettingItem
+              icon="history"
+              iconColor="#FF9500"
+              label="Chat History"
+              subtitle="Export, clear chats"
+              onPress={() => {}}
+            />
+          </View>
         </View>
-      </View>
 
-      {/* Logout Button */}
-      <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} activeOpacity={0.7}>
-        <View style={styles.logoutIconContainer}>
-          <Icon name="logout" size={20} color={COLORS.error} />
+        {/* Notifications Section */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Notifications</Text>
+          <View style={[styles.sectionContent, { backgroundColor: colors.card }]}>
+            <SettingItem
+              icon="bell-outline"
+              iconColor="#FF3B30"
+              label="Message Notifications"
+              subtitle="Sounds, vibration, pop-ups"
+              onPress={() => {}}
+            />
+            <View style={[styles.divider, { backgroundColor: colors.divider }]} />
+            <SettingItem
+              icon="account-group-outline"
+              iconColor="#32ADE6"
+              label="Group Notifications"
+              subtitle="Sounds, vibration"
+              onPress={() => {}}
+            />
+            <View style={[styles.divider, { backgroundColor: colors.divider }]} />
+            <SettingItem
+              icon="phone-ring-outline"
+              iconColor={colors.callAccept}
+              label="Call Notifications"
+              subtitle="Ringtone, vibration"
+              onPress={() => {}}
+            />
+          </View>
         </View>
-        <Text style={styles.logoutText}>Logout</Text>
-      </TouchableOpacity>
 
-      {/* Version */}
-      <View style={styles.versionContainer}>
-        <Text style={styles.version}>IM v1.0.0</Text>
-        <Text style={styles.copyright}>Made with care for your organization</Text>
-      </View>
-    </ScrollView>
+        {/* Storage & Network Section */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Storage & Data</Text>
+          <View style={[styles.sectionContent, { backgroundColor: colors.card }]}>
+            <SettingItem
+              icon="database-outline"
+              iconColor="#64D2FF"
+              label="Storage & Data"
+              subtitle="Manage storage and network"
+              onPress={() => navigation.navigate('StorageManagement')}
+            />
+          </View>
+        </View>
+
+        {/* Help & Support Section */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>Help & Support</Text>
+          <View style={[styles.sectionContent, { backgroundColor: colors.card }]}>
+            <SettingItem
+              icon="help-circle-outline"
+              iconColor="#007AFF"
+              label="Help Center"
+              subtitle="FAQ, contact support"
+              onPress={() => {}}
+            />
+            <View style={[styles.divider, { backgroundColor: colors.divider }]} />
+            <SettingItem
+              icon="file-document-outline"
+              iconColor="#8E8E93"
+              label="Terms & Privacy Policy"
+              onPress={() => {}}
+            />
+            <View style={[styles.divider, { backgroundColor: colors.divider }]} />
+            <SettingItem
+              icon="information-outline"
+              iconColor="#8E8E93"
+              label="App Info"
+              subtitle="Version 1.0.0"
+              onPress={() => {}}
+            />
+          </View>
+        </View>
+
+        {/* Invite Section */}
+        <View style={styles.section}>
+          <View style={[styles.sectionContent, { backgroundColor: colors.card }]}>
+            <SettingItem
+              icon="share-variant-outline"
+              iconColor={colors.primary}
+              label="Invite Friends"
+              subtitle="Share the app with friends"
+              onPress={() => {}}
+            />
+          </View>
+        </View>
+
+        {/* Logout Button */}
+        <TouchableOpacity
+          style={[styles.logoutButton, { backgroundColor: colors.card }]}
+          onPress={handleLogout}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.logoutIconContainer, { backgroundColor: colors.error + '15' }]}>
+            <Icon name="logout" size={20} color={colors.error} />
+          </View>
+          <Text style={[styles.logoutText, { color: colors.error }]}>Logout</Text>
+        </TouchableOpacity>
+
+        {/* Footer */}
+        <View style={styles.footer}>
+          <Icon name="lock-outline" size={16} color={colors.textTertiary} />
+          <Text style={[styles.footerText, { color: colors.textTertiary }]}>
+            Your messages are end-to-end encrypted
+          </Text>
+        </View>
+
+        {/* Version Info */}
+        <View style={styles.versionContainer}>
+          <Text style={[styles.version, { color: colors.textTertiary }]}>IM v1.0.0</Text>
+          <Text style={[styles.copyright, { color: colors.textTertiary }]}>
+            Made with care for your organization
+          </Text>
+        </View>
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+  },
+  header: {
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: SPACING.md,
+  },
+  headerTitle: {
+    fontSize: FONTS.sizes.title,
+    fontWeight: 'bold',
+    marginTop: SPACING.md,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: SPACING.xxl,
   },
   profileCard: {
-    margin: SPACING.md,
-    borderRadius: BORDER_RADIUS.xl,
-    overflow: 'hidden',
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  profileGradient: {
-    padding: SPACING.lg,
-  },
-  profileContent: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  avatarContainer: {
-    position: 'relative',
-  },
-  editBadge: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: COLORS.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: COLORS.primary,
+    margin: SPACING.md,
+    padding: SPACING.md,
+    borderRadius: BORDER_RADIUS.lg,
+    borderWidth: 1,
   },
   profileInfo: {
     flex: 1,
-    marginLeft: SPACING.lg,
+    marginLeft: SPACING.md,
   },
   profileName: {
-    fontSize: FONTS.sizes.xl,
-    fontWeight: 'bold',
-    color: COLORS.textLight,
-    marginBottom: SPACING.xs,
+    fontSize: FONTS.sizes.lg,
+    fontWeight: '600',
+    marginBottom: 2,
   },
   profileAbout: {
     fontSize: FONTS.sizes.sm,
-    color: 'rgba(255,255,255,0.8)',
+  },
+  qrButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   section: {
     marginTop: SPACING.lg,
@@ -266,14 +432,12 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: FONTS.sizes.xs,
     fontWeight: '600',
-    color: COLORS.textSecondary,
     textTransform: 'uppercase',
-    letterSpacing: 1,
+    letterSpacing: 0.5,
     marginBottom: SPACING.sm,
     marginLeft: SPACING.sm,
   },
   sectionContent: {
-    backgroundColor: COLORS.surface,
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
   },
@@ -281,12 +445,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: SPACING.md,
-    paddingHorizontal: SPACING.lg,
+    paddingHorizontal: SPACING.md,
+  },
+  settingItemDisabled: {
+    opacity: 0.5,
   },
   settingIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 32,
+    height: 32,
+    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: SPACING.md,
@@ -296,56 +463,57 @@ const styles = StyleSheet.create({
   },
   settingLabel: {
     fontSize: FONTS.sizes.md,
-    color: COLORS.text,
     fontWeight: '500',
   },
   settingSubtitle: {
     fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
     marginTop: 2,
   },
   divider: {
-    height: 1,
-    backgroundColor: COLORS.divider,
-    marginLeft: 68,
+    height: StyleSheet.hairlineWidth,
+    marginLeft: 56,
   },
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.surface,
     margin: SPACING.md,
     marginTop: SPACING.xl,
     padding: SPACING.md,
-    paddingHorizontal: SPACING.lg,
     borderRadius: BORDER_RADIUS.lg,
   },
   logoutIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: COLORS.error + '15',
+    width: 32,
+    height: 32,
+    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: SPACING.md,
   },
   logoutText: {
     fontSize: FONTS.sizes.md,
-    color: COLORS.error,
     fontWeight: '600',
+  },
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
+  },
+  footerText: {
+    fontSize: FONTS.sizes.sm,
+    marginLeft: SPACING.xs,
   },
   versionContainer: {
     alignItems: 'center',
-    padding: SPACING.xl,
     paddingBottom: SPACING.xxl,
   },
   version: {
     fontSize: FONTS.sizes.sm,
-    color: COLORS.textMuted,
     marginBottom: SPACING.xs,
   },
   copyright: {
     fontSize: FONTS.sizes.xs,
-    color: COLORS.textMuted,
   },
 });
 
