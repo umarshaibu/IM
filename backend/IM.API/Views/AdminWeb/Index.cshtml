@@ -1,0 +1,345 @@
+@model DashboardViewModel
+@{
+    ViewData["Title"] = "Dashboard";
+    ViewData["ActivePage"] = "Dashboard";
+}
+
+<!-- Stats Cards Row 1 -->
+<div class="row g-5 g-xl-8 mb-5">
+    <div class="col-xl-3 col-md-6">
+        <div class="card stat-card bg-body hoverable card-xl-stretch">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="symbol symbol-50px me-5">
+                        <span class="symbol-label bg-light-primary">
+                            <i class="bi bi-people fs-2x text-primary"></i>
+                        </span>
+                    </div>
+                    <div class="d-flex flex-column">
+                        <span class="text-gray-800 fw-bold fs-2">@Model.TotalUsers</span>
+                        <span class="text-gray-500 fw-semibold">Total Users</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="card stat-card bg-body hoverable card-xl-stretch">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="symbol symbol-50px me-5">
+                        <span class="symbol-label bg-light-success">
+                            <i class="bi bi-circle-fill fs-2x text-success"></i>
+                        </span>
+                    </div>
+                    <div class="d-flex flex-column">
+                        <span class="text-gray-800 fw-bold fs-2">@Model.OnlineUsers</span>
+                        <span class="text-gray-500 fw-semibold">Online Now</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="card stat-card bg-body hoverable card-xl-stretch">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="symbol symbol-50px me-5">
+                        <span class="symbol-label bg-light-info">
+                            <i class="bi bi-chat-dots fs-2x text-info"></i>
+                        </span>
+                    </div>
+                    <div class="d-flex flex-column">
+                        <span class="text-gray-800 fw-bold fs-2">@Model.TotalMessages</span>
+                        <span class="text-gray-500 fw-semibold">Total Messages</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="card stat-card bg-body hoverable card-xl-stretch">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="symbol symbol-50px me-5">
+                        <span class="symbol-label bg-light-warning">
+                            <i class="bi bi-telephone fs-2x text-warning"></i>
+                        </span>
+                    </div>
+                    <div class="d-flex flex-column">
+                        <span class="text-gray-800 fw-bold fs-2">@Model.TotalCalls</span>
+                        <span class="text-gray-500 fw-semibold">Total Calls</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Stats Cards Row 2 -->
+<div class="row g-5 g-xl-8 mb-5">
+    <div class="col-xl-3 col-md-6">
+        <div class="card bg-primary hoverable card-xl-stretch">
+            <div class="card-body">
+                <i class="bi bi-chat-text text-white opacity-25 fs-2hx position-absolute end-0 me-5"></i>
+                <div class="text-white fw-bold fs-2 mb-2">@Model.TodayMessages</div>
+                <div class="fw-semibold text-white opacity-75">Today's Messages</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="card bg-success hoverable card-xl-stretch">
+            <div class="card-body">
+                <i class="bi bi-telephone-outbound text-white opacity-25 fs-2hx position-absolute end-0 me-5"></i>
+                <div class="text-white fw-bold fs-2 mb-2">@Model.TodayCalls</div>
+                <div class="fw-semibold text-white opacity-75">Today's Calls</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="card bg-info hoverable card-xl-stretch">
+            <div class="card-body">
+                <i class="bi bi-chat-square-dots text-white opacity-25 fs-2hx position-absolute end-0 me-5"></i>
+                <div class="text-white fw-bold fs-2 mb-2">@Model.TotalConversations</div>
+                <div class="fw-semibold text-white opacity-75">Conversations</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="card bg-warning hoverable card-xl-stretch">
+            <div class="card-body">
+                <i class="bi bi-broadcast text-white opacity-25 fs-2hx position-absolute end-0 me-5"></i>
+                <div class="text-white fw-bold fs-2 mb-2">@Model.TotalChannels</div>
+                <div class="fw-semibold text-white opacity-75">Channels</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-5 g-xl-8 mb-5">
+    <!-- Message Activity Chart -->
+    <div class="col-xl-8">
+        <div class="card card-xl-stretch">
+            <div class="card-header border-0 pt-5">
+                <h3 class="card-title align-items-start flex-column">
+                    <span class="card-label fw-bold fs-3 mb-1">Message Activity</span>
+                    <span class="text-muted fw-semibold fs-7">Last 7 days</span>
+                </h3>
+                <div class="card-toolbar">
+                    <span class="badge badge-light-primary fs-8 fw-bold">This Week</span>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="chart-container" style="height: 300px;">
+                    <canvas id="messageChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Registration Progress -->
+    <div class="col-xl-4">
+        <div class="card card-xl-stretch">
+            <div class="card-header border-0 pt-5">
+                <h3 class="card-title align-items-start flex-column">
+                    <span class="card-label fw-bold fs-3 mb-1">Registration</span>
+                    <span class="text-muted fw-semibold fs-7">Personnel Progress</span>
+                </h3>
+            </div>
+            <div class="card-body d-flex flex-column">
+                <div class="flex-grow-1">
+                    <div class="d-flex flex-stack mb-5">
+                        <div class="d-flex align-items-center">
+                            <div class="symbol symbol-45px me-5">
+                                <span class="symbol-label bg-light-primary">
+                                    <i class="bi bi-person-check fs-2 text-primary"></i>
+                                </span>
+                            </div>
+                            <div class="d-flex flex-column">
+                                <span class="fw-bold fs-6">Registered Users</span>
+                                <span class="text-muted fw-semibold fs-7">Active accounts</span>
+                            </div>
+                        </div>
+                        <span class="badge badge-light-primary fs-6 fw-bold">@Model.RegisteredCount</span>
+                    </div>
+                    <div class="d-flex flex-stack mb-5">
+                        <div class="d-flex align-items-center">
+                            <div class="symbol symbol-45px me-5">
+                                <span class="symbol-label bg-light-info">
+                                    <i class="bi bi-person-lines-fill fs-2 text-info"></i>
+                                </span>
+                            </div>
+                            <div class="d-flex flex-column">
+                                <span class="fw-bold fs-6">Nominal Roll</span>
+                                <span class="text-muted fw-semibold fs-7">Total personnel</span>
+                            </div>
+                        </div>
+                        <span class="badge badge-light-info fs-6 fw-bold">@Model.NominalRollCount</span>
+                    </div>
+                </div>
+                <div class="pt-5">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="fw-semibold text-gray-600 fs-7">Progress</span>
+                        <span class="fw-bold text-gray-800 fs-6">@(Model.NominalRollCount > 0 ? Math.Round((double)Model.RegisteredCount / Model.NominalRollCount * 100) : 0)%</span>
+                    </div>
+                    <div class="h-8px bg-light-primary rounded">
+                        <div class="bg-primary rounded h-8px" role="progressbar"
+                             style="width: @(Model.NominalRollCount > 0 ? Math.Round((double)Model.RegisteredCount / Model.NominalRollCount * 100) : 0)%">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Registrations -->
+<div class="row g-5 g-xl-8">
+    <div class="col-12">
+        <div class="card card-xl-stretch">
+            <div class="card-header border-0 pt-5">
+                <h3 class="card-title align-items-start flex-column">
+                    <span class="card-label fw-bold fs-3 mb-1">Recent Registrations</span>
+                    <span class="text-muted fw-semibold fs-7">Latest user signups</span>
+                </h3>
+                <div class="card-toolbar">
+                    <a href="/admin/users" class="btn btn-sm btn-light-primary">
+                        <i class="bi bi-arrow-right me-1"></i>View All
+                    </a>
+                </div>
+            </div>
+            <div class="card-body py-3">
+                <div class="table-responsive">
+                    <table class="table table-row-dashed table-row-gray-300 align-middle gs-0 gy-4">
+                        <thead>
+                            <tr class="fw-bold text-muted">
+                                <th class="min-w-150px">User</th>
+                                <th class="min-w-140px">Service Number</th>
+                                <th class="min-w-120px">Phone</th>
+                                <th class="min-w-100px">Status</th>
+                                <th class="min-w-100px text-end">Registered</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var user in Model.RecentUsers)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="symbol symbol-45px me-5">
+                                                @if (!string.IsNullOrEmpty(user.ProfilePictureUrl))
+                                                {
+                                                    <img src="@user.ProfilePictureUrl" alt="@user.NominalRoll.FullName" />
+                                                }
+                                                else
+                                                {
+                                                    <div class="symbol-label fs-5 fw-semibold bg-light-primary text-primary">
+                                                        @user.NominalRoll.FullName.Substring(0, 1).ToUpper()
+                                                    </div>
+                                                }
+                                            </div>
+                                            <div class="d-flex justify-content-start flex-column">
+                                                <a href="/admin/users/@user.Id" class="text-gray-800 fw-bold text-hover-primary fs-6">
+                                                    @user.NominalRoll.FullName
+                                                </a>
+                                                <span class="text-muted fw-semibold d-block fs-7">@(user.NominalRoll.Department ?? "N/A")</span>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="badge badge-light-dark fs-7 fw-bold">@user.NominalRoll.ServiceNumber</span>
+                                    </td>
+                                    <td>
+                                        <span class="text-gray-600 fw-semibold">@user.PhoneNumber</span>
+                                    </td>
+                                    <td>
+                                        @if (user.IsOnline)
+                                        {
+                                            <span class="badge badge-light-success">Online</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge badge-light-secondary">Offline</span>
+                                        }
+                                    </td>
+                                    <td class="text-end">
+                                        <span class="text-gray-600 fw-semibold">@user.CreatedAt.ToString("MMM dd, yyyy")</span>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Message Activity Chart with Metronic 8 styling
+        const ctx = document.getElementById('messageChart').getContext('2d');
+        const messageData = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.MessageStats));
+
+        const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+        gradient.addColorStop(0, 'rgba(27, 132, 255, 0.3)');
+        gradient.addColorStop(1, 'rgba(27, 132, 255, 0)');
+
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: messageData.map(d => new Date(d.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })),
+                datasets: [{
+                    label: 'Messages',
+                    data: messageData.map(d => d.count),
+                    borderColor: '#1B84FF',
+                    backgroundColor: gradient,
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 4,
+                    pointBackgroundColor: '#1B84FF',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2,
+                    pointHoverRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        backgroundColor: '#1e1e2d',
+                        titleColor: '#fff',
+                        bodyColor: '#fff',
+                        padding: 12,
+                        cornerRadius: 8,
+                        displayColors: false
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: {
+                            display: false
+                        },
+                        ticks: {
+                            color: '#99A1B7'
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: '#f1f1f4'
+                        },
+                        ticks: {
+                            color: '#99A1B7'
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+}

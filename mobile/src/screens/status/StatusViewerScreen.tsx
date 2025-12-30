@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   StatusBar,
   Platform,
 } from 'react-native';
+import { useTheme, ThemeColors } from '../../context/ThemeContext';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useQuery, useMutation } from '@tanstack/react-query';
@@ -20,7 +21,7 @@ import { statusApi, usersApi } from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
 import { RootStackParamList } from '../../navigation/RootNavigator';
 import { Status, UserProfile } from '../../types';
-import { COLORS, FONTS, SPACING } from '../../utils/theme';
+import { FONTS, SPACING } from '../../utils/theme';
 
 type StatusViewerRouteProp = RouteProp<RootStackParamList, 'StatusViewer'>;
 
@@ -32,6 +33,8 @@ const StatusViewerScreen: React.FC = () => {
   const navigation = useNavigation();
   const { userId: statusUserId } = route.params;
   const { userId: currentUserId } = useAuthStore();
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -213,7 +216,7 @@ const StatusViewerScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#000" />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.surface} />
 
       {renderStatusContent()}
 
@@ -240,7 +243,7 @@ const StatusViewerScreen: React.FC = () => {
             style={styles.backButton}
             onPress={() => navigation.goBack()}
           >
-            <Icon name="arrow-left" size={24} color={COLORS.textLight} />
+            <Icon name="arrow-left" size={24} color={colors.textInverse} />
           </TouchableOpacity>
           <Avatar
             uri={user?.profilePictureUrl}
@@ -260,7 +263,7 @@ const StatusViewerScreen: React.FC = () => {
             </Text>
           </View>
           <TouchableOpacity style={styles.moreButton}>
-            <Icon name="dots-vertical" size={24} color={COLORS.textLight} />
+            <Icon name="dots-vertical" size={24} color={colors.textInverse} />
           </TouchableOpacity>
         </View>
       </View>
@@ -268,7 +271,7 @@ const StatusViewerScreen: React.FC = () => {
       {isMyStatus && currentStatus && (
         <View style={styles.viewsContainer}>
           <TouchableOpacity style={styles.viewsButton}>
-            <Icon name="eye" size={20} color={COLORS.textLight} />
+            <Icon name="eye" size={20} color={colors.textInverse} />
             <Text style={styles.viewsText}>
               {currentStatus.viewCount || 0} views
             </Text>
@@ -282,7 +285,7 @@ const StatusViewerScreen: React.FC = () => {
             <Text style={styles.replyPlaceholder}>Reply...</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.sendButton}>
-            <Icon name="send" size={24} color={COLORS.textLight} />
+            <Icon name="send" size={24} color={colors.textInverse} />
           </TouchableOpacity>
         </View>
       )}
@@ -290,7 +293,7 @@ const StatusViewerScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
@@ -318,7 +321,7 @@ const styles = StyleSheet.create({
   },
   progressBar: {
     height: '100%',
-    backgroundColor: COLORS.textLight,
+    backgroundColor: colors.textInverse,
   },
   userInfo: {
     flexDirection: 'row',
@@ -337,11 +340,11 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: FONTS.sizes.md,
     fontWeight: '600',
-    color: COLORS.textLight,
+    color: colors.textInverse,
   },
   statusTime: {
     fontSize: FONTS.sizes.xs,
-    color: COLORS.textLight,
+    color: colors.textInverse,
     opacity: 0.8,
   },
   moreButton: {
@@ -361,7 +364,7 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: FONTS.sizes.xxl,
     fontWeight: 'bold',
-    color: COLORS.textLight,
+    color: colors.textInverse,
     textAlign: 'center',
     lineHeight: 36,
   },
@@ -398,7 +401,7 @@ const styles = StyleSheet.create({
   },
   viewsText: {
     fontSize: FONTS.sizes.sm,
-    color: COLORS.textLight,
+    color: colors.textInverse,
     marginLeft: SPACING.xs,
   },
   replyContainer: {
@@ -419,7 +422,7 @@ const styles = StyleSheet.create({
   },
   replyPlaceholder: {
     fontSize: FONTS.sizes.md,
-    color: COLORS.textLight,
+    color: colors.textInverse,
     opacity: 0.7,
   },
   sendButton: {
@@ -427,7 +430,7 @@ const styles = StyleSheet.create({
   },
   noStatusText: {
     fontSize: FONTS.sizes.lg,
-    color: COLORS.textLight,
+    color: colors.textInverse,
     textAlign: 'center',
     marginTop: 100,
   },

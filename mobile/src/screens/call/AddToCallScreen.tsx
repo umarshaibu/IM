@@ -16,7 +16,7 @@ import { useQuery } from '@tanstack/react-query';
 import Avatar from '../../components/Avatar';
 import { contactsApi } from '../../services/api';
 import * as signalr from '../../services/signalr';
-import { useTheme } from '../../context';
+import { useTheme, ThemeColors } from '../../context/ThemeContext';
 import { FONTS, SPACING, BORDER_RADIUS } from '../../utils/theme';
 import { RootStackParamList } from '../../navigation/RootNavigator';
 
@@ -35,6 +35,7 @@ const AddToCallScreen: React.FC = () => {
   const navigation = useNavigation();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const { callId, existingParticipants = [], callType } = route.params || {};
 
@@ -116,7 +117,6 @@ const AddToCallScreen: React.FC = () => {
       <TouchableOpacity
         style={[
           styles.contactItem,
-          { backgroundColor: colors.card },
           isSelected && { backgroundColor: colors.primary + '20' },
         ]}
         onPress={() => toggleContactSelection(item.userId)}
@@ -128,7 +128,7 @@ const AddToCallScreen: React.FC = () => {
             size={50}
           />
           <View style={styles.contactDetails}>
-            <Text style={[styles.contactName, { color: colors.text }]}>
+            <Text style={styles.contactName}>
               {item.displayName || item.fullName}
             </Text>
             <Text style={[styles.contactStatus, { color: item.isOnline ? colors.success : colors.textSecondary }]}>
@@ -143,7 +143,7 @@ const AddToCallScreen: React.FC = () => {
           isSelected && { backgroundColor: colors.primary },
         ]}>
           {isSelected && (
-            <Icon name="check" size={16} color="#FFFFFF" />
+            <Icon name="check" size={16} color={colors.textInverse} />
           )}
         </View>
       </TouchableOpacity>
@@ -151,30 +151,30 @@ const AddToCallScreen: React.FC = () => {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={styles.container}>
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.header, paddingTop: insets.top }]}>
+      <View style={[styles.header, { paddingTop: insets.top }]}>
         <View style={styles.headerContent}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
             <Icon name="arrow-left" size={24} color={colors.headerText} />
           </TouchableOpacity>
           <View style={styles.headerTitleContainer}>
-            <Text style={[styles.headerTitle, { color: colors.headerText }]}>
+            <Text style={styles.headerTitle}>
               Add to Call
             </Text>
-            <Text style={[styles.headerSubtitle, { color: colors.headerText }]}>
+            <Text style={styles.headerSubtitle}>
               {callType === 'Video' ? 'Video' : 'Voice'} Call
             </Text>
           </View>
           <View style={styles.headerRight}>
             {selectedContacts.length > 0 && (
               <TouchableOpacity
-                style={[styles.inviteButton, { backgroundColor: colors.primary }]}
+                style={styles.inviteButton}
                 onPress={handleInvite}
                 disabled={isInviting}
               >
                 {isInviting ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <ActivityIndicator size="small" color={colors.textInverse} />
                 ) : (
                   <Text style={styles.inviteButtonText}>
                     Invite ({selectedContacts.length})
@@ -187,11 +187,11 @@ const AddToCallScreen: React.FC = () => {
       </View>
 
       {/* Search */}
-      <View style={[styles.searchContainer, { backgroundColor: colors.surface }]}>
-        <View style={[styles.searchBox, { backgroundColor: colors.inputBackground }]}>
+      <View style={styles.searchContainer}>
+        <View style={styles.searchBox}>
           <Icon name="magnify" size={20} color={colors.textSecondary} />
           <TextInput
-            style={[styles.searchInput, { color: colors.text }]}
+            style={styles.searchInput}
             placeholder="Search contacts"
             placeholderTextColor={colors.textMuted}
             value={searchQuery}
@@ -207,7 +207,7 @@ const AddToCallScreen: React.FC = () => {
 
       {/* Selected contacts chips */}
       {selectedContacts.length > 0 && (
-        <View style={[styles.selectedContainer, { backgroundColor: colors.surface }]}>
+        <View style={styles.selectedContainer}>
           <FlatList
             horizontal
             data={selectedContacts}
@@ -245,7 +245,7 @@ const AddToCallScreen: React.FC = () => {
       ) : filteredContacts.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Icon name="account-search" size={60} color={colors.textTertiary} />
-          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+          <Text style={styles.emptyText}>
             {searchQuery ? 'No contacts found' : 'No contacts available to add'}
           </Text>
         </View>
@@ -255,19 +255,21 @@ const AddToCallScreen: React.FC = () => {
           renderItem={renderContact}
           keyExtractor={(item: Contact) => item.userId}
           contentContainerStyle={styles.listContent}
-          ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: colors.divider }]} />}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
         />
       )}
     </View>
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   header: {
     paddingBottom: SPACING.md,
+    backgroundColor: colors.header,
   },
   headerContent: {
     flexDirection: 'row',
@@ -285,10 +287,12 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: FONTS.sizes.lg,
     fontWeight: 'bold',
+    color: colors.headerText,
   },
   headerSubtitle: {
     fontSize: FONTS.sizes.sm,
     opacity: 0.8,
+    color: colors.headerText,
   },
   headerRight: {
     minWidth: 80,
@@ -298,14 +302,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderRadius: BORDER_RADIUS.md,
+    backgroundColor: colors.primary,
   },
   inviteButtonText: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontWeight: '600',
     fontSize: FONTS.sizes.sm,
   },
   searchContainer: {
     padding: SPACING.md,
+    backgroundColor: colors.surface,
   },
   searchBox: {
     flexDirection: 'row',
@@ -313,15 +319,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     borderRadius: BORDER_RADIUS.lg,
     height: 44,
+    backgroundColor: colors.inputBackground,
   },
   searchInput: {
     flex: 1,
     marginLeft: SPACING.sm,
     fontSize: FONTS.sizes.md,
+    color: colors.text,
   },
   selectedContainer: {
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
+    backgroundColor: colors.surface,
   },
   selectedChip: {
     flexDirection: 'row',
@@ -345,6 +354,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: SPACING.md,
+    backgroundColor: colors.card,
   },
   contactInfo: {
     flexDirection: 'row',
@@ -358,6 +368,7 @@ const styles = StyleSheet.create({
   contactName: {
     fontSize: FONTS.sizes.md,
     fontWeight: '500',
+    color: colors.text,
   },
   contactStatus: {
     fontSize: FONTS.sizes.sm,
@@ -374,6 +385,7 @@ const styles = StyleSheet.create({
   separator: {
     height: StyleSheet.hairlineWidth,
     marginLeft: 78,
+    backgroundColor: colors.divider,
   },
   loadingContainer: {
     flex: 1,
@@ -390,6 +402,7 @@ const styles = StyleSheet.create({
     fontSize: FONTS.sizes.md,
     textAlign: 'center',
     marginTop: SPACING.md,
+    color: colors.textSecondary,
   },
 });
 

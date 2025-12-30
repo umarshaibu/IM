@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -18,25 +18,16 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { RootStackParamList } from '../../navigation/RootNavigator';
 import { authApi } from '../../services/api';
 import { SPACING, BORDER_RADIUS } from '../../utils/theme';
+import { useTheme, ThemeColors } from '../../context/ThemeContext';
 
 type ServiceNumberScreenProps = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'ServiceNumber'>;
 };
 
-// Theme colors matching the design
-const AUTH_COLORS = {
-  background: '#E8E8E8',
-  inputBackground: '#D0D0D0',
-  primary: '#0D3B2E',
-  text: '#000000',
-  textSecondary: '#666666',
-  textMuted: '#888888',
-  link: '#4A90D9',
-  indicatorActive: '#0D3B2E',
-  indicatorInactive: '#CCCCCC',
-};
-
 const ServiceNumberScreen: React.FC<ServiceNumberScreenProps> = ({ navigation }) => {
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [serviceNumber, setServiceNumber] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -79,7 +70,7 @@ const ServiceNumberScreen: React.FC<ServiceNumberScreenProps> = ({ navigation })
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <StatusBar barStyle="dark-content" backgroundColor={AUTH_COLORS.background} />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.surface} />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
@@ -96,7 +87,7 @@ const ServiceNumberScreen: React.FC<ServiceNumberScreenProps> = ({ navigation })
 
           {/* Welcome Text with Chat Icon */}
           <View style={styles.brandContainer}>
-            <Icon name="chat" size={28} color={AUTH_COLORS.primary} />
+            <Icon name="chat" size={28} color={colors.primary} />
             <Text style={styles.welcomeText}>Welcome to NAIM</Text>
           </View>
 
@@ -108,7 +99,7 @@ const ServiceNumberScreen: React.FC<ServiceNumberScreenProps> = ({ navigation })
                 value={serviceNumber}
                 onChangeText={setServiceNumber}
                 placeholder="Svc No"
-                placeholderTextColor={AUTH_COLORS.textMuted}
+                placeholderTextColor={colors.textMuted}
                 autoCapitalize="characters"
                 autoCorrect={false}
               />
@@ -121,7 +112,7 @@ const ServiceNumberScreen: React.FC<ServiceNumberScreenProps> = ({ navigation })
               activeOpacity={0.8}
             >
               {isLoading ? (
-                <ActivityIndicator color="#FFFFFF" />
+                <ActivityIndicator color={colors.textInverse} />
               ) : (
                 <Text style={styles.sendButtonText}>Send</Text>
               )}
@@ -149,10 +140,10 @@ const ServiceNumberScreen: React.FC<ServiceNumberScreenProps> = ({ navigation })
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: AUTH_COLORS.background,
+    backgroundColor: colors.backgroundSecondary,
   },
   scrollContent: {
     flexGrow: 1,
@@ -178,7 +169,7 @@ const styles = StyleSheet.create({
   welcomeText: {
     fontSize: 22,
     fontWeight: '600',
-    color: AUTH_COLORS.text,
+    color: colors.text,
   },
   inputSection: {
     width: '100%',
@@ -186,7 +177,7 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.xl,
   },
   inputContainer: {
-    backgroundColor: AUTH_COLORS.inputBackground,
+    backgroundColor: colors.inputBackground,
     borderRadius: BORDER_RADIUS.md,
     marginBottom: SPACING.lg,
   },
@@ -194,11 +185,11 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.lg,
     fontSize: 16,
-    color: AUTH_COLORS.text,
+    color: colors.text,
     textAlign: 'center',
   },
   sendButton: {
-    backgroundColor: AUTH_COLORS.primary,
+    backgroundColor: colors.primary,
     paddingVertical: SPACING.md,
     borderRadius: BORDER_RADIUS.xl,
     alignItems: 'center',
@@ -207,7 +198,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   sendButtonText: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -217,11 +208,11 @@ const styles = StyleSheet.create({
   },
   privacyText: {
     fontSize: 14,
-    color: AUTH_COLORS.textSecondary,
+    color: colors.textSecondary,
   },
   privacyLink: {
     fontSize: 14,
-    color: AUTH_COLORS.link,
+    color: colors.link,
     textDecorationLine: 'underline',
   },
   pageIndicator: {
@@ -232,10 +223,10 @@ const styles = StyleSheet.create({
     width: 24,
     height: 6,
     borderRadius: 3,
-    backgroundColor: AUTH_COLORS.indicatorInactive,
+    backgroundColor: colors.divider,
   },
   indicatorDotActive: {
-    backgroundColor: AUTH_COLORS.indicatorActive,
+    backgroundColor: colors.primary,
   },
 });
 

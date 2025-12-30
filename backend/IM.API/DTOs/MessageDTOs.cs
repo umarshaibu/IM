@@ -51,6 +51,7 @@ public class SendMessageRequest
     public MessageType Type { get; set; } = MessageType.Text;
     public string? Content { get; set; }
     public string? MediaUrl { get; set; }
+    public int? MediaDuration { get; set; }
     public Guid? ReplyToMessageId { get; set; }
 }
 

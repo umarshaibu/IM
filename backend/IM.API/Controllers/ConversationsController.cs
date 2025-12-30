@@ -16,17 +16,20 @@ public class ConversationsController : ControllerBase
     private readonly IMessageService _messageService;
     private readonly IUserService _userService;
     private readonly IEncryptionService _encryptionService;
+    private readonly INotificationService _notificationService;
 
     public ConversationsController(
         IConversationService conversationService,
         IMessageService messageService,
         IUserService userService,
-        IEncryptionService encryptionService)
+        IEncryptionService encryptionService,
+        INotificationService notificationService)
     {
         _conversationService = conversationService;
         _messageService = messageService;
         _userService = userService;
         _encryptionService = encryptionService;
+        _notificationService = notificationService;
     }
 
     private Guid GetUserId() => Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
@@ -91,6 +94,16 @@ public class ConversationsController : ControllerBase
 
         var fullConversation = await _conversationService.GetConversationByIdAsync(conversation.Id, userId);
 
+        // Send notification to all members (except the creator)
+        var memberIds = request.MemberIds.Where(id => id != userId).ToList();
+        if (memberIds.Any())
+        {
+            await _notificationService.SendGroupNotificationAsync(
+                fullConversation!,
+                $"You've been added to the group \"{request.Name}\"",
+                memberIds);
+        }
+
         return Ok(MapToDto(fullConversation!, userId));
     }
 
@@ -122,6 +135,16 @@ public class ConversationsController : ControllerBase
         if (!success)
         {
             return BadRequest(new { message = "Failed to add participant. You may not have permission." });
+        }
+
+        // Send notification to the added user
+        var conversation = await _conversationService.GetConversationByIdAsync(id, userId);
+        if (conversation != null)
+        {
+            await _notificationService.SendGroupNotificationAsync(
+                conversation,
+                $"You've been added to the group \"{conversation.Name}\"",
+                new[] { request.UserId });
         }
 
         return Ok(new { message = "Participant added successfully" });
@@ -315,6 +338,7 @@ public class ConversationsController : ControllerBase
                 CreatedAt = lastMessage.CreatedAt,
                 IsDeleted = lastMessage.IsDeleted
             } : null,
+            UnreadCount = 0, // Calculated client-side from MessageStatuses
             Participants = conversation.Participants.Where(p => p.IsActive).Select(p => new ParticipantDto
             {
                 UserId = p.UserId,
@@ -329,5 +353,33 @@ public class ConversationsController : ControllerBase
             }).ToList(),
             CreatedAt = conversation.CreatedAt
         };
+    }
+
+    [HttpDelete("{id}")]
+    public async Task<ActionResult> DeleteConversation(Guid id)
+    {
+        var userId = GetUserId();
+        var success = await _conversationService.SoftDeleteConversationForUserAsync(id, userId);
+
+        if (!success)
+        {
+            return BadRequest(new { message = "Failed to delete conversation" });
+        }
+
+        return Ok(new { message = "Conversation deleted successfully" });
+    }
+
+    [HttpPost("{id}/restore")]
+    public async Task<ActionResult> RestoreConversation(Guid id)
+    {
+        var userId = GetUserId();
+        var success = await _conversationService.RestoreConversationForUserAsync(id, userId);
+
+        if (!success)
+        {
+            return BadRequest(new { message = "Failed to restore conversation" });
+        }
+
+        return Ok(new { message = "Conversation restored successfully" });
     }
 }

@@ -48,6 +48,8 @@ export interface Conversation {
   unreadCount: number;
   participants: Participant[];
   createdAt: string;
+  isDeleted?: boolean;
+  deletedAt?: string;
 }
 
 export interface Participant {
@@ -121,7 +123,10 @@ export type MessageType =
   | 'Document'
   | 'Location'
   | 'Contact'
-  | 'Sticker';
+  | 'Sticker'
+  | 'MissedCall'
+  | 'MissedVideoCall'
+  | 'System';
 
 export type MessageStatus = 'Sending' | 'Sent' | 'Delivered' | 'Read' | 'Failed';
 

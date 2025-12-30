@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -32,7 +33,7 @@ Directory.CreateDirectory(logPath);
 builder.Logging.AddProvider(new FileLoggerProvider(Path.Combine(logPath, $"im-api-{DateTime.Now:yyyy-MM-dd}.log")));
 
 // Add services to the container
-builder.Services.AddControllers()
+builder.Services.AddControllersWithViews()
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
@@ -111,6 +112,17 @@ builder.Services.AddAuthentication(options =>
             return Task.CompletedTask;
         }
     };
+})
+.AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
+{
+    options.LoginPath = "/admin/login";
+    options.LogoutPath = "/admin/logout";
+    options.AccessDeniedPath = "/admin/login";
+    options.Cookie.Name = "IMAdmin";
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+    options.ExpireTimeSpan = TimeSpan.FromHours(12);
+    options.SlidingExpiration = true;
 });
 
 builder.Services.AddAuthorization();
@@ -175,11 +187,9 @@ builder.Services.AddScoped<DatabaseSeeder>();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+// Enable Swagger in all environments for API documentation
+app.UseSwagger();
+app.UseSwaggerUI();
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();
@@ -193,7 +203,14 @@ app.UseIpRateLimiting();
 app.UseAuthentication();
 app.UseAuthorization();
 
+// Map MVC controllers (for admin panel and API)
 app.MapControllers();
+
+// Add conventional MVC routing for admin area
+app.MapControllerRoute(
+    name: "admin",
+    pattern: "admin/{action=Index}/{id?}",
+    defaults: new { controller = "AdminWeb" });
 
 // SignalR Hubs
 app.MapHub<ChatHub>("/hubs/chat");

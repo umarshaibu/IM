@@ -3,6 +3,7 @@ namespace IM.Core.Entities;
 public class Channel : BaseEntity
 {
     public string Name { get; set; } = string.Empty;
+    public string ShortName { get; set; } = string.Empty;
     public string? Description { get; set; }
     public string? IconUrl { get; set; }
     public Guid OwnerId { get; set; }

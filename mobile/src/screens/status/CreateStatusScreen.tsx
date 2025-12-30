@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -17,7 +17,8 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
 import { statusApi, filesApi } from '../../services/api';
-import { COLORS, FONTS, SPACING } from '../../utils/theme';
+import { FONTS, SPACING } from '../../utils/theme';
+import { useTheme, ThemeColors } from '../../context/ThemeContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -37,6 +38,8 @@ const BACKGROUND_COLORS = [
 const CreateStatusScreen: React.FC = () => {
   const navigation = useNavigation();
   const queryClient = useQueryClient();
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [mode, setMode] = useState<'text' | 'media'>('text');
   const [textContent, setTextContent] = useState('');
@@ -158,7 +161,7 @@ const CreateStatusScreen: React.FC = () => {
         <Image source={{ uri: mediaUri }} style={styles.mediaImage} resizeMode="contain" />
       ) : (
         <View style={styles.mediaPlaceholder}>
-          <Icon name="image" size={80} color={COLORS.textMuted} />
+          <Icon name="image" size={80} color={colors.textMuted} />
           <Text style={styles.mediaPlaceholderText}>Select an image</Text>
         </View>
       )}
@@ -169,7 +172,7 @@ const CreateStatusScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#000" />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.surface} />
 
       <View style={styles.header}>
         <TouchableOpacity
@@ -177,7 +180,7 @@ const CreateStatusScreen: React.FC = () => {
           onPress={() => navigation.goBack()}
           disabled={isPending}
         >
-          <Icon name="close" size={24} color={COLORS.textLight} />
+          <Icon name="close" size={24} color={colors.textInverse} />
         </TouchableOpacity>
 
         <View style={styles.modeToggle}>
@@ -191,7 +194,7 @@ const CreateStatusScreen: React.FC = () => {
             <Icon
               name="format-text"
               size={24}
-              color={mode === 'text' ? COLORS.textLight : COLORS.textMuted}
+              color={mode === 'text' ? colors.textInverse : colors.textMuted}
             />
           </TouchableOpacity>
           <TouchableOpacity
@@ -201,7 +204,7 @@ const CreateStatusScreen: React.FC = () => {
             <Icon
               name="image"
               size={24}
-              color={mode === 'media' ? COLORS.textLight : COLORS.textMuted}
+              color={mode === 'media' ? colors.textInverse : colors.textMuted}
             />
           </TouchableOpacity>
         </View>
@@ -213,10 +216,10 @@ const CreateStatusScreen: React.FC = () => {
         {mode === 'media' && (
           <View style={styles.mediaActions}>
             <TouchableOpacity style={styles.mediaActionButton} onPress={handleTakePhoto}>
-              <Icon name="camera" size={28} color={COLORS.textLight} />
+              <Icon name="camera" size={28} color={colors.textInverse} />
             </TouchableOpacity>
             <TouchableOpacity style={styles.mediaActionButton} onPress={handlePickImage}>
-              <Icon name="image-multiple" size={28} color={COLORS.textLight} />
+              <Icon name="image-multiple" size={28} color={colors.textInverse} />
             </TouchableOpacity>
           </View>
         )}
@@ -227,10 +230,10 @@ const CreateStatusScreen: React.FC = () => {
           disabled={isPending}
         >
           {isPending ? (
-            <ActivityIndicator size="small" color={COLORS.textLight} />
+            <ActivityIndicator size="small" color={colors.textInverse} />
           ) : (
             <>
-              <Icon name="send" size={20} color={COLORS.textLight} />
+              <Icon name="send" size={20} color={colors.textInverse} />
               <Text style={styles.postButtonText}>Post</Text>
             </>
           )}
@@ -240,7 +243,7 @@ const CreateStatusScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
@@ -272,7 +275,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   modeButtonActive: {
-    backgroundColor: COLORS.secondary,
+    backgroundColor: colors.secondary,
   },
   textContainer: {
     flex: 1,
@@ -283,7 +286,7 @@ const styles = StyleSheet.create({
   textInput: {
     fontSize: FONTS.sizes.xxl,
     fontWeight: 'bold',
-    color: COLORS.textLight,
+    color: colors.textInverse,
     textAlign: 'center',
     maxWidth: SCREEN_WIDTH - SPACING.xl * 2,
   },
@@ -303,7 +306,7 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   colorOptionSelected: {
-    borderColor: COLORS.textLight,
+    borderColor: colors.textInverse,
   },
   mediaContainer: {
     flex: 1,
@@ -320,7 +323,7 @@ const styles = StyleSheet.create({
   },
   mediaPlaceholderText: {
     fontSize: FONTS.sizes.lg,
-    color: COLORS.textMuted,
+    color: colors.textMuted,
     marginTop: SPACING.md,
   },
   footer: {
@@ -347,7 +350,7 @@ const styles = StyleSheet.create({
   postButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.secondary,
+    backgroundColor: colors.secondary,
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.lg,
     borderRadius: 25,
@@ -359,7 +362,7 @@ const styles = StyleSheet.create({
   postButtonText: {
     fontSize: FONTS.sizes.md,
     fontWeight: '600',
-    color: COLORS.textLight,
+    color: colors.textInverse,
     marginLeft: SPACING.xs,
   },
 });

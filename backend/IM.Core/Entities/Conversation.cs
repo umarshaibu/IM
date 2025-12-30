@@ -15,8 +15,14 @@ public class Conversation : BaseEntity
     public DateTime? MutedUntil { get; set; }
     public DateTime? LastMessageAt { get; set; }
 
+    // Soft delete
+    public bool IsDeleted { get; set; }
+    public DateTime? DeletedAt { get; set; }
+    public Guid? DeletedById { get; set; }
+
     // Navigation
     public User? CreatedBy { get; set; }
+    public User? DeletedBy { get; set; }
     public ICollection<ConversationParticipant> Participants { get; set; } = new List<ConversationParticipant>();
     public ICollection<Message> Messages { get; set; } = new List<Message>();
 }

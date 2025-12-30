@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,25 +11,19 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { RootStackParamList } from '../../navigation/RootNavigator';
 import { SPACING, BORDER_RADIUS } from '../../utils/theme';
+import { useTheme, ThemeColors } from '../../context/ThemeContext';
 
 type WelcomeScreenProps = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Welcome'>;
 };
 
-// Theme colors matching the design
-const AUTH_COLORS = {
-  background: '#E8E8E8', // Light gray background
-  primary: '#0D3B2E', // Dark green for button
-  text: '#000000',
-  textSecondary: '#666666',
-  indicatorActive: '#0D3B2E',
-  indicatorInactive: '#CCCCCC',
-};
-
 const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ navigation }) => {
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={AUTH_COLORS.background} />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.surface} />
 
       {/* Main Content */}
       <View style={styles.content}>
@@ -44,7 +38,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ navigation }) => {
 
         {/* Chat Icon and App Name */}
         <View style={styles.brandContainer}>
-          <Icon name="chat" size={32} color={AUTH_COLORS.primary} />
+          <Icon name="chat" size={32} color={colors.primary} />
           <Text style={styles.appName}>NAIM</Text>
         </View>
       </View>
@@ -72,10 +66,10 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: AUTH_COLORS.background,
+    backgroundColor: colors.background,
   },
   content: {
     flex: 1,
@@ -97,7 +91,7 @@ const styles = StyleSheet.create({
   appName: {
     fontSize: 36,
     fontWeight: 'bold',
-    color: AUTH_COLORS.text,
+    color: colors.text,
     letterSpacing: 2,
   },
   footer: {
@@ -114,20 +108,20 @@ const styles = StyleSheet.create({
     width: 24,
     height: 6,
     borderRadius: 3,
-    backgroundColor: AUTH_COLORS.indicatorInactive,
+    backgroundColor: colors.border,
   },
   indicatorDotActive: {
-    backgroundColor: AUTH_COLORS.indicatorActive,
+    backgroundColor: colors.primary,
   },
   getStartedButton: {
-    backgroundColor: AUTH_COLORS.primary,
+    backgroundColor: colors.primary,
     paddingVertical: SPACING.lg,
     borderRadius: BORDER_RADIUS.xl,
     alignItems: 'center',
     justifyContent: 'center',
   },
   getStartedButtonText: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontSize: 18,
     fontWeight: '600',
   },

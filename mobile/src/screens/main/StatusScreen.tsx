@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -18,7 +18,8 @@ import { statusApi } from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
 import { RootStackParamList } from '../../navigation/RootNavigator';
 import { UserStatuses, Status } from '../../types';
-import { COLORS, FONTS, SPACING, BORDER_RADIUS } from '../../utils/theme';
+import { FONTS, SPACING, BORDER_RADIUS } from '../../utils/theme';
+import { useTheme, ThemeColors } from '../../context/ThemeContext';
 import { formatDistanceToNow } from 'date-fns';
 
 type StatusScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -26,6 +27,8 @@ type StatusScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 const StatusScreen: React.FC = () => {
   const navigation = useNavigation<StatusScreenNavigationProp>();
   const { user } = useAuthStore();
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const { data: myStatuses, refetch: refetchMy } = useQuery({
     queryKey: ['myStatuses'],
@@ -61,7 +64,7 @@ const StatusScreen: React.FC = () => {
       activeOpacity={0.8}
     >
       <LinearGradient
-        colors={[COLORS.primary + '15', COLORS.secondary + '15']}
+        colors={[colors.primary + '15', colors.secondary + '15']}
         style={styles.myStatusGradient}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
@@ -80,12 +83,12 @@ const StatusScreen: React.FC = () => {
           {(!myStatuses || myStatuses.length === 0) && (
             <View style={styles.addStatusBadge}>
               <LinearGradient
-                colors={[COLORS.secondary, COLORS.primary]}
+                colors={[colors.secondary, colors.primary]}
                 style={styles.addBadgeGradient}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
               >
-                <Icon name="plus" size={14} color={COLORS.textLight} />
+                <Icon name="plus" size={14} color={colors.textInverse} />
               </LinearGradient>
             </View>
           )}
@@ -102,7 +105,7 @@ const StatusScreen: React.FC = () => {
           <Icon
             name={myStatuses && myStatuses.length > 0 ? 'eye-outline' : 'plus-circle-outline'}
             size={24}
-            color={COLORS.primary}
+            color={colors.primary}
           />
         </View>
       </LinearGradient>
@@ -133,7 +136,7 @@ const StatusScreen: React.FC = () => {
           <Icon
             name={item.hasUnviewed ? 'circle' : 'check-circle'}
             size={12}
-            color={item.hasUnviewed ? COLORS.secondary : COLORS.textMuted}
+            color={item.hasUnviewed ? colors.secondary : colors.textMuted}
           />
           <Text style={[
             styles.statusTime,
@@ -173,7 +176,7 @@ const StatusScreen: React.FC = () => {
   const renderEmptyList = () => (
     <View style={styles.emptyContainer}>
       <View style={styles.emptyIconContainer}>
-        <Icon name="camera-burst" size={64} color={COLORS.primary} />
+        <Icon name="camera-burst" size={64} color={colors.primary} />
       </View>
       <Text style={styles.emptyTitle}>No status updates</Text>
       <Text style={styles.emptySubtitle}>
@@ -184,7 +187,7 @@ const StatusScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.surface} />
 
       <FlatList
         data={contactStatuses}
@@ -197,8 +200,8 @@ const StatusScreen: React.FC = () => {
           <RefreshControl
             refreshing={isLoading}
             onRefresh={handleRefresh}
-            colors={[COLORS.primary]}
-            tintColor={COLORS.primary}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
           />
         }
         contentContainerStyle={
@@ -213,12 +216,12 @@ const StatusScreen: React.FC = () => {
         activeOpacity={0.9}
       >
         <LinearGradient
-          colors={[COLORS.secondary, COLORS.primary]}
+          colors={[colors.secondary, colors.primary]}
           style={styles.fabGradient}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
         >
-          <Icon name="camera" size={26} color={COLORS.textLight} />
+          <Icon name="camera" size={26} color={colors.textInverse} />
         </LinearGradient>
       </TouchableOpacity>
 
@@ -227,16 +230,16 @@ const StatusScreen: React.FC = () => {
         onPress={() => navigation.navigate('CreateStatus')}
         activeOpacity={0.9}
       >
-        <Icon name="pencil" size={20} color={COLORS.primary} />
+        <Icon name="pencil" size={20} color={colors.primary} />
       </TouchableOpacity>
     </View>
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
   },
   listContent: {
     paddingBottom: 100,
@@ -251,7 +254,7 @@ const styles = StyleSheet.create({
     margin: SPACING.md,
     borderRadius: BORDER_RADIUS.xl,
     overflow: 'hidden',
-    shadowColor: COLORS.primary,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
@@ -268,11 +271,11 @@ const styles = StyleSheet.create({
   statusRingLarge: {
     borderRadius: 36,
     borderWidth: 3,
-    borderColor: COLORS.divider,
+    borderColor: colors.divider,
     padding: 2,
   },
   statusRingActive: {
-    borderColor: COLORS.secondary,
+    borderColor: colors.secondary,
   },
   addStatusBadge: {
     position: 'absolute',
@@ -281,7 +284,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     overflow: 'hidden',
     borderWidth: 3,
-    borderColor: COLORS.surface,
+    borderColor: colors.surface,
   },
   addBadgeGradient: {
     width: 24,
@@ -296,18 +299,18 @@ const styles = StyleSheet.create({
   myStatusTitle: {
     fontSize: FONTS.sizes.lg,
     fontWeight: '700',
-    color: COLORS.text,
+    color: colors.text,
     marginBottom: SPACING.xs,
   },
   myStatusSubtitle: {
     fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
   },
   myStatusAction: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: COLORS.primary + '15',
+    backgroundColor: colors.primary + '15',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -326,21 +329,21 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: COLORS.secondary,
+    backgroundColor: colors.secondary,
     marginRight: SPACING.sm,
   },
   sectionTitle: {
     fontSize: FONTS.sizes.xs,
     fontWeight: '700',
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
   sectionCount: {
     fontSize: FONTS.sizes.xs,
     fontWeight: '600',
-    color: COLORS.secondary,
-    backgroundColor: COLORS.secondary + '15',
+    color: colors.secondary,
+    backgroundColor: colors.secondary + '15',
     paddingHorizontal: SPACING.sm,
     paddingVertical: SPACING.xs,
     borderRadius: BORDER_RADIUS.sm,
@@ -357,10 +360,10 @@ const styles = StyleSheet.create({
     padding: 2,
   },
   statusRingUnviewed: {
-    borderColor: COLORS.secondary,
+    borderColor: colors.secondary,
   },
   statusRingViewed: {
-    borderColor: COLORS.divider,
+    borderColor: colors.divider,
   },
   statusInfo: {
     flex: 1,
@@ -369,7 +372,7 @@ const styles = StyleSheet.create({
   statusName: {
     fontSize: FONTS.sizes.md,
     fontWeight: '600',
-    color: COLORS.text,
+    color: colors.text,
     marginBottom: 4,
   },
   statusMeta: {
@@ -378,29 +381,29 @@ const styles = StyleSheet.create({
   },
   statusTime: {
     fontSize: FONTS.sizes.sm,
-    color: COLORS.textMuted,
+    color: colors.textMuted,
     marginLeft: 4,
   },
   statusTimeNew: {
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   statusCount: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: COLORS.inputBackground,
+    backgroundColor: colors.inputBackground,
     justifyContent: 'center',
     alignItems: 'center',
   },
   statusCountText: {
     fontSize: FONTS.sizes.xs,
     fontWeight: '600',
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
   },
   separator: {
     height: 1,
-    backgroundColor: COLORS.divider,
+    backgroundColor: colors.divider,
     marginLeft: 84,
   },
   emptyContainer: {
@@ -413,7 +416,7 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: COLORS.primary + '15',
+    backgroundColor: colors.primary + '15',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: SPACING.xl,
@@ -421,12 +424,12 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: FONTS.sizes.xl,
     fontWeight: 'bold',
-    color: COLORS.text,
+    color: colors.text,
     marginBottom: SPACING.sm,
   },
   emptySubtitle: {
     fontSize: FONTS.sizes.md,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
   },
@@ -435,7 +438,7 @@ const styles = StyleSheet.create({
     right: SPACING.lg,
     bottom: SPACING.xl,
     borderRadius: 30,
-    shadowColor: COLORS.primary,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 8,
@@ -455,7 +458,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',

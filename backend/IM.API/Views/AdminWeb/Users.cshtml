@@ -1,0 +1,180 @@
+@model UsersListViewModel
+@{
+    ViewData["Title"] = "Users";
+    ViewData["ActivePage"] = "Users";
+}
+
+<!-- Toolbar -->
+<div class="d-flex flex-wrap flex-stack mb-6">
+    <div class="d-flex flex-column flex-grow-1 pe-8">
+        <div class="d-flex flex-wrap">
+            <div class="border border-gray-300 border-dashed rounded min-w-125px py-3 px-4 me-6 mb-3">
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-people fs-3 text-primary me-2"></i>
+                    <div class="fs-2 fw-bold">@Model.TotalCount</div>
+                </div>
+                <div class="fw-semibold fs-6 text-gray-500">Total Users</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Search Card -->
+<div class="card mb-5">
+    <div class="card-body">
+        <form method="get" class="d-flex align-items-center position-relative">
+            <i class="bi bi-search fs-3 text-gray-500 position-absolute ms-4"></i>
+            <input type="text" class="form-control form-control-solid ps-12 w-350px me-3" name="search"
+                   value="@Model.Search" placeholder="Search by service number, name, or phone..." />
+            <button type="submit" class="btn btn-primary me-3">
+                <i class="bi bi-search me-1"></i>Search
+            </button>
+            @if (!string.IsNullOrEmpty(Model.Search))
+            {
+                <a href="/admin/users" class="btn btn-light-secondary">
+                    <i class="bi bi-x me-1"></i>Clear
+                </a>
+            }
+        </form>
+    </div>
+</div>
+
+<!-- Users Table -->
+<div class="card">
+    <div class="card-header border-0 pt-6">
+        <div class="card-title">
+            <h3 class="card-label fw-bold fs-3">
+                Registered Users
+                @if (!string.IsNullOrEmpty(Model.Search))
+                {
+                    <span class="text-muted fs-6 ms-1">- Search results for "@Model.Search"</span>
+                }
+            </h3>
+        </div>
+    </div>
+    <div class="card-body py-4">
+        <div class="table-responsive">
+            <table class="table align-middle table-row-dashed fs-6 gy-5">
+                <thead>
+                    <tr class="text-start text-muted fw-bold fs-7 text-uppercase gs-0">
+                        <th class="min-w-125px">Service Number</th>
+                        <th class="min-w-250px">User</th>
+                        <th class="min-w-125px">Phone</th>
+                        <th class="min-w-125px">Department</th>
+                        <th class="min-w-100px">Status</th>
+                        <th class="min-w-100px">Last Seen</th>
+                        <th class="text-end min-w-100px">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="text-gray-600 fw-semibold">
+                    @if (!Model.Users.Any())
+                    {
+                        <tr>
+                            <td colspan="7" class="text-center py-10">
+                                <div class="d-flex flex-column align-items-center">
+                                    <i class="bi bi-inbox fs-2tx text-gray-300 mb-3"></i>
+                                    <span class="text-gray-500 fs-5">No users found</span>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                    @foreach (var user in Model.Users)
+                    {
+                        <tr>
+                            <td>
+                                <span class="badge badge-light-dark fs-7 fw-bold">@user.NominalRoll.ServiceNumber</span>
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <div class="symbol symbol-circle symbol-50px overflow-hidden me-3">
+                                        @if (!string.IsNullOrEmpty(user.ProfilePictureUrl))
+                                        {
+                                            <div class="symbol-label">
+                                                <img src="@user.ProfilePictureUrl" alt="@user.NominalRoll.FullName" class="w-100" />
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <div class="symbol-label fs-5 fw-semibold bg-light-primary text-primary">
+                                                @user.NominalRoll.FullName.Substring(0, 1).ToUpper()
+                                            </div>
+                                        }
+                                    </div>
+                                    <div class="d-flex flex-column">
+                                        <a href="/admin/users/@user.Id" class="text-gray-800 text-hover-primary mb-1 fw-bold">
+                                            @user.NominalRoll.FullName
+                                        </a>
+                                        <span class="text-muted fs-7">@(user.DisplayName ?? "No display name")</span>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="text-gray-800 fw-semibold">@user.PhoneNumber</span>
+                            </td>
+                            <td>@(user.NominalRoll.Department ?? "-")</td>
+                            <td>
+                                @switch (user.NominalRoll.Status)
+                                {
+                                    case IM.Core.Enums.UserStatus.Active:
+                                        <span class="badge badge-light-success">Active</span>
+                                        break;
+                                    case IM.Core.Enums.UserStatus.Suspended:
+                                        <span class="badge badge-light-danger">Suspended</span>
+                                        break;
+                                    case IM.Core.Enums.UserStatus.Inactive:
+                                        <span class="badge badge-light-warning">Inactive</span>
+                                        break;
+                                }
+                            </td>
+                            <td>
+                                @if (user.IsOnline)
+                                {
+                                    <div class="d-flex align-items-center">
+                                        <div class="symbol-badge bg-success start-100 top-100 rounded-circle w-8px h-8px me-2"></div>
+                                        <span class="text-success fw-semibold">Online</span>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <span class="text-gray-500">@(user.LastSeen?.ToString("MMM dd, HH:mm") ?? "Never")</span>
+                                }
+                            </td>
+                            <td class="text-end">
+                                <a href="/admin/users/@user.Id" class="btn btn-sm btn-light btn-active-light-primary">
+                                    <i class="bi bi-eye me-1"></i>View
+                                </a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    @if (Model.TotalPages > 1)
+    {
+        <div class="card-footer d-flex justify-content-between align-items-center flex-wrap">
+            <div class="fs-6 text-gray-700">
+                Showing @((Model.CurrentPage - 1) * 20 + 1) to @(Math.Min(Model.CurrentPage * 20, Model.TotalCount)) of @Model.TotalCount entries
+            </div>
+            <ul class="pagination">
+                <li class="page-item @(Model.CurrentPage == 1 ? "disabled" : "previous")">
+                    <a href="/admin/users?page=@(Model.CurrentPage - 1)&search=@Model.Search" class="page-link">
+                        <i class="bi bi-chevron-left fs-7"></i>
+                    </a>
+                </li>
+                @for (int i = Math.Max(1, Model.CurrentPage - 2); i <= Math.Min(Model.TotalPages, Model.CurrentPage + 2); i++)
+                {
+                    <li class="page-item @(i == Model.CurrentPage ? "active" : "")">
+                        <a href="/admin/users?page=@i&search=@Model.Search" class="page-link">@i</a>
+                    </li>
+                }
+                <li class="page-item @(Model.CurrentPage == Model.TotalPages ? "disabled" : "next")">
+                    <a href="/admin/users?page=@(Model.CurrentPage + 1)&search=@Model.Search" class="page-link">
+                        <i class="bi bi-chevron-right fs-7"></i>
+                    </a>
+                </li>
+            </ul>
+        </div>
+    }
+</div>

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -17,23 +17,11 @@ import { RootStackParamList } from '../../navigation/RootNavigator';
 import { authApi } from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
 import { SPACING, BORDER_RADIUS } from '../../utils/theme';
+import { useTheme, ThemeColors } from '../../context/ThemeContext';
 
 type TokenVerificationScreenProps = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'TokenVerification'>;
   route: RouteProp<RootStackParamList, 'TokenVerification'>;
-};
-
-// Theme colors matching the design
-const AUTH_COLORS = {
-  background: '#E8E8E8',
-  primary: '#0D3B2E',
-  text: '#000000',
-  textSecondary: '#666666',
-  textMuted: '#888888',
-  keypadBg: '#F5F5F5',
-  keypadText: '#000000',
-  indicatorActive: '#0D3B2E',
-  indicatorInactive: '#CCCCCC',
 };
 
 const CODE_LENGTH = 6;
@@ -47,6 +35,8 @@ const TokenVerificationScreen: React.FC<TokenVerificationScreenProps> = ({ navig
 
   const inputRefs = useRef<(TextInput | null)[]>([]);
   const { login } = useAuthStore();
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   useEffect(() => {
     if (countdown > 0) {
@@ -161,7 +151,7 @@ const TokenVerificationScreen: React.FC<TokenVerificationScreenProps> = ({ navig
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={AUTH_COLORS.background} />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.surface} />
 
       {/* Header with Back Button */}
       <View style={styles.header}>
@@ -170,7 +160,7 @@ const TokenVerificationScreen: React.FC<TokenVerificationScreenProps> = ({ navig
           onPress={() => navigation.goBack()}
           activeOpacity={0.7}
         >
-          <Icon name="arrow-left" size={24} color={AUTH_COLORS.text} />
+          <Icon name="arrow-left" size={24} color={colors.text} />
         </TouchableOpacity>
       </View>
 
@@ -185,7 +175,7 @@ const TokenVerificationScreen: React.FC<TokenVerificationScreenProps> = ({ navig
 
         {/* Welcome Text with Chat Icon */}
         <View style={styles.brandContainer}>
-          <Icon name="chat" size={24} color={AUTH_COLORS.primary} />
+          <Icon name="chat" size={24} color={colors.primary} />
           <Text style={styles.welcomeText}>Welcome to NAIM</Text>
         </View>
         <Text style={styles.subtitleText}>Enter Activation Code</Text>
@@ -211,7 +201,7 @@ const TokenVerificationScreen: React.FC<TokenVerificationScreenProps> = ({ navig
           activeOpacity={0.8}
         >
           {isLoading ? (
-            <ActivityIndicator color="#FFFFFF" />
+            <ActivityIndicator color={colors.textInverse} />
           ) : (
             <Text style={styles.activateButtonText}>Activate</Text>
           )}
@@ -254,7 +244,7 @@ const TokenVerificationScreen: React.FC<TokenVerificationScreenProps> = ({ navig
             onPress={() => handleKeyPress('backspace')}
             activeOpacity={0.7}
           >
-            <Icon name="backspace-outline" size={24} color={AUTH_COLORS.keypadText} />
+            <Icon name="backspace-outline" size={24} color={colors.text} />
           </TouchableOpacity>
         </View>
       </View>
@@ -262,10 +252,10 @@ const TokenVerificationScreen: React.FC<TokenVerificationScreenProps> = ({ navig
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: AUTH_COLORS.background,
+    backgroundColor: colors.backgroundSecondary,
   },
   header: {
     paddingTop: 50,
@@ -293,11 +283,11 @@ const styles = StyleSheet.create({
   welcomeText: {
     fontSize: 20,
     fontWeight: '600',
-    color: AUTH_COLORS.text,
+    color: colors.text,
   },
   subtitleText: {
     fontSize: 14,
-    color: AUTH_COLORS.textSecondary,
+    color: colors.textSecondary,
     marginTop: SPACING.xs,
     marginBottom: SPACING.xl,
   },
@@ -315,15 +305,15 @@ const styles = StyleSheet.create({
   codeDigit: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: AUTH_COLORS.text,
+    color: colors.text,
   },
   codeDash: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: AUTH_COLORS.textMuted,
+    color: colors.textMuted,
   },
   activateButton: {
-    backgroundColor: AUTH_COLORS.primary,
+    backgroundColor: colors.primary,
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.xxl * 2,
     borderRadius: BORDER_RADIUS.xl,
@@ -333,20 +323,20 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   activateButtonText: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontSize: 16,
     fontWeight: '600',
   },
   resendLink: {
     fontSize: 14,
-    color: AUTH_COLORS.primary,
+    color: colors.primary,
   },
   countdownText: {
     fontSize: 14,
-    color: AUTH_COLORS.textMuted,
+    color: colors.textMuted,
   },
   keypadSection: {
-    backgroundColor: AUTH_COLORS.keypadBg,
+    backgroundColor: colors.surface,
     paddingVertical: SPACING.lg,
     paddingHorizontal: SPACING.md,
     borderTopLeftRadius: 24,
@@ -366,11 +356,11 @@ const styles = StyleSheet.create({
   keypadButtonText: {
     fontSize: 28,
     fontWeight: '400',
-    color: AUTH_COLORS.keypadText,
+    color: colors.text,
   },
   keypadSubText: {
     fontSize: 10,
-    color: AUTH_COLORS.textMuted,
+    color: colors.textMuted,
     marginTop: -2,
   },
 });

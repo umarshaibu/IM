@@ -116,14 +116,27 @@ object CallApiClient {
                     val response = reader.readText()
                     reader.close()
 
+                    Log.d(TAG, "Join call raw response: $response")
                     val json = JSONObject(response)
+
+                    // optString returns empty string if not found, convert to null for proper checking
+                    val roomToken = json.optString("roomToken").takeIf { it.isNotEmpty() }
+                    val roomId = json.optString("roomId").takeIf { it.isNotEmpty() }
+                    val liveKitUrl = json.optString("liveKitUrl").takeIf { it.isNotEmpty() }
+
+                    if (roomToken == null || liveKitUrl == null) {
+                        Log.e(TAG, "Join call response missing required fields: roomToken=$roomToken, liveKitUrl=$liveKitUrl")
+                        callback(JoinCallResult(false, error = "Invalid response: missing roomToken or liveKitUrl"))
+                        return@execute
+                    }
+
                     val result = JoinCallResult(
                         success = true,
-                        roomToken = json.optString("roomToken"),
-                        roomId = json.optString("roomId"),
-                        liveKitUrl = json.optString("liveKitUrl")
+                        roomToken = roomToken,
+                        roomId = roomId,
+                        liveKitUrl = liveKitUrl
                     )
-                    Log.d(TAG, "Join call success: roomId=${result.roomId}")
+                    Log.d(TAG, "Join call success: roomId=$roomId, roomToken=${roomToken.take(20)}..., liveKitUrl=$liveKitUrl")
                     callback(result)
                 } else {
                     val errorReader = BufferedReader(InputStreamReader(connection.errorStream ?: connection.inputStream))

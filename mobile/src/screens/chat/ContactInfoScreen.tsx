@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -16,12 +16,16 @@ import Avatar from '../../components/Avatar';
 import { usersApi, conversationsApi, contactsApi } from '../../services/api';
 import { RootStackParamList } from '../../navigation/RootNavigator';
 import { UserProfile } from '../../types';
-import { COLORS, FONTS, SPACING } from '../../utils/theme';
+import { useTheme, ThemeColors } from '../../context/ThemeContext';
+import { FONTS, SPACING } from '../../utils/theme';
 
 type ContactInfoRouteProp = RouteProp<RootStackParamList, 'ContactInfo'>;
 type ContactInfoNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 const ContactInfoScreen: React.FC = () => {
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const route = useRoute<ContactInfoRouteProp>();
   const navigation = useNavigation<ContactInfoNavigationProp>();
   const queryClient = useQueryClient();
@@ -118,21 +122,21 @@ const ContactInfoScreen: React.FC = () => {
         <View style={styles.actions}>
           <TouchableOpacity style={styles.actionButton} onPress={handleStartChat}>
             <View style={styles.actionIcon}>
-              <Icon name="message" size={24} color={COLORS.secondary} />
+              <Icon name="message" size={24} color={colors.secondary} />
             </View>
             <Text style={styles.actionLabel}>Message</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.actionButton} onPress={handleVoiceCall}>
             <View style={styles.actionIcon}>
-              <Icon name="phone" size={24} color={COLORS.secondary} />
+              <Icon name="phone" size={24} color={colors.secondary} />
             </View>
             <Text style={styles.actionLabel}>Audio</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.actionButton} onPress={handleVideoCall}>
             <View style={styles.actionIcon}>
-              <Icon name="video" size={24} color={COLORS.secondary} />
+              <Icon name="video" size={24} color={colors.secondary} />
             </View>
             <Text style={styles.actionLabel}>Video</Text>
           </TouchableOpacity>
@@ -148,36 +152,36 @@ const ContactInfoScreen: React.FC = () => {
 
       <View style={styles.section}>
         <TouchableOpacity style={styles.menuItem}>
-          <Icon name="image-multiple" size={24} color={COLORS.textSecondary} />
+          <Icon name="image-multiple" size={24} color={colors.textSecondary} />
           <Text style={styles.menuLabel}>Media, links, and docs</Text>
-          <Icon name="chevron-right" size={24} color={COLORS.textMuted} />
+          <Icon name="chevron-right" size={24} color={colors.textMuted} />
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.menuItem}>
-          <Icon name="star" size={24} color={COLORS.textSecondary} />
+          <Icon name="star" size={24} color={colors.textSecondary} />
           <Text style={styles.menuLabel}>Starred messages</Text>
-          <Icon name="chevron-right" size={24} color={COLORS.textMuted} />
+          <Icon name="chevron-right" size={24} color={colors.textMuted} />
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.menuItem}>
-          <Icon name="magnify" size={24} color={COLORS.textSecondary} />
+          <Icon name="magnify" size={24} color={colors.textSecondary} />
           <Text style={styles.menuLabel}>Search in chat</Text>
-          <Icon name="chevron-right" size={24} color={COLORS.textMuted} />
+          <Icon name="chevron-right" size={24} color={colors.textMuted} />
         </TouchableOpacity>
       </View>
 
       <View style={styles.section}>
         <TouchableOpacity style={styles.menuItem}>
-          <Icon name="bell-off" size={24} color={COLORS.textSecondary} />
+          <Icon name="bell-off" size={24} color={colors.textSecondary} />
           <Text style={styles.menuLabel}>Mute notifications</Text>
-          <Icon name="chevron-right" size={24} color={COLORS.textMuted} />
+          <Icon name="chevron-right" size={24} color={colors.textMuted} />
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.menuItem}>
-          <Icon name="timer-outline" size={24} color={COLORS.textSecondary} />
+          <Icon name="timer-outline" size={24} color={colors.textSecondary} />
           <Text style={styles.menuLabel}>Disappearing messages</Text>
           <Text style={styles.menuValue}>Off</Text>
-          <Icon name="chevron-right" size={24} color={COLORS.textMuted} />
+          <Icon name="chevron-right" size={24} color={colors.textMuted} />
         </TouchableOpacity>
       </View>
 
@@ -186,14 +190,14 @@ const ContactInfoScreen: React.FC = () => {
           style={styles.dangerItem}
           onPress={handleBlock}
         >
-          <Icon name="block-helper" size={24} color={COLORS.error} />
+          <Icon name="block-helper" size={24} color={colors.error} />
           <Text style={styles.dangerLabel}>
             Block {user?.displayName || user?.fullName}
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.dangerItem}>
-          <Icon name="thumb-down" size={24} color={COLORS.error} />
+          <Icon name="thumb-down" size={24} color={colors.error} />
           <Text style={styles.dangerLabel}>
             Report {user?.displayName || user?.fullName}
           </Text>
@@ -203,13 +207,13 @@ const ContactInfoScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.background,
   },
   header: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     padding: SPACING.xl,
     alignItems: 'center',
     marginBottom: SPACING.lg,
@@ -217,12 +221,12 @@ const styles = StyleSheet.create({
   name: {
     fontSize: FONTS.sizes.xxl,
     fontWeight: 'bold',
-    color: COLORS.text,
+    color: colors.text,
     marginTop: SPACING.lg,
   },
   status: {
     fontSize: FONTS.sizes.md,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     marginTop: SPACING.xs,
   },
   actions: {
@@ -237,30 +241,30 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: SPACING.xs,
   },
   actionLabel: {
     fontSize: FONTS.sizes.sm,
-    color: COLORS.secondary,
+    color: colors.secondary,
     fontWeight: '500',
   },
   section: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     marginBottom: SPACING.lg,
   },
   sectionTitle: {
     fontSize: FONTS.sizes.sm,
     fontWeight: '600',
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     padding: SPACING.lg,
     paddingBottom: SPACING.sm,
   },
   aboutText: {
     fontSize: FONTS.sizes.md,
-    color: COLORS.text,
+    color: colors.text,
     paddingHorizontal: SPACING.lg,
     paddingBottom: SPACING.lg,
   },
@@ -269,17 +273,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: SPACING.lg,
     borderTopWidth: 1,
-    borderTopColor: COLORS.divider,
+    borderTopColor: colors.divider,
   },
   menuLabel: {
     flex: 1,
     fontSize: FONTS.sizes.md,
-    color: COLORS.text,
+    color: colors.text,
     marginLeft: SPACING.lg,
   },
   menuValue: {
     fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     marginRight: SPACING.sm,
   },
   dangerItem: {
@@ -287,11 +291,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: SPACING.lg,
     borderTopWidth: 1,
-    borderTopColor: COLORS.divider,
+    borderTopColor: colors.divider,
   },
   dangerLabel: {
     fontSize: FONTS.sizes.md,
-    color: COLORS.error,
+    color: colors.error,
     marginLeft: SPACING.lg,
   },
 });

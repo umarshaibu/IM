@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, Animated, Text } from 'react-native';
-import { COLORS, FONTS, SPACING } from '../utils/theme';
+import { useTheme } from '../context';
+import { FONTS, SPACING } from '../utils/theme';
 
 interface TypingIndicatorProps {
   names?: string[];
@@ -8,6 +9,7 @@ interface TypingIndicatorProps {
 }
 
 const TypingIndicator: React.FC<TypingIndicatorProps> = ({ names = [], isVisible }) => {
+  const { colors } = useTheme();
   const dot1 = useRef(new Animated.Value(0)).current;
   const dot2 = useRef(new Animated.Value(0)).current;
   const dot3 = useRef(new Animated.Value(0)).current;
@@ -46,7 +48,7 @@ const TypingIndicator: React.FC<TypingIndicatorProps> = ({ names = [], isVisible
       dot2.setValue(0);
       dot3.setValue(0);
     };
-  }, [isVisible]);
+  }, [isVisible, dot1, dot2, dot3]);
 
   if (!isVisible) return null;
 
@@ -57,15 +59,19 @@ const TypingIndicator: React.FC<TypingIndicatorProps> = ({ names = [], isVisible
     return `${names[0]} and ${names.length - 1} others are typing`;
   };
 
+  const bubbleColor = colors.receivedBubble || colors.surface;
+  const dotColor = colors.textSecondary;
+
   return (
     <View style={styles.container}>
-      <View style={styles.bubble}>
+      <View style={[styles.bubble, { backgroundColor: bubbleColor }]}>
         <View style={styles.dotsContainer}>
           {[dot1, dot2, dot3].map((dot, index) => (
             <Animated.View
               key={index}
               style={[
                 styles.dot,
+                { backgroundColor: dotColor },
                 {
                   transform: [
                     {
@@ -86,7 +92,7 @@ const TypingIndicator: React.FC<TypingIndicatorProps> = ({ names = [], isVisible
         </View>
       </View>
       {names.length > 0 && (
-        <Text style={styles.text}>{getTypingText()}</Text>
+        <Text style={[styles.text, { color: colors.textSecondary }]}>{getTypingText()}</Text>
       )}
     </View>
   );
@@ -100,10 +106,10 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.sm,
   },
   bubble: {
-    backgroundColor: COLORS.chatBubbleReceived,
-    borderRadius: 16,
+    borderRadius: 18,
+    borderTopLeftRadius: 4,
     paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
+    paddingVertical: SPACING.sm + 2,
   },
   dotsContainer: {
     flexDirection: 'row',
@@ -114,11 +120,9 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: COLORS.textSecondary,
   },
   text: {
     fontSize: FONTS.sizes.xs,
-    color: COLORS.textSecondary,
     marginLeft: SPACING.sm,
     fontStyle: 'italic',
   },

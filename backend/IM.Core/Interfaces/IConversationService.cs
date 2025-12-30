@@ -18,4 +18,8 @@ public interface IConversationService
     Task<bool> MuteConversationAsync(Guid conversationId, Guid userId, DateTime? until);
     Task<bool> ArchiveConversationAsync(Guid conversationId, Guid userId, bool archive);
     Task<IEnumerable<ConversationParticipant>> GetParticipantsAsync(Guid conversationId);
+
+    // Soft delete for user
+    Task<bool> SoftDeleteConversationForUserAsync(Guid conversationId, Guid userId);
+    Task<bool> RestoreConversationForUserAsync(Guid conversationId, Guid userId);
 }

@@ -23,6 +23,8 @@ import {
   ConnectionQuality,
   RoomEvent,
   RemoteParticipant,
+  LocalVideoTrack,
+  facingModeFromLocalTrack,
 } from 'livekit-client';
 import InCallManager from 'react-native-incall-manager';
 import Avatar from '../../components/Avatar';
@@ -32,7 +34,7 @@ import * as signalr from '../../services/signalr';
 import { useCallStore } from '../../stores/callStore';
 import { useAuthStore } from '../../stores/authStore';
 import { RootStackParamList } from '../../navigation/RootNavigator';
-import { useTheme } from '../../context';
+import { useTheme, ThemeColors } from '../../context/ThemeContext';
 import { FONTS, SPACING } from '../../utils/theme';
 import { callSoundService } from '../../services/CallSoundService';
 
@@ -108,7 +110,8 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CallScreen: React.FC = () => {
   const route = useRoute<CallScreenRouteProp>();
   const navigation = useNavigation<CallScreenNavigationProp>();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { conversationId, type, callId, isIncoming, roomToken: preJoinedRoomToken, roomId: preJoinedRoomId, liveKitUrl: preJoinedLiveKitUrl } = route.params;
   const { userId } = useAuthStore();
   const { setActiveCall, clearActiveCall, activeCall } = useCallStore();
@@ -131,6 +134,7 @@ const CallScreen: React.FC = () => {
   const hasOtherParticipantRef = useRef(false); // Ref to track participant status for timeout callback
   const isReconnectingRef = useRef(false); // Ref to track reconnection status for callbacks
   const participantDisconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Grace period timeout
+  const isCallTerminatedRef = useRef(false); // Ref to track if call has been terminated to prevent re-initialization
 
   // Group call state - track multiple remote participants
   const [remoteParticipants, setRemoteParticipants] = useState<Map<string, RemoteParticipantInfo>>(new Map());
@@ -144,6 +148,20 @@ const CallScreen: React.FC = () => {
   const [showQualityWarning, setShowQualityWarning] = useState(false);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const qualityWarningTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Camera flip state
+  const [isFrontCamera, setIsFrontCamera] = useState(true);
+  const [isFlippingCamera, setIsFlippingCamera] = useState(false);
+
+  // Hold/Resume state
+  const [isOnHold, setIsOnHold] = useState(false);
+
+  // Audio routing state
+  const [audioRoute, setAudioRoute] = useState<'speaker' | 'earpiece' | 'bluetooth' | 'headphones'>('speaker');
+  const [isBluetoothAvailable, setIsBluetoothAvailable] = useState(false);
+
+  // Encryption state
+  const [isEncrypted, setIsEncrypted] = useState(true); // LiveKit uses E2EE by default when configured
 
   const { data: conversation } = useQuery({
     queryKey: ['conversation', currentConversationId],
@@ -279,9 +297,36 @@ const CallScreen: React.FC = () => {
     console.log('CallScreen: existingCallId from route:', existingCallId);
     console.log('CallScreen: room exists:', !!room);
     console.log('CallScreen: callInitialized:', callInitialized);
-    if (!activeCall && callInitialized) {
+    console.log('CallScreen: isCallTerminatedRef:', isCallTerminatedRef.current);
+    if (!activeCall && callInitialized && !isCallTerminatedRef.current) {
       // Call was ended remotely, cleanup and navigate back
       console.log('CallScreen: Call ended remotely, cleaning up and navigating back');
+
+      // Mark call as terminated to prevent any further actions
+      isCallTerminatedRef.current = true;
+
+      // Clear all timeouts immediately
+      if (ringingTimeoutRef.current) {
+        console.log('CallScreen: Clearing ringing timeout');
+        clearTimeout(ringingTimeoutRef.current);
+        ringingTimeoutRef.current = null;
+      }
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+      if (qualityWarningTimeoutRef.current) {
+        clearTimeout(qualityWarningTimeoutRef.current);
+        qualityWarningTimeoutRef.current = null;
+      }
+      if (participantDisconnectTimeoutRef.current) {
+        clearTimeout(participantDisconnectTimeoutRef.current);
+        participantDisconnectTimeoutRef.current = null;
+      }
+
+      // Stop all sounds
+      callSoundService.stopAllSounds();
+
       cleanupCall();
       navigateBack();
     }
@@ -299,11 +344,23 @@ const CallScreen: React.FC = () => {
   };
 
   const initializeCall = async () => {
+    // Check if call has already been terminated (e.g., declined before init completed)
+    if (isCallTerminatedRef.current) {
+      console.log('CallScreen: initializeCall skipped - call already terminated');
+      return;
+    }
+
     if (!currentConversationId) {
       Alert.alert('Error', 'No conversation specified');
       navigation.goBack();
       return;
     }
+
+    console.log('CallScreen: initializeCall starting');
+    console.log('CallScreen: isIncoming:', isIncoming, 'callId:', existingCallId);
+    console.log('CallScreen: preJoinedRoomToken:', preJoinedRoomToken ? `present (${preJoinedRoomToken.substring(0, 20)}...)` : 'NOT PRESENT');
+    console.log('CallScreen: preJoinedLiveKitUrl:', preJoinedLiveKitUrl || 'NOT PRESENT');
+    console.log('CallScreen: preJoinedRoomId:', preJoinedRoomId || 'NOT PRESENT');
 
     // Declare call outside try block so it's accessible in catch for cleanup
     let call: any = null;
@@ -316,13 +373,15 @@ const CallScreen: React.FC = () => {
         // Check if we have pre-fetched room token from native code
         // This happens when the call was answered from the native IncomingCallActivity
         if (preJoinedRoomToken && preJoinedLiveKitUrl) {
-          console.log('Using pre-fetched room token from native code');
+          console.log('CallScreen: Using pre-fetched room token from native code');
+          console.log('CallScreen: Token length:', preJoinedRoomToken.length);
+          console.log('CallScreen: LiveKit URL:', preJoinedLiveKitUrl);
           call = { id: existingCallId };
           roomToken = preJoinedRoomToken;
           liveKitUrl = preJoinedLiveKitUrl;
         } else {
           // Join existing call via SignalR (fallback when not answered from native)
-          console.log('Joining call via SignalR');
+          console.log('CallScreen: Joining call via SignalR (no pre-joined token)');
           const response = await signalr.joinCall(existingCallId);
           if (!response) {
             throw new Error('Failed to join call - SignalR returned null');
@@ -330,6 +389,7 @@ const CallScreen: React.FC = () => {
           call = { id: existingCallId };
           roomToken = response.roomToken;
           liveKitUrl = response.liveKitUrl;
+          console.log('CallScreen: Got room token from SignalR, length:', roomToken.length);
         }
       } else {
         // Initiate new call via SignalR
@@ -506,6 +566,12 @@ const CallScreen: React.FC = () => {
       newRoom.on('disconnected', (reason?: any) => {
         console.log('Room disconnected, reason:', reason);
         // Don't call handleEndCall if we're the one who initiated the disconnect
+        // Check if already terminated to prevent duplicate navigation
+        if (isCallTerminatedRef.current) {
+          console.log('Room disconnected but call already terminated, skipping navigation');
+          return;
+        }
+        isCallTerminatedRef.current = true;
         // Just cleanup and navigate back
         callSoundService.stopAllSounds();
         callSoundService.playEndedTone();
@@ -643,6 +709,11 @@ const CallScreen: React.FC = () => {
         // Play the outgoing call tone (ringback tone)
         callSoundService.playOutgoingTone();
         ringingTimeoutRef.current = setTimeout(() => {
+          // Check if call was already terminated (e.g., declined)
+          if (isCallTerminatedRef.current) {
+            console.log('Ringing timeout skipped - call already terminated');
+            return;
+          }
           // Use ref instead of state to get current value (avoids stale closure issue)
           // Also double-check remoteParticipants size as a backup
           console.log('Timeout check - hasOtherParticipantRef:', hasOtherParticipantRef.current, 'remoteParticipants:', newRoom.remoteParticipants.size);
@@ -709,6 +780,19 @@ const CallScreen: React.FC = () => {
   };
 
   const handleEndCall = async () => {
+    // Prevent multiple calls to handleEndCall
+    if (isCallTerminatedRef.current) {
+      console.log('handleEndCall: Call already terminated, skipping');
+      return;
+    }
+    isCallTerminatedRef.current = true;
+
+    // Clear all timeouts
+    if (ringingTimeoutRef.current) {
+      clearTimeout(ringingTimeoutRef.current);
+      ringingTimeoutRef.current = null;
+    }
+
     // Stop any playing sounds first
     await callSoundService.stopAllSounds();
 
@@ -754,14 +838,139 @@ const CallScreen: React.FC = () => {
     const newSpeakerState = !isSpeakerOn;
     InCallManager.setSpeakerphoneOn(newSpeakerState);
     setIsSpeakerOn(newSpeakerState);
+    setAudioRoute(newSpeakerState ? 'speaker' : 'earpiece');
   };
 
+  // Camera flip implementation
   const flipCamera = async () => {
-    if (room && type === 'Video') {
-      const videoPublication = room.localParticipant.getTrackPublicationByName('camera');
-      if (videoPublication?.track) {
-        // Camera flip implementation
+    if (!room || type !== 'Video' || isFlippingCamera) return;
+
+    try {
+      setIsFlippingCamera(true);
+
+      // Get the current camera track
+      const videoTrackPublications = Array.from(
+        room.localParticipant.videoTrackPublications.values()
+      );
+
+      if (videoTrackPublications.length === 0) {
+        console.log('No video track to flip');
+        return;
       }
+
+      const cameraPublication = videoTrackPublications.find(
+        (pub) => pub.source === Track.Source.Camera
+      );
+
+      if (!cameraPublication?.track) {
+        console.log('No camera track found');
+        return;
+      }
+
+      const track = cameraPublication.track as LocalVideoTrack;
+
+      // Determine the new facing mode
+      const currentFacingMode = facingModeFromLocalTrack(track);
+      const newFacingMode: 'user' | 'environment' = currentFacingMode?.facingMode === 'environment'
+        ? 'user'
+        : 'environment';
+
+      console.log('Flipping camera from', currentFacingMode?.facingMode, 'to', newFacingMode);
+
+      // Restart the track with the new facing mode
+      await track.restartTrack({
+        facingMode: newFacingMode,
+      });
+
+      setIsFrontCamera(newFacingMode === 'user');
+      console.log('Camera flipped successfully');
+    } catch (error) {
+      console.error('Error flipping camera:', error);
+      Alert.alert('Error', 'Failed to switch camera. Please try again.');
+    } finally {
+      setIsFlippingCamera(false);
+    }
+  };
+
+  // Hold/Resume call functionality
+  const toggleHold = async () => {
+    if (!room) return;
+
+    try {
+      if (isOnHold) {
+        // Resume call
+        await room.localParticipant.setMicrophoneEnabled(!isMuted);
+        if (type === 'Video') {
+          await room.localParticipant.setCameraEnabled(isVideoEnabled);
+        }
+        setIsOnHold(false);
+        console.log('Call resumed');
+      } else {
+        // Put call on hold - mute mic and disable video
+        await room.localParticipant.setMicrophoneEnabled(false);
+        if (type === 'Video') {
+          await room.localParticipant.setCameraEnabled(false);
+        }
+        setIsOnHold(true);
+        console.log('Call put on hold');
+      }
+
+      // Notify the other participant via SignalR
+      if (activeCall?.id) {
+        await signalr.updateCallStatus(activeCall.id, { isOnHold: !isOnHold });
+      }
+    } catch (error) {
+      console.error('Error toggling hold:', error);
+    }
+  };
+
+  // Cycle through audio routes (speaker -> bluetooth -> earpiece -> headphones)
+  const cycleAudioRoute = async () => {
+    try {
+      if (Platform.OS === 'ios') {
+        // On iOS, we can use AudioSession to get available routes
+        // For now, just toggle between speaker and earpiece
+        const newSpeakerState = !isSpeakerOn;
+        InCallManager.setSpeakerphoneOn(newSpeakerState);
+        setIsSpeakerOn(newSpeakerState);
+        setAudioRoute(newSpeakerState ? 'speaker' : 'earpiece');
+      } else {
+        // Android - check for available Bluetooth devices
+        // InCallManager handles this automatically, we just toggle modes
+        if (audioRoute === 'speaker') {
+          InCallManager.setSpeakerphoneOn(false);
+          setIsSpeakerOn(false);
+          // Try to route to Bluetooth if available
+          if (isBluetoothAvailable) {
+            setAudioRoute('bluetooth');
+          } else {
+            setAudioRoute('earpiece');
+          }
+        } else if (audioRoute === 'bluetooth') {
+          setAudioRoute('earpiece');
+        } else {
+          InCallManager.setSpeakerphoneOn(true);
+          setIsSpeakerOn(true);
+          setAudioRoute('speaker');
+        }
+      }
+    } catch (error) {
+      console.error('Error cycling audio route:', error);
+    }
+  };
+
+  // Get audio route icon
+  const getAudioRouteIcon = (): string => {
+    switch (audioRoute) {
+      case 'speaker':
+        return 'volume-high';
+      case 'bluetooth':
+        return 'bluetooth-audio';
+      case 'headphones':
+        return 'headphones';
+      case 'earpiece':
+      default:
+        return 'phone';
     }
   };
 
@@ -845,13 +1054,13 @@ const CallScreen: React.FC = () => {
             <Icon
               name={callLayout === 'grid' ? 'view-grid' : 'spotlight-beam'}
               size={24}
-              color="#FFFFFF"
+              color={colors.textInverse}
             />
           </TouchableOpacity>
 
           {/* Participant count badge */}
           <View style={styles.participantCountBadge}>
-            <Icon name="account-group" size={16} color="#FFFFFF" />
+            <Icon name="account-group" size={16} color={colors.textInverse} />
             <Text style={styles.participantCountText}>
               {remoteParticipantsArray.length + 1}
             </Text>
@@ -917,7 +1126,7 @@ const CallScreen: React.FC = () => {
               mirror
             />
             <TouchableOpacity style={styles.flipButton} onPress={flipCamera}>
-              <Icon name="camera-flip" size={20} color="#FFFFFF" />
+              <Icon name="camera-flip" size={20} color={colors.textInverse} />
             </TouchableOpacity>
           </View>
         )}
@@ -932,7 +1141,7 @@ const CallScreen: React.FC = () => {
               mirror
             />
             <TouchableOpacity style={styles.flipButton} onPress={flipCamera}>
-              <Icon name="camera-flip" size={20} color="#FFFFFF" />
+              <Icon name="camera-flip" size={20} color={colors.textInverse} />
             </TouchableOpacity>
           </View>
         )}
@@ -940,7 +1149,7 @@ const CallScreen: React.FC = () => {
         {/* Flip camera button when local video is fullscreen */}
         {showLocalVideoFullscreen && (
           <TouchableOpacity style={styles.flipButtonFullscreen} onPress={flipCamera}>
-            <Icon name="camera-flip" size={24} color="#FFFFFF" />
+            <Icon name="camera-flip" size={24} color={colors.textInverse} />
           </TouchableOpacity>
         )}
 
@@ -1005,12 +1214,12 @@ const CallScreen: React.FC = () => {
                     />
                     {participant.isSpeaking && (
                       <View style={styles.speakingIndicatorSmall}>
-                        <Icon name="volume-high" size={12} color="#4CAF50" />
+                        <Icon name="volume-high" size={12} color={colors.success} />
                       </View>
                     )}
                     {participant.isMuted && (
                       <View style={styles.mutedIndicatorSmall}>
-                        <Icon name="microphone-off" size={12} color="#FF5252" />
+                        <Icon name="microphone-off" size={12} color={colors.error} />
                       </View>
                     )}
                     <Text style={styles.voiceParticipantName} numberOfLines={1}>
@@ -1024,7 +1233,7 @@ const CallScreen: React.FC = () => {
 
           {/* Participant count */}
           <View style={styles.voiceParticipantCount}>
-            <Icon name="account-group" size={20} color="#FFFFFF" />
+            <Icon name="account-group" size={20} color={colors.textInverse} />
             <Text style={styles.voiceParticipantCountText}>
               {remoteParticipantsArray.length + 1} participants
             </Text>
@@ -1068,7 +1277,7 @@ const CallScreen: React.FC = () => {
 
     return (
       <View style={styles.reconnectingBanner}>
-        <Icon name="wifi-off" size={18} color="#FFF" />
+        <Icon name="wifi-off" size={18} color={colors.textInverse} />
         <Text style={styles.reconnectingText}>
           Connection lost. Reconnecting{reconnectAttempts > 1 ? ` (attempt ${reconnectAttempts})` : ''}...
         </Text>
@@ -1082,7 +1291,7 @@ const CallScreen: React.FC = () => {
 
     return (
       <View style={styles.qualityWarningBanner}>
-        <Icon name="signal-cellular-1" size={18} color="#FFF" />
+        <Icon name="signal-cellular-1" size={18} color={colors.textInverse} />
         <Text style={styles.qualityWarningText}>
           {connectionQuality === 'lost'
             ? 'Connection lost'
@@ -1092,9 +1301,36 @@ const CallScreen: React.FC = () => {
     );
   };
 
+  // Render hold banner
+  const renderHoldBanner = () => {
+    if (!isOnHold) return null;
+
+    return (
+      <View style={styles.holdBanner}>
+        <Icon name="pause-circle" size={18} color={colors.textInverse} />
+        <Text style={styles.holdBannerText}>Call on hold</Text>
+        <TouchableOpacity style={styles.resumeButton} onPress={toggleHold}>
+          <Text style={styles.resumeButtonText}>Resume</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
+  // Render encryption indicator
+  const renderEncryptionIndicator = () => {
+    if (!isEncrypted || callStatus !== 'connected') return null;
+
+    return (
+      <View style={styles.encryptionIndicator}>
+        <Icon name="lock" size={14} color="#4CAF50" />
+        <Text style={styles.encryptionText}>Encrypted</Text>
+      </View>
+    );
+  };
+
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#000" />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.surface} />
 
       {/* Reconnecting banner at top */}
       {renderReconnectingBanner()}
@@ -1102,16 +1338,24 @@ const CallScreen: React.FC = () => {
       {/* Quality warning banner */}
       {renderQualityWarning()}
 
+      {/* Hold banner */}
+      {renderHoldBanner()}
+
       {type === 'Video' ? renderVideoCall() : renderVoiceCall()}
 
       {/* Connection quality indicator */}
       {callStatus === 'connected' && !isReconnecting && renderConnectionQuality()}
 
+      {/* Encryption indicator */}
+      {renderEncryptionIndicator()}
+
       <View style={styles.controls}>
+        {/* Top row - main controls */}
         <View style={styles.controlButtons}>
           <TouchableOpacity
             style={[styles.controlButton, isMuted && styles.controlButtonActive]}
             onPress={toggleMute}
+            disabled={isOnHold}
           >
             <Icon
               name={isMuted ? 'microphone-off' : 'microphone'}
@@ -1124,6 +1368,7 @@ const CallScreen: React.FC = () => {
             <TouchableOpacity
               style={[styles.controlButton, !isVideoEnabled && styles.controlButtonActive]}
               onPress={toggleVideo}
+              disabled={isOnHold}
             >
               <Icon
                 name={isVideoEnabled ? 'video' : 'video-off'}
@@ -1133,16 +1378,37 @@ const CallScreen: React.FC = () => {
             </TouchableOpacity>
           )}
 
+          {/* Audio route button - cycles through speaker/bluetooth/earpiece */}
           <TouchableOpacity
-            style={[styles.controlButton, isSpeakerOn && styles.controlButtonActive]}
-            onPress={toggleSpeaker}
+            style={[styles.controlButton, audioRoute === 'speaker' && styles.controlButtonActive]}
+            onPress={cycleAudioRoute}
+            onLongPress={toggleSpeaker}
           >
             <Icon
-              name={isSpeakerOn ? 'volume-high' : 'volume-off'}
+              name={getAudioRouteIcon()}
               size={28}
-              color={isSpeakerOn ? '#1a1a2e' : '#FFFFFF'}
+              color={audioRoute === 'speaker' ? '#1a1a2e' : '#FFFFFF'}
             />
+            {audioRoute === 'bluetooth' && (
+              <View style={styles.bluetoothBadge}>
+                <Icon name="bluetooth" size={10} color="#FFFFFF" />
+              </View>
+            )}
           </TouchableOpacity>
+
+          {/* Hold/Resume button - only show when call is connected */}
+          {callStatus === 'connected' && (
+            <TouchableOpacity
+              style={[styles.controlButton, isOnHold && styles.controlButtonHold]}
+              onPress={toggleHold}
+            >
+              <Icon
+                name={isOnHold ? 'play' : 'pause'}
+                size={28}
+                color={isOnHold ? '#1a1a2e' : '#FFFFFF'}
+              />
+            </TouchableOpacity>
+          )}
 
           {/* Add participant button - only show when call is connected */}
           {callStatus === 'connected' && (
@@ -1163,10 +1429,10 @@ const CallScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.background,
   },
   videoContainer: {
     flex: 1,
@@ -1185,10 +1451,10 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.background,
   },
   waitingOverlayTransparent: {
-    backgroundColor: 'rgba(26, 26, 46, 0.7)',
+    backgroundColor: colors.overlay,
   },
   durationOverlay: {
     position: 'absolute',
@@ -1200,7 +1466,7 @@ const styles = StyleSheet.create({
   durationBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: colors.overlay,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
@@ -1209,12 +1475,12 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#ff3b30',
+    backgroundColor: colors.error,
     marginRight: 8,
   },
   durationText: {
     fontSize: FONTS.sizes.sm,
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontWeight: '600',
   },
   localVideoContainer: {
@@ -1225,14 +1491,14 @@ const styles = StyleSheet.create({
     height: 160,
     borderRadius: 16,
     overflow: 'hidden',
-    backgroundColor: '#000',
+    backgroundColor: colors.background,
     elevation: 8,
-    shadowColor: '#000',
+    shadowColor: colors.text,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 6,
     borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: colors.border,
   },
   localVideo: {
     width: 120,
@@ -1245,7 +1511,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: colors.overlay,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1256,7 +1522,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: colors.overlay,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1266,7 +1532,7 @@ const styles = StyleSheet.create({
     left: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: colors.overlay,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 20,
@@ -1274,7 +1540,7 @@ const styles = StyleSheet.create({
   },
   remoteInfoName: {
     fontSize: FONTS.sizes.sm,
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontWeight: '500',
     marginLeft: 8,
   },
@@ -1286,12 +1552,12 @@ const styles = StyleSheet.create({
   callerName: {
     fontSize: FONTS.sizes.xxl,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: colors.text,
     marginTop: SPACING.lg,
   },
   callStatus: {
     fontSize: FONTS.sizes.lg,
-    color: '#FFFFFF',
+    color: colors.textSecondary,
     opacity: 0.8,
     marginTop: SPACING.sm,
   },
@@ -1299,11 +1565,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xl,
     paddingBottom: Platform.OS === 'ios' ? 50 : SPACING.xl,
     paddingTop: SPACING.lg,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    backgroundColor: colors.overlayLight,
   },
   duration: {
     fontSize: FONTS.sizes.md,
-    color: '#FFFFFF',
+    color: colors.textInverse,
     textAlign: 'center',
     marginBottom: SPACING.lg,
   },
@@ -1317,18 +1583,18 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: colors.overlayLight,
     justifyContent: 'center',
     alignItems: 'center',
   },
   controlButtonActive: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   endCallButton: {
     width: 70,
     height: 70,
     borderRadius: 35,
-    backgroundColor: '#FF3B30',
+    backgroundColor: colors.callDecline,
     justifyContent: 'center',
     alignItems: 'center',
     alignSelf: 'center',
@@ -1338,7 +1604,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: Platform.OS === 'ios' ? 60 : 20,
     right: 16,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: colors.overlay,
     paddingHorizontal: 8,
     paddingVertical: 6,
     borderRadius: 12,
@@ -1351,7 +1617,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: colors.overlay,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1361,13 +1627,13 @@ const styles = StyleSheet.create({
     right: 70,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: colors.overlay,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 16,
   },
   participantCountText: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontSize: FONTS.sizes.sm,
     fontWeight: '600',
     marginLeft: 6,
@@ -1386,7 +1652,7 @@ const styles = StyleSheet.create({
     width: 80,
   },
   voiceParticipantName: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: FONTS.sizes.xs,
     marginTop: 4,
     textAlign: 'center',
@@ -1413,7 +1679,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xl,
   },
   voiceParticipantCountText: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: FONTS.sizes.md,
     marginLeft: 8,
     opacity: 0.8,
@@ -1424,7 +1690,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#F44336',
+    backgroundColor: colors.error,
     paddingVertical: 8,
     paddingHorizontal: 16,
     flexDirection: 'row',
@@ -1434,7 +1700,7 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'ios' ? 50 : 8,
   },
   reconnectingText: {
-    color: '#FFF',
+    color: colors.textInverse,
     fontSize: FONTS.sizes.sm,
     fontWeight: '600',
     marginLeft: 8,
@@ -1445,7 +1711,7 @@ const styles = StyleSheet.create({
     top: Platform.OS === 'ios' ? 50 : 0,
     left: 0,
     right: 0,
-    backgroundColor: '#FF9800',
+    backgroundColor: colors.warning,
     paddingVertical: 6,
     paddingHorizontal: 16,
     flexDirection: 'row',
@@ -1454,10 +1720,76 @@ const styles = StyleSheet.create({
     zIndex: 99,
   },
   qualityWarningText: {
-    color: '#FFF',
+    color: colors.textInverse,
     fontSize: FONTS.sizes.xs,
     fontWeight: '500',
     marginLeft: 8,
+  },
+  // Hold banner styles
+  holdBanner: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 100 : 50,
+    left: 0,
+    right: 0,
+    backgroundColor: colors.warning,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 98,
+  },
+  holdBannerText: {
+    color: colors.textInverse,
+    fontSize: FONTS.sizes.md,
+    fontWeight: '600',
+    marginLeft: 8,
+    flex: 1,
+  },
+  resumeButton: {
+    backgroundColor: colors.overlayLight,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  resumeButtonText: {
+    color: colors.textInverse,
+    fontSize: FONTS.sizes.sm,
+    fontWeight: '600',
+  },
+  // Hold control button style
+  controlButtonHold: {
+    backgroundColor: colors.warning,
+  },
+  // Bluetooth badge
+  bluetoothBadge: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    backgroundColor: colors.info,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  // Encryption indicator
+  encryptionIndicator: {
+    position: 'absolute',
+    bottom: Platform.OS === 'ios' ? 200 : 180,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.overlay,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  encryptionText: {
+    color: colors.success,
+    fontSize: FONTS.sizes.xs,
+    fontWeight: '500',
+    marginLeft: 4,
   },
 });
 

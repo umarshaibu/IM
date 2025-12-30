@@ -6,6 +6,20 @@ import { Message } from '../types';
 import { useTheme } from '../context';
 import { FONTS, SPACING, BORDER_RADIUS } from '../utils/theme';
 import AudioPlayer from './AudioPlayer';
+import { AppConfig } from '../config';
+
+// Helper to convert relative media URLs to full URLs
+const getFullMediaUrl = (url: string | undefined): string => {
+  if (!url) return '';
+  // If already a full URL, return as is
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+  // Convert relative path to full URL using API base URL
+  // Remove /api suffix from apiBaseUrl since mediaUrl already starts with /api
+  const baseUrl = AppConfig.apiUrl;
+  return `${baseUrl}${url}`;
+};
 
 interface MessageBubbleProps {
   message: Message;
@@ -14,6 +28,7 @@ interface MessageBubbleProps {
   onLongPress?: () => void;
   onMediaPress?: () => void;
   onReplyPress?: () => void;
+  onCallBack?: (type: 'Voice' | 'Video') => void;
 }
 
 const MessageBubble: React.FC<MessageBubbleProps> = ({
@@ -23,6 +38,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   onLongPress,
   onMediaPress,
   onReplyPress,
+  onCallBack,
 }) => {
   const { colors, isDark } = useTheme();
 
@@ -33,6 +49,53 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
           <Icon name="cancel" size={16} color={colors.textMuted} />
           <Text style={[styles.deletedText, { color: colors.textMuted }]}>
             This message was deleted
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Render missed call messages
+  if (message.type === 'MissedCall' || message.type === 'MissedVideoCall') {
+    const isVideoCall = message.type === 'MissedVideoCall';
+    const isMissedByMe = !isMine; // If I'm not the sender, I missed the call
+
+    return (
+      <View style={[styles.container, styles.containerCenter]}>
+        <View style={[styles.missedCallBubble, { backgroundColor: colors.divider }]}>
+          <Icon
+            name={isVideoCall ? 'video-off' : 'phone-missed'}
+            size={18}
+            color={isMissedByMe ? colors.error : colors.textSecondary}
+          />
+          <View style={styles.missedCallContent}>
+            <Text style={[styles.missedCallText, { color: isMissedByMe ? colors.error : colors.textSecondary }]}>
+              {isMissedByMe
+                ? `Missed ${isVideoCall ? 'video' : 'voice'} call`
+                : `${isVideoCall ? 'Video' : 'Voice'} call - No answer`}
+            </Text>
+            <Text style={[styles.missedCallTime, { color: colors.textMuted }]}>
+              {format(new Date(message.createdAt), 'HH:mm')}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.callBackButton, { backgroundColor: colors.primary + '20' }]}
+            onPress={() => onCallBack?.(isVideoCall ? 'Video' : 'Voice')}
+          >
+            <Icon name={isVideoCall ? 'video' : 'phone'} size={18} color={colors.primary} />
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  // Render system messages (e.g., "User joined the group")
+  if (message.type === 'System') {
+    return (
+      <View style={[styles.container, styles.containerCenter]}>
+        <View style={[styles.systemBubble, { backgroundColor: colors.divider }]}>
+          <Text style={[styles.systemText, { color: colors.textSecondary }]}>
+            {message.content}
           </Text>
         </View>
       </View>
@@ -92,7 +155,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         return (
           <View style={styles.audioWrapper}>
             <AudioPlayer
-              uri={message.mediaUrl}
+              uri={getFullMediaUrl(message.mediaUrl)}
               duration={message.mediaDuration || 0}
               isMine={isMine}
             />
@@ -180,7 +243,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
           {renderReply()}
 
           <AudioPlayer
-            uri={message.mediaUrl!}
+            uri={getFullMediaUrl(message.mediaUrl)}
             duration={message.mediaDuration || 0}
             isMine={isMine}
           />
@@ -323,6 +386,47 @@ const styles = StyleSheet.create({
   },
   containerOther: {
     justifyContent: 'flex-start',
+  },
+  containerCenter: {
+    justifyContent: 'center',
+  },
+  missedCallBubble: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: BORDER_RADIUS.lg,
+    maxWidth: '85%',
+  },
+  missedCallContent: {
+    flex: 1,
+    marginHorizontal: SPACING.sm,
+  },
+  missedCallText: {
+    fontSize: FONTS.sizes.sm,
+    fontWeight: '500',
+  },
+  missedCallTime: {
+    fontSize: FONTS.sizes.xs,
+    marginTop: 2,
+  },
+  callBackButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  systemBubble: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: BORDER_RADIUS.lg,
+    maxWidth: '85%',
+  },
+  systemText: {
+    fontSize: FONTS.sizes.sm,
+    fontStyle: 'italic',
+    textAlign: 'center',
   },
   bubble: {
     maxWidth: '80%',

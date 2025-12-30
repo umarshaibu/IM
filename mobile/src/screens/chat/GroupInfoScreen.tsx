@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -19,12 +19,16 @@ import { useChatStore } from '../../stores/chatStore';
 import { useAuthStore } from '../../stores/authStore';
 import { RootStackParamList } from '../../navigation/RootNavigator';
 import { Participant } from '../../types';
-import { COLORS, FONTS, SPACING, BORDER_RADIUS } from '../../utils/theme';
+import { useTheme, ThemeColors } from '../../context/ThemeContext';
+import { FONTS, SPACING, BORDER_RADIUS } from '../../utils/theme';
 
 type GroupInfoRouteProp = RouteProp<RootStackParamList, 'GroupInfo'>;
 type GroupInfoNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 const GroupInfoScreen: React.FC = () => {
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const route = useRoute<GroupInfoRouteProp>();
   const navigation = useNavigation<GroupInfoNavigationProp>();
   const queryClient = useQueryClient();
@@ -174,7 +178,7 @@ const GroupInfoScreen: React.FC = () => {
           />
           {isAdmin && (
             <View style={styles.editAvatarBadge}>
-              <Icon name="camera" size={20} color={COLORS.textLight} />
+              <Icon name="camera" size={20} color={colors.textInverse} />
             </View>
           )}
         </TouchableOpacity>
@@ -186,14 +190,14 @@ const GroupInfoScreen: React.FC = () => {
               value={groupName}
               onChangeText={setGroupName}
               placeholder="Group name"
-              placeholderTextColor={COLORS.textMuted}
+              placeholderTextColor={colors.textMuted}
             />
             <TextInput
               style={[styles.editInput, styles.descInput]}
               value={groupDescription}
               onChangeText={setGroupDescription}
               placeholder="Description"
-              placeholderTextColor={COLORS.textMuted}
+              placeholderTextColor={colors.textMuted}
               multiline
             />
             <View style={styles.editButtons}>
@@ -229,7 +233,7 @@ const GroupInfoScreen: React.FC = () => {
                   setIsEditing(true);
                 }}
               >
-                <Icon name="pencil" size={16} color={COLORS.secondary} />
+                <Icon name="pencil" size={16} color={colors.secondary} />
                 <Text style={styles.editButtonText}>Edit</Text>
               </TouchableOpacity>
             )}
@@ -243,9 +247,12 @@ const GroupInfoScreen: React.FC = () => {
           {isAdmin && (
             <TouchableOpacity
               style={styles.addButton}
-              onPress={() => {/* Navigate to add participants */}}
+              onPress={() => navigation.navigate('AddParticipants', {
+                conversationId,
+                existingParticipantIds: participants?.map(p => p.userId) || [],
+              })}
             >
-              <Icon name="account-plus" size={24} color={COLORS.secondary} />
+              <Icon name="account-plus" size={24} color={colors.secondary} />
             </TouchableOpacity>
           )}
         </View>
@@ -263,7 +270,7 @@ const GroupInfoScreen: React.FC = () => {
           style={styles.actionButton}
           onPress={handleLeaveGroup}
         >
-          <Icon name="exit-to-app" size={24} color={COLORS.error} />
+          <Icon name="exit-to-app" size={24} color={colors.error} />
           <Text style={styles.leaveText}>Leave Group</Text>
         </TouchableOpacity>
       </View>
@@ -271,13 +278,13 @@ const GroupInfoScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.background,
   },
   header: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     padding: SPACING.xl,
     alignItems: 'center',
     marginBottom: SPACING.lg,
@@ -293,11 +300,11 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: COLORS.secondary,
+    backgroundColor: colors.secondary,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
-    borderColor: COLORS.surface,
+    borderColor: colors.surface,
   },
   infoContainer: {
     alignItems: 'center',
@@ -305,18 +312,18 @@ const styles = StyleSheet.create({
   groupName: {
     fontSize: FONTS.sizes.xxl,
     fontWeight: 'bold',
-    color: COLORS.text,
+    color: colors.text,
     marginBottom: SPACING.xs,
   },
   groupDesc: {
     fontSize: FONTS.sizes.md,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     textAlign: 'center',
     marginBottom: SPACING.sm,
   },
   memberCount: {
     fontSize: FONTS.sizes.sm,
-    color: COLORS.textMuted,
+    color: colors.textMuted,
     marginBottom: SPACING.md,
   },
   editButton: {
@@ -326,7 +333,7 @@ const styles = StyleSheet.create({
   },
   editButtonText: {
     fontSize: FONTS.sizes.sm,
-    color: COLORS.secondary,
+    color: colors.secondary,
     marginLeft: SPACING.xs,
     fontWeight: '500',
   },
@@ -336,9 +343,9 @@ const styles = StyleSheet.create({
   },
   editInput: {
     fontSize: FONTS.sizes.lg,
-    color: COLORS.text,
+    color: colors.text,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.secondary,
+    borderBottomColor: colors.secondary,
     paddingVertical: SPACING.sm,
     marginBottom: SPACING.md,
     textAlign: 'center',
@@ -356,26 +363,26 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.lg,
     borderRadius: BORDER_RADIUS.md,
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.background,
   },
   cancelButtonText: {
     fontSize: FONTS.sizes.md,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   saveButton: {
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.lg,
     borderRadius: BORDER_RADIUS.md,
-    backgroundColor: COLORS.secondary,
+    backgroundColor: colors.secondary,
   },
   saveButtonText: {
     fontSize: FONTS.sizes.md,
-    color: COLORS.textLight,
+    color: colors.textInverse,
     fontWeight: '500',
   },
   section: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     marginBottom: SPACING.lg,
   },
   sectionHeader: {
@@ -384,12 +391,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: SPACING.lg,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.divider,
+    borderBottomColor: colors.divider,
   },
   sectionTitle: {
     fontSize: FONTS.sizes.md,
     fontWeight: '600',
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     textTransform: 'uppercase',
   },
   addButton: {
@@ -400,7 +407,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: SPACING.lg,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.divider,
+    borderBottomColor: colors.divider,
   },
   participantInfo: {
     flex: 1,
@@ -409,16 +416,16 @@ const styles = StyleSheet.create({
   participantName: {
     fontSize: FONTS.sizes.lg,
     fontWeight: '500',
-    color: COLORS.text,
+    color: colors.text,
   },
   adminBadge: {
     fontSize: FONTS.sizes.xs,
-    color: COLORS.secondary,
+    color: colors.secondary,
     fontWeight: '600',
     marginTop: SPACING.xs,
   },
   actionsSection: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     marginBottom: SPACING.xxl,
   },
   actionButton: {
@@ -428,7 +435,7 @@ const styles = StyleSheet.create({
   },
   leaveText: {
     fontSize: FONTS.sizes.lg,
-    color: COLORS.error,
+    color: colors.error,
     marginLeft: SPACING.md,
     fontWeight: '500',
   },

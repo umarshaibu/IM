@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -17,8 +17,10 @@ import Avatar from '../../components/Avatar';
 import { conversationsApi, usersApi } from '../../services/api';
 import { RootStackParamList } from '../../navigation/RootNavigator';
 import { User } from '../../types';
-import { COLORS, FONTS, SPACING, BORDER_RADIUS } from '../../utils/theme';
+import { useTheme, ThemeColors } from '../../context/ThemeContext';
+import { FONTS, SPACING, BORDER_RADIUS } from '../../utils/theme';
 import { useAuthStore } from '../../stores/authStore';
+import { useChatStore } from '../../stores/chatStore';
 
 type NewChatScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -29,10 +31,13 @@ interface UserSection {
 
 const NewChatScreen: React.FC = () => {
   const navigation = useNavigation<NewChatScreenNavigationProp>();
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [searchQuery, setSearchQuery] = useState('');
   const { userId } = useAuthStore();
+  const { addConversation } = useChatStore();
 
-  const { data: users, isLoading, refetch, isRefetching } = useQuery({
+  const { data: users, isLoading } = useQuery({
     queryKey: ['all-users'],
     queryFn: async () => {
       const response = await usersApi.getAll();
@@ -76,6 +81,8 @@ const NewChatScreen: React.FC = () => {
     try {
       const response = await conversationsApi.getOrCreatePrivate(user.id);
       const conversation = response.data;
+      // Add conversation to store before navigating
+      addConversation(conversation);
       navigation.replace('Chat', { conversationId: conversation.id });
     } catch (error) {
       console.error('Error creating conversation:', error);
@@ -121,7 +128,7 @@ const NewChatScreen: React.FC = () => {
         activeOpacity={0.7}
       >
         <View style={styles.actionIconContainer}>
-          <Icon name="account-group" size={24} color={COLORS.textLight} />
+          <Icon name="account-group" size={24} color={colors.textInverse} />
         </View>
         <Text style={styles.actionText}>New group</Text>
       </TouchableOpacity>
@@ -129,11 +136,11 @@ const NewChatScreen: React.FC = () => {
       {/* New Contact */}
       <TouchableOpacity
         style={styles.actionItem}
-        onPress={() => {}}
+        onPress={() => navigation.navigate('NewContact')}
         activeOpacity={0.7}
       >
         <View style={styles.actionIconContainer}>
-          <Icon name="account-plus" size={24} color={COLORS.textLight} />
+          <Icon name="account-plus" size={24} color={colors.textInverse} />
         </View>
         <Text style={styles.actionText}>New contact</Text>
       </TouchableOpacity>
@@ -152,7 +159,7 @@ const NewChatScreen: React.FC = () => {
   const renderEmptyList = () => (
     <View style={styles.emptyContainer}>
       <View style={styles.emptyIconContainer}>
-        <Icon name="account-search-outline" size={64} color={COLORS.primary} />
+        <Icon name="account-search-outline" size={64} color={colors.primary} />
       </View>
       <Text style={styles.emptyTitle}>No users found</Text>
       <Text style={styles.emptySubtitle}>
@@ -166,8 +173,8 @@ const NewChatScreen: React.FC = () => {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
-        <ActivityIndicator size="large" color={COLORS.primary} />
+        <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.surface} />
+        <ActivityIndicator size="large" color={colors.primary} />
         <Text style={styles.loadingText}>Loading contacts...</Text>
       </View>
     );
@@ -175,16 +182,16 @@ const NewChatScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.surface} />
 
       {/* Search Bar */}
       <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
-          <Icon name="magnify" size={20} color={COLORS.textMuted} />
+          <Icon name="magnify" size={20} color={colors.textMuted} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search name or number"
-            placeholderTextColor={COLORS.textMuted}
+            placeholderTextColor={colors.textMuted}
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
@@ -193,7 +200,7 @@ const NewChatScreen: React.FC = () => {
               onPress={() => setSearchQuery('')}
               activeOpacity={0.7}
             >
-              <Icon name="close-circle" size={18} color={COLORS.textMuted} />
+              <Icon name="close-circle" size={18} color={colors.textMuted} />
             </TouchableOpacity>
           )}
         </View>
@@ -217,31 +224,31 @@ const NewChatScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
   },
   loadingText: {
     marginTop: SPACING.md,
     fontSize: FONTS.sizes.md,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
   },
   searchContainer: {
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.inputBackground,
+    backgroundColor: colors.inputBackground,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderRadius: BORDER_RADIUS.lg,
@@ -250,11 +257,11 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: FONTS.sizes.md,
-    color: COLORS.text,
+    color: colors.text,
     padding: 0,
   },
   headerContainer: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
   },
   actionItem: {
     flexDirection: 'row',
@@ -266,36 +273,36 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: COLORS.primary,
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
   actionText: {
     fontSize: FONTS.sizes.md,
     fontWeight: '500',
-    color: COLORS.text,
+    color: colors.text,
     marginLeft: SPACING.md,
     flex: 1,
   },
   contactsCountContainer: {
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.sm,
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.background,
   },
   contactsCountText: {
     fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   sectionHeader: {
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.xs,
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.background,
   },
   sectionTitle: {
     fontSize: FONTS.sizes.sm,
     fontWeight: '600',
-    color: COLORS.primary,
+    color: colors.primary,
   },
   listContent: {
     paddingBottom: SPACING.xxl,
@@ -308,7 +315,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.lg,
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
   },
   contactInfo: {
     flex: 1,
@@ -317,16 +324,16 @@ const styles = StyleSheet.create({
   contactName: {
     fontSize: FONTS.sizes.md,
     fontWeight: '500',
-    color: COLORS.text,
+    color: colors.text,
     marginBottom: 2,
   },
   contactAbout: {
     fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
   },
   separator: {
     height: 1,
-    backgroundColor: COLORS.divider,
+    backgroundColor: colors.divider,
     marginLeft: 82,
   },
   emptyContainer: {
@@ -339,7 +346,7 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: COLORS.primary + '15',
+    backgroundColor: colors.primary + '15',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: SPACING.xl,
@@ -347,12 +354,12 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: FONTS.sizes.xl,
     fontWeight: 'bold',
-    color: COLORS.text,
+    color: colors.text,
     marginBottom: SPACING.sm,
   },
   emptySubtitle: {
     fontSize: FONTS.sizes.md,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
   },

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -16,7 +16,8 @@ import Avatar from '../../components/Avatar';
 import * as signalr from '../../services/signalr';
 import { useCallStore } from '../../stores/callStore';
 import { RootStackParamList } from '../../navigation/RootNavigator';
-import { COLORS, FONTS, SPACING } from '../../utils/theme';
+import { FONTS, SPACING } from '../../utils/theme';
+import { useTheme, ThemeColors } from '../../context/ThemeContext';
 import { callSoundService } from '../../services/CallSoundService';
 
 type IncomingCallRouteProp = RouteProp<RootStackParamList, 'IncomingCall'>;
@@ -27,6 +28,8 @@ const IncomingCallScreen: React.FC = () => {
   const navigation = useNavigation<IncomingCallNavigationProp>();
   const { callId, callerName, callerAvatar, callType, conversationId } = route.params;
   const { clearIncomingCall, incomingCall, activeCall } = useCallStore();
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const hasHandledCancellation = useRef(false);
@@ -123,7 +126,7 @@ const IncomingCallScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#1a1a2e" />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.surface} />
 
       <View style={styles.callerInfo}>
         <Animated.View style={[styles.avatarContainer, { transform: [{ scale: pulseAnim }] }]}>
@@ -149,7 +152,7 @@ const IncomingCallScreen: React.FC = () => {
             onPress={handleDecline}
             activeOpacity={0.7}
           >
-            <Icon name="phone-hangup" size={36} color={COLORS.textLight} />
+            <Icon name="phone-hangup" size={36} color={colors.textInverse} />
           </TouchableOpacity>
           <Text style={styles.actionText}>Decline</Text>
         </View>
@@ -163,7 +166,7 @@ const IncomingCallScreen: React.FC = () => {
             <Icon
               name={callType === 'Video' ? 'video' : 'phone'}
               size={36}
-              color={COLORS.textLight}
+              color={colors.textInverse}
             />
           </TouchableOpacity>
           <Text style={styles.actionText}>Accept</Text>
@@ -173,10 +176,10 @@ const IncomingCallScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: colors.surface,
     justifyContent: 'space-between',
     paddingVertical: Platform.OS === 'ios' ? 60 : 40,
   },
@@ -192,17 +195,17 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 85,
     borderWidth: 3,
-    borderColor: COLORS.secondary,
+    borderColor: colors.secondary,
   },
   callerName: {
     fontSize: FONTS.sizes.xxl,
     fontWeight: 'bold',
-    color: COLORS.textLight,
+    color: colors.text,
     marginBottom: SPACING.sm,
   },
   callType: {
     fontSize: FONTS.sizes.lg,
-    color: COLORS.textLight,
+    color: colors.textSecondary,
     opacity: 0.8,
   },
   actions: {
@@ -222,13 +225,13 @@ const styles = StyleSheet.create({
     borderRadius: 40,
   },
   declineButton: {
-    backgroundColor: COLORS.error,
+    backgroundColor: colors.error,
   },
   acceptButton: {
-    backgroundColor: COLORS.secondary,
+    backgroundColor: colors.secondary,
   },
   actionText: {
-    color: COLORS.textLight,
+    color: colors.text,
     fontSize: FONTS.sizes.sm,
     marginTop: SPACING.sm,
   },

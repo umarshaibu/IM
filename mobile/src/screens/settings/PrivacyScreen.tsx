@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Switch,
   Alert,
+  StatusBar,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -15,13 +16,16 @@ import { useMutation } from '@tanstack/react-query';
 import { usersApi } from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
 import { RootStackParamList } from '../../navigation/RootNavigator';
-import { COLORS, FONTS, SPACING } from '../../utils/theme';
+import { useTheme, ThemeColors } from '../../context/ThemeContext';
+import { FONTS, SPACING } from '../../utils/theme';
 
 type PrivacyScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 const PrivacyScreen: React.FC = () => {
   const navigation = useNavigation<PrivacyScreenNavigationProp>();
   const { user, setUser } = useAuthStore();
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [showLastSeen, setShowLastSeen] = useState(user?.showLastSeen ?? true);
   const [showProfilePhoto, setShowProfilePhoto] = useState(user?.showProfilePhoto ?? true);
@@ -69,6 +73,7 @@ const PrivacyScreen: React.FC = () => {
 
   return (
     <ScrollView style={styles.container}>
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.surface} />
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Who can see my personal info</Text>
 
@@ -82,8 +87,8 @@ const PrivacyScreen: React.FC = () => {
           <Switch
             value={showLastSeen}
             onValueChange={(value) => handleToggle('showLastSeen', value)}
-            trackColor={{ false: COLORS.divider, true: COLORS.secondary }}
-            thumbColor={COLORS.textLight}
+            trackColor={{ false: colors.divider, true: colors.secondary }}
+            thumbColor={colors.textInverse}
           />
         </TouchableOpacity>
 
@@ -97,8 +102,8 @@ const PrivacyScreen: React.FC = () => {
           <Switch
             value={showProfilePhoto}
             onValueChange={(value) => handleToggle('showProfilePhoto', value)}
-            trackColor={{ false: COLORS.divider, true: COLORS.secondary }}
-            thumbColor={COLORS.textLight}
+            trackColor={{ false: colors.divider, true: colors.secondary }}
+            thumbColor={colors.textInverse}
           />
         </TouchableOpacity>
 
@@ -112,8 +117,8 @@ const PrivacyScreen: React.FC = () => {
           <Switch
             value={showAbout}
             onValueChange={(value) => handleToggle('showAbout', value)}
-            trackColor={{ false: COLORS.divider, true: COLORS.secondary }}
-            thumbColor={COLORS.textLight}
+            trackColor={{ false: colors.divider, true: colors.secondary }}
+            thumbColor={colors.textInverse}
           />
         </TouchableOpacity>
 
@@ -135,8 +140,8 @@ const PrivacyScreen: React.FC = () => {
           <Switch
             value={readReceipts}
             onValueChange={(value) => handleToggle('readReceipts', value)}
-            trackColor={{ false: COLORS.divider, true: COLORS.secondary }}
-            thumbColor={COLORS.textLight}
+            trackColor={{ false: colors.divider, true: colors.secondary }}
+            thumbColor={colors.textInverse}
           />
         </TouchableOpacity>
 
@@ -145,7 +150,7 @@ const PrivacyScreen: React.FC = () => {
             <Text style={styles.settingLabel}>Disappearing messages</Text>
             <Text style={styles.settingValue}>Off</Text>
           </View>
-          <Icon name="chevron-right" size={24} color={COLORS.textMuted} />
+          <Icon name="chevron-right" size={24} color={colors.textMuted} />
         </TouchableOpacity>
       </View>
 
@@ -162,7 +167,7 @@ const PrivacyScreen: React.FC = () => {
               Tap to see blocked contacts
             </Text>
           </View>
-          <Icon name="chevron-right" size={24} color={COLORS.textMuted} />
+          <Icon name="chevron-right" size={24} color={colors.textMuted} />
         </TouchableOpacity>
       </View>
 
@@ -174,7 +179,7 @@ const PrivacyScreen: React.FC = () => {
             <Text style={styles.settingLabel}>App lock</Text>
             <Text style={styles.settingValue}>Off</Text>
           </View>
-          <Icon name="chevron-right" size={24} color={COLORS.textMuted} />
+          <Icon name="chevron-right" size={24} color={colors.textMuted} />
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.settingItem}>
@@ -182,33 +187,33 @@ const PrivacyScreen: React.FC = () => {
             <Text style={styles.settingLabel}>Two-step verification</Text>
             <Text style={styles.settingValue}>Off</Text>
           </View>
-          <Icon name="chevron-right" size={24} color={COLORS.textMuted} />
+          <Icon name="chevron-right" size={24} color={colors.textMuted} />
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.settingItem}>
           <View style={styles.settingContent}>
             <Text style={styles.settingLabel}>Change password</Text>
           </View>
-          <Icon name="chevron-right" size={24} color={COLORS.textMuted} />
+          <Icon name="chevron-right" size={24} color={colors.textMuted} />
         </TouchableOpacity>
       </View>
     </ScrollView>
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.background,
   },
   section: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     marginBottom: SPACING.lg,
   },
   sectionTitle: {
     fontSize: FONTS.sizes.sm,
     fontWeight: '600',
-    color: COLORS.secondary,
+    color: colors.secondary,
     textTransform: 'uppercase',
     paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.lg,
@@ -216,7 +221,7 @@ const styles = StyleSheet.create({
   },
   sectionHint: {
     fontSize: FONTS.sizes.sm,
-    color: COLORS.textMuted,
+    color: colors.textMuted,
     paddingHorizontal: SPACING.lg,
     paddingBottom: SPACING.lg,
     lineHeight: 18,
@@ -226,23 +231,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: SPACING.lg,
     borderTopWidth: 1,
-    borderTopColor: COLORS.divider,
+    borderTopColor: colors.divider,
   },
   settingContent: {
     flex: 1,
   },
   settingLabel: {
     fontSize: FONTS.sizes.md,
-    color: COLORS.text,
+    color: colors.text,
     marginBottom: SPACING.xs,
   },
   settingValue: {
     fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
   },
   settingHintText: {
     fontSize: FONTS.sizes.sm,
-    color: COLORS.textMuted,
+    color: colors.textMuted,
     marginTop: SPACING.xs,
     lineHeight: 16,
   },

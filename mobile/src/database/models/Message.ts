@@ -3,7 +3,7 @@ import { field, date, readonly, text, relation, children } from '@nozbe/watermel
 import Conversation from './Conversation';
 import MessageReceipt from './MessageReceipt';
 
-export type MessageType = 'text' | 'image' | 'video' | 'audio' | 'document' | 'location' | 'contact' | 'sticker';
+export type MessageType = 'text' | 'image' | 'video' | 'audio' | 'document' | 'location' | 'contact' | 'sticker' | 'missed_call' | 'missed_video_call' | 'system';
 export type MessageStatus = 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
 
 export default class Message extends Model {
@@ -31,6 +31,7 @@ export default class Message extends Model {
   @field('is_edited') isEdited!: boolean;
   @field('is_deleted') isDeleted!: boolean;
   @field('expires_at') expiresAt!: number | null;
+  @text('metadata') metadata!: string | null; // JSON metadata for call info, etc.
   @readonly @date('created_at') createdAt!: Date;
   @readonly @date('updated_at') updatedAt!: Date;
 
@@ -45,5 +46,25 @@ export default class Message extends Model {
   // Check if media is cached locally
   get isMediaCached(): boolean {
     return !!this.mediaLocalPath;
+  }
+
+  // Check if message is a call-related message
+  get isCallMessage(): boolean {
+    return ['missed_call', 'missed_video_call'].includes(this.type);
+  }
+
+  // Check if message is a system message
+  get isSystemMessage(): boolean {
+    return this.type === 'system';
+  }
+
+  // Parse metadata as JSON
+  get parsedMetadata(): Record<string, any> | null {
+    if (!this.metadata) return null;
+    try {
+      return JSON.parse(this.metadata);
+    } catch {
+      return null;
+    }
   }
 }

@@ -1,16 +1,108 @@
 import { Platform } from 'react-native';
 import { NativeCallSound } from './NativeCallSound';
 
+// Sound file mappings for iOS bundle resources
+const IOS_SOUND_FILES: Record<string, string> = {
+  ringtone_outgoing: 'ringtone_outgoing',
+  ringtone_incoming: 'ringtone_incoming',
+  tone_busy: 'tone_busy',
+  tone_ended: 'tone_ended',
+};
+
+// We'll use react-native-audio-recorder-player for iOS playback
+// since react-native-video requires a component
+let iosAudioPlayer: any = null;
+
+/**
+ * Get or create the iOS audio player instance
+ */
+async function getIOSAudioPlayer(): Promise<any> {
+  if (!iosAudioPlayer) {
+    try {
+      const AudioRecorderPlayer = require('react-native-audio-recorder-player').default;
+      iosAudioPlayer = new AudioRecorderPlayer();
+    } catch (error) {
+      console.error('Failed to initialize iOS audio player:', error);
+      return null;
+    }
+  }
+  return iosAudioPlayer;
+}
+
 /**
  * Service to handle call-related sounds (ringtones, call tones, etc.)
  * Uses native Android MediaPlayer for reliable playback on Android
+ * Uses react-native-audio-recorder-player for iOS
  */
 class CallSoundService {
   private isPlaying: boolean = false;
   private currentSound: 'outgoing' | 'incoming' | 'busy' | 'ended' | null = null;
+  private iosLoopInterval: ReturnType<typeof setInterval> | null = null;
+  private iosCurrentSoundPath: string | null = null;
 
   constructor() {
     // No initialization needed
+  }
+
+  /**
+   * Play a sound on iOS using react-native-audio-recorder-player
+   */
+  private async playIOSSound(soundName: string, loop: boolean): Promise<void> {
+    try {
+      const player = await getIOSAudioPlayer();
+      if (!player) {
+        console.log('iOS audio player not available');
+        return;
+      }
+
+      // Stop any currently playing sound
+      await this.stopIOSSound();
+
+      // Get the bundled sound file path
+      // For iOS, bundled resources are accessed via the main bundle
+      const soundPath = `${IOS_SOUND_FILES[soundName]}.mp3`;
+      this.iosCurrentSoundPath = soundPath;
+
+      console.log('iOS: Playing sound:', soundPath, 'loop:', loop);
+
+      // Start playback
+      await player.startPlayer(soundPath);
+
+      if (loop) {
+        // Set up looping by restarting when the sound ends
+        player.addPlayBackListener((e: any) => {
+          if (e.currentPosition >= e.duration - 100) {
+            // Restart for looping
+            player.seekToPlayer(0);
+          }
+        });
+      } else {
+        // For non-looping, stop when complete
+        player.addPlayBackListener((e: any) => {
+          if (e.currentPosition >= e.duration - 100) {
+            this.stopIOSSound();
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error playing iOS sound:', error);
+    }
+  }
+
+  /**
+   * Stop iOS sound playback
+   */
+  private async stopIOSSound(): Promise<void> {
+    try {
+      const player = await getIOSAudioPlayer();
+      if (player) {
+        player.removePlayBackListener();
+        await player.stopPlayer();
+      }
+      this.iosCurrentSoundPath = null;
+    } catch (error) {
+      console.log('Error stopping iOS sound:', error);
+    }
   }
 
   /**
@@ -31,9 +123,9 @@ class CallSoundService {
       if (Platform.OS === 'android') {
         // Use native module for Android - plays ringtone_outgoing from raw resources
         await NativeCallSound.playSound('ringtone_outgoing', true);
-      } else {
-        // iOS: TODO - implement with AVFoundation
-        console.log('iOS sound playback not yet implemented');
+      } else if (Platform.OS === 'ios') {
+        // iOS: Use react-native-audio-recorder-player
+        await this.playIOSSound('ringtone_outgoing', true);
       }
     } catch (error) {
       console.error('Error playing outgoing tone:', error);
@@ -59,8 +151,8 @@ class CallSoundService {
       console.log('Playing incoming ringtone');
       if (Platform.OS === 'android') {
         await NativeCallSound.playSound('ringtone_incoming', true);
-      } else {
-        console.log('iOS sound playback not yet implemented');
+      } else if (Platform.OS === 'ios') {
+        await this.playIOSSound('ringtone_incoming', true);
       }
     } catch (error) {
       console.error('Error playing incoming ringtone:', error);
@@ -83,8 +175,8 @@ class CallSoundService {
       if (Platform.OS === 'android') {
         // Play once, not looping
         await NativeCallSound.playSound('tone_busy', false);
-      } else {
-        console.log('iOS sound playback not yet implemented');
+      } else if (Platform.OS === 'ios') {
+        await this.playIOSSound('tone_busy', false);
       }
 
       // Auto-clear state after a short delay for non-looping sounds
@@ -114,8 +206,8 @@ class CallSoundService {
       console.log('Playing ended tone');
       if (Platform.OS === 'android') {
         await NativeCallSound.playSound('tone_ended', false);
-      } else {
-        console.log('iOS sound playback not yet implemented');
+      } else if (Platform.OS === 'ios') {
+        await this.playIOSSound('tone_ended', false);
       }
 
       // Auto-clear state after a short delay
@@ -142,6 +234,9 @@ class CallSoundService {
         await NativeCallSound.stopSound();
         // Also stop the ringtone (in case it was started by native notification service)
         await NativeCallSound.stopRingtone();
+      } else if (Platform.OS === 'ios') {
+        // Stop iOS sound playback
+        await this.stopIOSSound();
       }
     } catch (error) {
       console.log('Error stopping sounds:', error);

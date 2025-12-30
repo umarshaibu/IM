@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, View, Platform, PermissionsAndroid } from 'react-native';
+import { ActivityIndicator, View, Platform, PermissionsAndroid, Alert, Linking } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { request, PERMISSIONS, RESULTS } from 'react-native-permissions';
+import { request, check, PERMISSIONS, RESULTS } from 'react-native-permissions';
 import { useAuthStore } from '../stores/authStore';
 import { COLORS } from '../utils/theme';
 
@@ -33,6 +33,11 @@ import QRCodeScreen from '../screens/settings/QRCodeScreen';
 import StatusViewerScreen from '../screens/status/StatusViewerScreen';
 import CreateStatusScreen from '../screens/status/CreateStatusScreen';
 import AddToCallScreen from '../screens/call/AddToCallScreen';
+import PTTScreen from '../screens/main/PTTScreen';
+import CreateChannelScreen from '../screens/channels/CreateChannelScreen';
+import ChannelScreen from '../screens/channels/ChannelScreen';
+import AddParticipantsScreen from '../screens/chat/AddParticipantsScreen';
+import NewContactScreen from '../screens/chat/NewContactScreen';
 
 export type RootStackParamList = {
   // Auth
@@ -92,6 +97,11 @@ export type RootStackParamList = {
   StorageManagement: undefined;
   ChatBackup: undefined;
   QRCode: undefined;
+  PTT: { conversationId?: string };
+  CreateChannel: undefined;
+  Channel: { channelId: string };
+  AddParticipants: { conversationId: string; existingParticipantIds: string[] };
+  NewContact: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -99,6 +109,9 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 // Request essential permissions via native popups
 const requestPermissions = async () => {
   if (Platform.OS === 'android') {
+    const androidVersion = Platform.Version as number;
+
+    // Core permissions that are always required
     const permissions = [
       PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
       PermissionsAndroid.PERMISSIONS.CAMERA,
@@ -106,35 +119,69 @@ const requestPermissions = async () => {
     ];
 
     // Add notification permission for Android 13+
-    if (Platform.Version >= 33) {
+    if (androidVersion >= 33) {
       permissions.push(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
-    }
-
-    // Add storage permissions based on Android version
-    if (Platform.Version >= 33) {
-      permissions.push(
-        PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES,
-        PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO
-      );
+      permissions.push(PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES);
+      permissions.push(PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO);
+      permissions.push(PermissionsAndroid.PERMISSIONS.READ_MEDIA_AUDIO);
     } else {
-      permissions.push(
-        PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
-        PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE
-      );
+      permissions.push(PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE);
+      permissions.push(PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE);
     }
 
     try {
-      await PermissionsAndroid.requestMultiple(permissions);
+      const results = await PermissionsAndroid.requestMultiple(permissions);
+
+      // Check if critical permissions (audio, camera) were denied
+      const audioGranted = results[PermissionsAndroid.PERMISSIONS.RECORD_AUDIO] === PermissionsAndroid.RESULTS.GRANTED;
+      const cameraGranted = results[PermissionsAndroid.PERMISSIONS.CAMERA] === PermissionsAndroid.RESULTS.GRANTED;
+
+      const deniedPermissions: string[] = [];
+      if (!audioGranted) deniedPermissions.push('Microphone');
+      if (!cameraGranted) deniedPermissions.push('Camera');
+
+      if (deniedPermissions.length > 0) {
+        // Show alert to guide user to settings
+        Alert.alert(
+          'Permissions Required',
+          `The following permissions are required for full app functionality: ${deniedPermissions.join(', ')}. Please enable them in Settings.`,
+          [
+            { text: 'Later', style: 'cancel' },
+            {
+              text: 'Open Settings',
+              onPress: () => Linking.openSettings(),
+            },
+          ]
+        );
+      }
     } catch (error) {
       console.error('Error requesting permissions:', error);
     }
   } else {
     // iOS - request permissions one by one
     try {
-      await request(PERMISSIONS.IOS.MICROPHONE);
-      await request(PERMISSIONS.IOS.CAMERA);
+      const micResult = await request(PERMISSIONS.IOS.MICROPHONE);
+      const cameraResult = await request(PERMISSIONS.IOS.CAMERA);
       await request(PERMISSIONS.IOS.CONTACTS);
       await request(PERMISSIONS.IOS.PHOTO_LIBRARY);
+
+      const deniedPermissions: string[] = [];
+      if (micResult !== RESULTS.GRANTED) deniedPermissions.push('Microphone');
+      if (cameraResult !== RESULTS.GRANTED) deniedPermissions.push('Camera');
+
+      if (deniedPermissions.length > 0) {
+        Alert.alert(
+          'Permissions Required',
+          `The following permissions are required for full app functionality: ${deniedPermissions.join(', ')}. Please enable them in Settings.`,
+          [
+            { text: 'Later', style: 'cancel' },
+            {
+              text: 'Open Settings',
+              onPress: () => Linking.openSettings(),
+            },
+          ]
+        );
+      }
     } catch (error) {
       console.error('Error requesting iOS permissions:', error);
     }
@@ -213,6 +260,11 @@ const RootNavigator: React.FC = () => {
           <Stack.Screen name="StorageManagement" component={StorageManagementScreen} options={{ headerShown: false }} />
           <Stack.Screen name="ChatBackup" component={ChatBackupScreen} options={{ headerShown: false }} />
           <Stack.Screen name="QRCode" component={QRCodeScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="PTT" component={PTTScreen} options={{ title: 'Push to Talk', headerShown: false }} />
+          <Stack.Screen name="CreateChannel" component={CreateChannelScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="Channel" component={ChannelScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="AddParticipants" component={AddParticipantsScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="NewContact" component={NewContactScreen} options={{ headerShown: false }} />
         </>
       )}
     </Stack.Navigator>

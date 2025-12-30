@@ -70,6 +70,37 @@ public class FilesController : ControllerBase
         return File(stream, mediaFile.MimeType, mediaFile.FileName);
     }
 
+    [HttpGet("{year}/{month}/{day}/{fileName}")]
+    [AllowAnonymous]
+    public async Task<ActionResult> DownloadFileByPath(string year, string month, string day, string fileName)
+    {
+        var stream = await _fileService.DownloadFileByPathAsync($"{year}/{month}/{day}/{fileName}");
+        if (stream == null)
+        {
+            return NotFound();
+        }
+
+        // Determine content type from file extension
+        var extension = Path.GetExtension(fileName).ToLowerInvariant();
+        var contentType = extension switch
+        {
+            ".mp4" => "video/mp4",
+            ".mp3" => "audio/mpeg",
+            ".m4a" => "audio/mp4",
+            ".wav" => "audio/wav",
+            ".ogg" => "audio/ogg",
+            ".webm" => "video/webm",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".png" => "image/png",
+            ".gif" => "image/gif",
+            ".webp" => "image/webp",
+            ".pdf" => "application/pdf",
+            _ => "application/octet-stream"
+        };
+
+        return File(stream, contentType, fileName);
+    }
+
     [HttpDelete("{id}")]
     public async Task<ActionResult> DeleteFile(Guid id)
     {

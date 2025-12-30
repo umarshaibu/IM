@@ -1,0 +1,164 @@
+@model BroadcastViewModel
+@{
+    ViewData["Title"] = "Broadcast Message";
+    ViewData["ActivePage"] = "Broadcast";
+}
+
+<div class="row g-5 g-xl-10">
+    <!-- Broadcast Form -->
+    <div class="col-xl-8">
+        <div class="card">
+            <div class="card-header border-0 pt-5">
+                <h3 class="card-title align-items-start flex-column">
+                    <span class="card-label fw-bold fs-3 mb-1">
+                        <i class="bi bi-megaphone me-2 text-primary"></i>Send Broadcast
+                    </span>
+                    <span class="text-muted fw-semibold fs-7">Send a push notification to all users</span>
+                </h3>
+            </div>
+            <div class="card-body">
+                <form asp-action="Broadcast" method="post">
+                    <div class="mb-8">
+                        <label asp-for="Title" class="form-label fs-6 fw-semibold mb-3">
+                            Title <span class="text-danger">*</span>
+                        </label>
+                        <input asp-for="Title" class="form-control form-control-solid"
+                               placeholder="Enter notification title" required />
+                        <span asp-validation-for="Title" class="text-danger fs-7"></span>
+                    </div>
+
+                    <div class="mb-8">
+                        <label asp-for="Body" class="form-label fs-6 fw-semibold mb-3">
+                            Message <span class="text-danger">*</span>
+                        </label>
+                        <textarea asp-for="Body" class="form-control form-control-solid" rows="6"
+                                  placeholder="Enter your message here..." required></textarea>
+                        <span asp-validation-for="Body" class="text-danger fs-7"></span>
+                        <div class="form-text text-muted mt-3">
+                            <i class="bi bi-info-circle me-1"></i>
+                            This message will be sent as a push notification to all users with registered devices.
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-end">
+                        <button type="submit" class="btn btn-primary"
+                                onclick="return confirm('Are you sure you want to send this broadcast to ALL users?');">
+                            <i class="bi bi-send me-2"></i>Send Broadcast
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="col-xl-4">
+        <!-- Tips Card -->
+        <div class="card mb-5">
+            <div class="card-header border-0 pt-5">
+                <h3 class="card-title align-items-start flex-column">
+                    <span class="card-label fw-bold fs-3 mb-1">
+                        <i class="bi bi-lightbulb me-2 text-warning"></i>Tips
+                    </span>
+                </h3>
+            </div>
+            <div class="card-body pt-0">
+                <div class="d-flex align-items-center mb-4">
+                    <div class="symbol symbol-35px me-4">
+                        <span class="symbol-label bg-light-success">
+                            <i class="bi bi-check2 text-success fs-4"></i>
+                        </span>
+                    </div>
+                    <div class="d-flex flex-column">
+                        <span class="text-gray-800 fw-semibold fs-6">Keep it Short</span>
+                        <span class="text-muted fs-7">Title should be clear and concise</span>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center mb-4">
+                    <div class="symbol symbol-35px me-4">
+                        <span class="symbol-label bg-light-success">
+                            <i class="bi bi-check2 text-success fs-4"></i>
+                        </span>
+                    </div>
+                    <div class="d-flex flex-column">
+                        <span class="text-gray-800 fw-semibold fs-6">Be Informative</span>
+                        <span class="text-muted fs-7">Message should be meaningful</span>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center mb-4">
+                    <div class="symbol symbol-35px me-4">
+                        <span class="symbol-label bg-light-success">
+                            <i class="bi bi-check2 text-success fs-4"></i>
+                        </span>
+                    </div>
+                    <div class="d-flex flex-column">
+                        <span class="text-gray-800 fw-semibold fs-6">Limited Frequency</span>
+                        <span class="text-muted fs-7">Avoid sending too frequently</span>
+                    </div>
+                </div>
+                <div class="separator my-5"></div>
+                <div class="d-flex align-items-center mb-4">
+                    <div class="symbol symbol-35px me-4">
+                        <span class="symbol-label bg-light-warning">
+                            <i class="bi bi-exclamation-triangle text-warning fs-4"></i>
+                        </span>
+                    </div>
+                    <div class="d-flex flex-column">
+                        <span class="text-gray-800 fw-semibold fs-6">All Users</span>
+                        <span class="text-muted fs-7">Broadcasts reach ALL users</span>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center">
+                    <div class="symbol symbol-35px me-4">
+                        <span class="symbol-label bg-light-danger">
+                            <i class="bi bi-x-circle text-danger fs-4"></i>
+                        </span>
+                    </div>
+                    <div class="d-flex flex-column">
+                        <span class="text-gray-800 fw-semibold fs-6">Cannot Recall</span>
+                        <span class="text-muted fs-7">Cannot be recalled once sent</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Preview Card -->
+        <div class="card">
+            <div class="card-header border-0 pt-5">
+                <h3 class="card-title align-items-start flex-column">
+                    <span class="card-label fw-bold fs-3 mb-1">
+                        <i class="bi bi-phone me-2 text-info"></i>Preview
+                    </span>
+                </h3>
+            </div>
+            <div class="card-body pt-0">
+                <div class="rounded-3 p-5" style="background: linear-gradient(180deg, #1e1e2d 0%, #2d2d3d 100%);">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="symbol symbol-30px me-3">
+                            <span class="symbol-label bg-primary">
+                                <i class="bi bi-chat-dots-fill text-white fs-6"></i>
+                            </span>
+                        </div>
+                        <span class="text-white fw-bold">IM</span>
+                        <span class="text-gray-500 fs-8 ms-auto">now</span>
+                    </div>
+                    <div class="text-white fw-bold fs-6 mb-2" id="preview-title">Notification Title</div>
+                    <div class="text-gray-400 fs-7" id="preview-body">Your message will appear here...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Live Preview
+        document.getElementById('Title').addEventListener('input', function() {
+            document.getElementById('preview-title').textContent = this.value || 'Notification Title';
+        });
+
+        document.getElementById('Body').addEventListener('input', function() {
+            document.getElementById('preview-body').textContent = this.value || 'Your message will appear here...';
+        });
+    </script>
+}

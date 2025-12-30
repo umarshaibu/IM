@@ -1,16 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { format, isToday, isYesterday } from 'date-fns';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Avatar from './Avatar';
 import { Conversation } from '../types';
-import { COLORS, FONTS, SPACING } from '../utils/theme';
+import { useTheme, ThemeColors } from '../context';
+import { FONTS, SPACING } from '../utils/theme';
 
 interface ConversationItemProps {
   conversation: Conversation;
   currentUserId: string;
   onPress: () => void;
   onLongPress?: () => void;
+  isTyping?: boolean;
+  typingUserName?: string;
 }
 
 const ConversationItem: React.FC<ConversationItemProps> = ({
@@ -18,7 +21,11 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
   currentUserId,
   onPress,
   onLongPress,
+  isTyping = false,
+  typingUserName,
 }) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [decryptedPreview, setDecryptedPreview] = useState<string>('');
 
   const getDisplayName = (): string => {
@@ -86,6 +93,12 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
         return prefix + '👤 Contact';
       case 'Sticker':
         return prefix + '🎨 Sticker';
+      case 'MissedCall':
+        return msg.senderId === currentUserId ? '📞 Voice call - No answer' : '📞 Missed voice call';
+      case 'MissedVideoCall':
+        return msg.senderId === currentUserId ? '📹 Video call - No answer' : '📹 Missed video call';
+      case 'System':
+        return msg.content || 'System message';
       default:
         return prefix + 'Message';
     }
@@ -127,34 +140,44 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
 
         <View style={styles.footer}>
           <View style={styles.messagePreview}>
-            {conversation.lastMessage?.senderId === currentUserId && (
-              <Icon
-                name={
-                  conversation.lastMessage?.statuses?.every((s) => s.status === 'Read')
-                    ? 'check-all'
-                    : conversation.lastMessage?.statuses?.every(
-                        (s) => s.status === 'Delivered' || s.status === 'Read'
-                      )
-                    ? 'check-all'
-                    : 'check'
-                }
-                size={16}
-                color={
-                  conversation.lastMessage?.statuses?.every((s) => s.status === 'Read')
-                    ? COLORS.tickBlue
-                    : COLORS.tick
-                }
-                style={styles.statusIcon}
-              />
+            {isTyping ? (
+              <Text style={[styles.typingText, { color: colors.primary }]} numberOfLines={1}>
+                {conversation.type === 'Group' && typingUserName
+                  ? `${typingUserName} is typing...`
+                  : 'typing...'}
+              </Text>
+            ) : (
+              <>
+                {conversation.lastMessage?.senderId === currentUserId && (
+                  <Icon
+                    name={
+                      conversation.lastMessage?.statuses?.every((s) => s.status === 'Read')
+                        ? 'check-all'
+                        : conversation.lastMessage?.statuses?.every(
+                            (s) => s.status === 'Delivered' || s.status === 'Read'
+                          )
+                        ? 'check-all'
+                        : 'check'
+                    }
+                    size={16}
+                    color={
+                      conversation.lastMessage?.statuses?.every((s) => s.status === 'Read')
+                        ? colors.tickBlue
+                        : colors.tick
+                    }
+                    style={styles.statusIcon}
+                  />
+                )}
+                <Text style={styles.lastMessage} numberOfLines={1}>
+                  {getLastMessagePreview()}
+                </Text>
+              </>
             )}
-            <Text style={styles.lastMessage} numberOfLines={1}>
-              {getLastMessagePreview()}
-            </Text>
           </View>
 
           <View style={styles.badges}>
             {conversation.isMuted && (
-              <Icon name="volume-off" size={16} color={COLORS.textMuted} style={styles.muteIcon} />
+              <Icon name="volume-off" size={16} color={colors.textMuted} style={styles.muteIcon} />
             )}
             {conversation.unreadCount > 0 && (
               <View style={styles.unreadBadge}>
@@ -170,13 +193,13 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
   },
   content: {
     flex: 1,
@@ -192,15 +215,15 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: FONTS.sizes.lg,
     fontWeight: '600',
-    color: COLORS.text,
+    color: colors.text,
     marginRight: SPACING.sm,
   },
   time: {
     fontSize: FONTS.sizes.xs,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
   },
   timeUnread: {
-    color: COLORS.secondary,
+    color: colors.secondary,
     fontWeight: '600',
   },
   footer: {
@@ -219,7 +242,12 @@ const styles = StyleSheet.create({
   lastMessage: {
     flex: 1,
     fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
+  },
+  typingText: {
+    flex: 1,
+    fontSize: FONTS.sizes.sm,
+    fontStyle: 'italic',
   },
   badges: {
     flexDirection: 'row',
@@ -229,7 +257,7 @@ const styles = StyleSheet.create({
     marginRight: SPACING.xs,
   },
   unreadBadge: {
-    backgroundColor: COLORS.secondary,
+    backgroundColor: colors.secondary,
     borderRadius: 12,
     minWidth: 24,
     height: 24,
@@ -238,7 +266,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xs,
   },
   unreadCount: {
-    color: COLORS.textLight,
+    color: '#FFFFFF',
     fontSize: FONTS.sizes.xs,
     fontWeight: 'bold',
   },

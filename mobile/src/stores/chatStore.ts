@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { Conversation, Message, Participant } from '../types';
 import { conversationDBService, messageDBService, syncService } from '../database/services';
+import { v4 as uuidv4 } from 'uuid';
 
 // PTT (Push-to-Talk) state for tracking active PTT sessions
 interface PTTSession {
@@ -27,13 +28,21 @@ interface ChatState {
   updateConversation: (conversationId: string, updates: Partial<Conversation>) => void;
   removeConversation: (conversationId: string) => void;
   setActiveConversation: (conversationId: string | null) => void;
+  softDeleteConversation: (conversationId: string) => void;
+  incrementUnreadCount: (conversationId: string) => void;
+  resetUnreadCount: (conversationId: string) => void;
+  moveConversationToTop: (conversationId: string) => void;
 
   // Messages
   setMessages: (conversationId: string, messages: Message[]) => void;
   addMessage: (conversationId: string, message: Message) => void;
+  addOptimisticMessage: (conversationId: string, message: Partial<Message>, senderId: string, senderName?: string) => string;
+  confirmOptimisticMessage: (conversationId: string, tempId: string, serverMessage: Message) => void;
+  failOptimisticMessage: (conversationId: string, tempId: string) => void;
   updateMessage: (conversationId: string, messageId: string, updates: Partial<Message>) => void;
   deleteMessage: (conversationId: string, messageId: string) => void;
   prependMessages: (conversationId: string, messages: Message[]) => void;
+  addMissedCallMessage: (conversationId: string, callerId: string, callerName: string, callType: 'Voice' | 'Video') => void;
 
   // Typing
   setUserTyping: (conversationId: string, userId: string) => void;
@@ -75,9 +84,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
   pttSessions: {},
 
   setConversations: (conversations) => {
-    set({ conversations });
+    // Sort conversations by lastMessageAt (most recent first), with fallback to createdAt
+    const sortedConversations = [...conversations].sort((a, b) => {
+      const aDate = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+      const bDate = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+      return bDate - aDate; // Descending order (most recent first)
+    });
+    set({ conversations: sortedConversations });
     // Save to local cache in background
-    get().saveConversationsToCache(conversations);
+    get().saveConversationsToCache(sortedConversations);
   },
 
   addConversation: (conversation) => {
@@ -117,6 +132,59 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({ activeConversationId: conversationId });
   },
 
+  softDeleteConversation: (conversationId) => {
+    set((state) => ({
+      conversations: state.conversations.map((c) =>
+        c.id === conversationId
+          ? { ...c, isDeleted: true, deletedAt: new Date().toISOString() }
+          : c
+      ),
+    }));
+    // Update in local DB
+    conversationDBService.softDeleteConversation(conversationId);
+  },
+
+  incrementUnreadCount: (conversationId) => {
+    console.log('incrementUnreadCount called for:', conversationId);
+    set((state) => {
+      const updated = state.conversations.map((c) =>
+        c.id === conversationId
+          ? { ...c, unreadCount: (c.unreadCount || 0) + 1 }
+          : c
+      );
+      const updatedConv = updated.find(c => c.id === conversationId);
+      console.log('New unread count for', conversationId, ':', updatedConv?.unreadCount);
+      return { conversations: updated };
+    });
+    // Update in local DB
+    const conv = get().conversations.find((c) => c.id === conversationId);
+    if (conv) {
+      conversationDBService.updateUnreadCount(conversationId, (conv.unreadCount || 0) + 1);
+    }
+  },
+
+  resetUnreadCount: (conversationId) => {
+    set((state) => ({
+      conversations: state.conversations.map((c) =>
+        c.id === conversationId ? { ...c, unreadCount: 0 } : c
+      ),
+    }));
+    // Update in local DB
+    conversationDBService.updateUnreadCount(conversationId, 0);
+  },
+
+  moveConversationToTop: (conversationId) => {
+    set((state) => {
+      const conversation = state.conversations.find((c) => c.id === conversationId);
+      if (!conversation) return state;
+
+      const otherConversations = state.conversations.filter((c) => c.id !== conversationId);
+      return {
+        conversations: [conversation, ...otherConversations],
+      };
+    });
+  },
+
   setMessages: (conversationId, messages) => {
     set((state) => ({
       messages: {
@@ -131,10 +199,35 @@ export const useChatStore = create<ChatState>((set, get) => ({
   addMessage: (conversationId, message) => {
     set((state) => {
       const existingMessages = state.messages[conversationId] || [];
-      // Check if message already exists
+
+      // Check if message already exists by ID
       if (existingMessages.some((m) => m.id === message.id)) {
         return state;
       }
+
+      // Check if this is a server confirmation of an optimistic message
+      // Match by: same sender, same content, status is 'Sending', and ID starts with 'temp_'
+      const optimisticIndex = existingMessages.findIndex(
+        (m) =>
+          m.id.startsWith('temp_') &&
+          m.senderId === message.senderId &&
+          m.content === message.content &&
+          m.type === message.type &&
+          m.status === 'Sending'
+      );
+
+      if (optimisticIndex !== -1) {
+        // Replace the optimistic message with the server message
+        const updatedMessages = [...existingMessages];
+        updatedMessages[optimisticIndex] = message;
+        return {
+          messages: {
+            ...state.messages,
+            [conversationId]: updatedMessages,
+          },
+        };
+      }
+
       return {
         messages: {
           ...state.messages,
@@ -143,11 +236,86 @@ export const useChatStore = create<ChatState>((set, get) => ({
       };
     });
 
-    // Update conversation's last message
+    // Update conversation's last message and move to top
     get().updateConversation(conversationId, {
       lastMessage: message,
       lastMessageAt: message.createdAt,
     });
+    get().moveConversationToTop(conversationId);
+  },
+
+  // Add optimistic message for instant display
+  addOptimisticMessage: (conversationId, messageData, senderId, senderName) => {
+    const tempId = `temp_${uuidv4()}`;
+    const now = new Date().toISOString();
+
+    const optimisticMessage: Message = {
+      id: tempId,
+      conversationId,
+      senderId,
+      senderName,
+      type: messageData.type || 'Text',
+      content: messageData.content,
+      mediaUrl: messageData.mediaUrl,
+      mediaThumbnailUrl: messageData.mediaThumbnailUrl,
+      mediaMimeType: messageData.mediaMimeType,
+      mediaSize: messageData.mediaSize,
+      mediaDuration: messageData.mediaDuration,
+      replyToMessageId: messageData.replyToMessageId,
+      replyToMessage: messageData.replyToMessage,
+      isForwarded: false,
+      isEdited: false,
+      isDeleted: false,
+      status: 'Sending',
+      createdAt: now,
+      statuses: [],
+    };
+
+    set((state) => ({
+      messages: {
+        ...state.messages,
+        [conversationId]: [optimisticMessage, ...(state.messages[conversationId] || [])],
+      },
+    }));
+
+    // Update conversation's last message and move to top
+    get().updateConversation(conversationId, {
+      lastMessage: optimisticMessage,
+      lastMessageAt: now,
+    });
+    get().moveConversationToTop(conversationId);
+
+    return tempId;
+  },
+
+  // Confirm optimistic message with server response
+  confirmOptimisticMessage: (conversationId, tempId, serverMessage) => {
+    set((state) => ({
+      messages: {
+        ...state.messages,
+        [conversationId]: (state.messages[conversationId] || []).map((m) =>
+          m.id === tempId ? serverMessage : m
+        ),
+      },
+    }));
+
+    // Update last message to confirmed version
+    get().updateConversation(conversationId, {
+      lastMessage: serverMessage,
+      lastMessageAt: serverMessage.createdAt,
+    });
+  },
+
+  // Mark optimistic message as failed
+  failOptimisticMessage: (conversationId, tempId) => {
+    set((state) => ({
+      messages: {
+        ...state.messages,
+        [conversationId]: (state.messages[conversationId] || []).map((m) =>
+          m.id === tempId ? { ...m, status: 'Failed' as const } : m
+        ),
+      },
+    }));
   },
 
   updateMessage: (conversationId, messageId, updates) => {
@@ -184,6 +352,34 @@ export const useChatStore = create<ChatState>((set, get) => ({
         ],
       },
     }));
+  },
+
+  // Add missed call message to conversation
+  addMissedCallMessage: (conversationId, callerId, callerName, callType) => {
+    const now = new Date().toISOString();
+    const missedCallMessage: Message = {
+      id: `missed_call_${uuidv4()}`,
+      conversationId,
+      senderId: callerId,
+      senderName: callerName,
+      type: callType === 'Video' ? 'MissedVideoCall' : 'MissedCall',
+      content: callType === 'Video' ? 'Missed video call' : 'Missed voice call',
+      isForwarded: false,
+      isEdited: false,
+      isDeleted: false,
+      status: 'Sent',
+      createdAt: now,
+      statuses: [],
+    };
+
+    // Add the missed call message
+    get().addMessage(conversationId, missedCallMessage);
+
+    // Increment unread count if user is not viewing this conversation
+    const activeConversationId = get().activeConversationId;
+    if (activeConversationId !== conversationId) {
+      get().incrementUnreadCount(conversationId);
+    }
   },
 
   setUserTyping: (conversationId, userId) => {
@@ -394,6 +590,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
         },
       };
     });
+
+    // Forward chunk to PTT stream service for real-time playback
+    try {
+      const { pttStreamService } = require('../services/PTTStreamService');
+      pttStreamService.addReceivedChunk(conversationId, userId, audioChunk);
+    } catch (error) {
+      console.error('Error forwarding PTT chunk to stream service:', error);
+    }
   },
 
   clearPTTActive: (conversationId, userId) => {

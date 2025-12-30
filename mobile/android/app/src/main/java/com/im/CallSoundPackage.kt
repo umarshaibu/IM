@@ -9,7 +9,9 @@ class CallSoundPackage : ReactPackage {
     override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> {
         return listOf(
             CallSoundModule(reactContext),
-            CallEventModule(reactContext)
+            CallEventModule(reactContext),
+            BatteryOptimizationModule(reactContext),
+            OverlayPermissionModule(reactContext)
         )
     }
 

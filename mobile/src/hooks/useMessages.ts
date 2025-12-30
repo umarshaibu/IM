@@ -31,7 +31,21 @@ export const useMessages = (conversationId: string) => {
     queryKey: ['messages', conversationId],
     queryFn: async () => {
       const response = await conversationsApi.getMessages(conversationId, 1, 50);
-      return response.data as Message[];
+      const fetchedMessages = response.data as Message[];
+
+      // Populate replyToMessage for messages that have replyToMessageId
+      // Create a map for quick lookup
+      const messageMap = new Map(fetchedMessages.map(m => [m.id, m]));
+      fetchedMessages.forEach(msg => {
+        if (msg.replyToMessageId && !msg.replyToMessage) {
+          const replyToMsg = messageMap.get(msg.replyToMessageId);
+          if (replyToMsg) {
+            msg.replyToMessage = replyToMsg;
+          }
+        }
+      });
+
+      return fetchedMessages;
     },
   });
 
@@ -49,6 +63,20 @@ export const useMessages = (conversationId: string) => {
       const newMessages = response.data as Message[];
 
       if (newMessages.length > 0) {
+        // Populate replyToMessage from existing messages in the store
+        const existingMessages = useChatStore.getState().messages[conversationId] || [];
+        const allMessages = [...newMessages, ...existingMessages];
+        const messageMap = new Map(allMessages.map(m => [m.id, m]));
+
+        newMessages.forEach(msg => {
+          if (msg.replyToMessageId && !msg.replyToMessage) {
+            const replyToMsg = messageMap.get(msg.replyToMessageId);
+            if (replyToMsg) {
+              msg.replyToMessage = replyToMsg;
+            }
+          }
+        });
+
         prependMessages(conversationId, newMessages);
       }
 

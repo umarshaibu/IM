@@ -21,6 +21,53 @@ class CallActionReceiver : BroadcastReceiver() {
         Log.d(TAG, "Received action: ${intent.action}")
 
         when (intent.action) {
+            "ANSWER_CALL" -> {
+                val callId = intent.getStringExtra("callId") ?: return
+                val callerId = intent.getStringExtra("callerId") ?: ""
+                val callerName = intent.getStringExtra("callerName") ?: "Unknown"
+                val callType = intent.getStringExtra("callType") ?: "Voice"
+                val conversationId = intent.getStringExtra("conversationId") ?: ""
+
+                Log.d(TAG, "Answering call from notification: $callId")
+
+                // Stop ringtone and vibration
+                CallNotificationService.stopRingtone()
+
+                // Cancel notification
+                val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                notificationManager.cancel(CALL_NOTIFICATION_ID)
+
+                // Close IncomingCallActivity if it's open
+                closeIncomingCallActivity(context)
+
+                // Join the call via HTTP API FIRST to get room token
+                CallApiClient.joinCall(context, callId) { result ->
+                    Log.d(TAG, "Join API call result: success=${result.success}, error=${result.error}")
+
+                    // Launch MainActivity with call data
+                    val mainIntent = Intent(context, MainActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        putExtra("type", "call")
+                        putExtra("callId", callId)
+                        putExtra("callerId", callerId)
+                        putExtra("callerName", callerName)
+                        putExtra("callType", callType)
+                        putExtra("conversationId", conversationId)
+                        putExtra("action", "answer")
+
+                        // Include room token if API call was successful
+                        if (result.success) {
+                            putExtra("roomToken", result.roomToken)
+                            putExtra("roomId", result.roomId)
+                            putExtra("liveKitUrl", result.liveKitUrl)
+                            Log.d(TAG, "Including room token from API: roomId=${result.roomId}")
+                        } else {
+                            Log.e(TAG, "No room token available, React Native will try to join")
+                        }
+                    }
+                    context.startActivity(mainIntent)
+                }
+            }
             "DECLINE_CALL" -> {
                 val callId = intent.getStringExtra("callId") ?: return
                 Log.d(TAG, "Declining call: $callId")

@@ -36,18 +36,31 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ uri, duration = 0, isMine = f
   const [totalDuration, setTotalDuration] = useState(duration);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [isPaused, setIsPaused] = useState(true);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [hasError, setHasError] = useState(false);
 
   const videoRef = useRef<any>(null);
   const progressAnim = useRef(new Animated.Value(0)).current;
 
+  // Debug: Log the URI being used
+  useEffect(() => {
+    console.log('AudioPlayer URI:', uri);
+  }, [uri]);
+
   // Generate consistent waveform data based on URI hash or use provided data
+  // Reduced to 25 bars to fit within the bubble
   const waveformBars = useMemo(() => {
     if (waveformData && waveformData.length > 0) {
+      // Resample if too many bars
+      if (waveformData.length > 25) {
+        const step = waveformData.length / 25;
+        return Array.from({ length: 25 }, (_, i) => waveformData[Math.floor(i * step)]);
+      }
       return waveformData;
     }
     // Generate pseudo-random waveform based on uri for consistency
     const seed = uri.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    return Array.from({ length: 40 }, (_, i) => {
+    return Array.from({ length: 25 }, (_, i) => {
       const value = Math.sin(seed + i * 0.5) * 0.3 + 0.5 + Math.cos(seed * i * 0.1) * 0.2;
       return Math.max(0.15, Math.min(1, value));
     });
@@ -75,14 +88,26 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ uri, duration = 0, isMine = f
   };
 
   const handleProgress = (data: OnProgressData) => {
+    console.log('AudioPlayer progress:', data.currentTime, '/', totalDuration);
     setCurrentPosition(data.currentTime);
   };
 
   const handleLoad = (data: OnLoadData) => {
+    console.log('AudioPlayer loaded, duration:', data.duration);
     setTotalDuration(data.duration);
+    setIsLoaded(true);
+    setHasError(false);
+  };
+
+  const handleError = (error: any) => {
+    console.error('AudioPlayer error:', error);
+    setHasError(true);
+    setIsPlaying(false);
+    setIsPaused(true);
   };
 
   const handleEnd = () => {
+    console.log('AudioPlayer ended');
     setIsPlaying(false);
     setIsPaused(true);
     setCurrentPosition(0);
@@ -124,9 +149,12 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ uri, duration = 0, isMine = f
         onProgress={handleProgress}
         onLoad={handleLoad}
         onEnd={handleEnd}
+        onError={handleError}
+        progressUpdateInterval={250}
         playInBackground={false}
         playWhenInactive={false}
         ignoreSilentSwitch="ignore"
+        audioOnly={true}
         style={styles.hiddenVideo}
       />
 
@@ -235,12 +263,14 @@ const styles = StyleSheet.create({
   waveformContainer: {
     flex: 1,
     marginRight: SPACING.sm,
+    overflow: 'hidden',
   },
   waveform: {
     flexDirection: 'row',
     alignItems: 'center',
     height: 28,
     gap: 2,
+    overflow: 'hidden',
   },
   waveformBar: {
     width: 3,

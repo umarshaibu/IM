@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -17,7 +17,8 @@ import Avatar from '../../components/Avatar';
 import { messagesApi, usersApi, conversationsApi } from '../../services/api';
 import { RootStackParamList } from '../../navigation/RootNavigator';
 import { Message, UserProfile } from '../../types';
-import { COLORS, FONTS, SPACING } from '../../utils/theme';
+import { useTheme, ThemeColors } from '../../context/ThemeContext';
+import { FONTS, SPACING } from '../../utils/theme';
 import { formatDistanceToNow } from 'date-fns';
 
 type SearchScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -29,8 +30,11 @@ type SearchResult = {
 
 const SearchScreen: React.FC = () => {
   const navigation = useNavigation<SearchScreenNavigationProp>();
+  const { colors, isDark } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'messages' | 'users'>('all');
+
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const { data: messageResults, isLoading: messagesLoading } = useQuery({
     queryKey: ['searchMessages', searchQuery],
@@ -113,7 +117,7 @@ const SearchScreen: React.FC = () => {
             </Text>
           </View>
           <View style={styles.resultBadge}>
-            <Icon name="account" size={16} color={COLORS.textSecondary} />
+            <Icon name="account" size={16} color={colors.textSecondary} />
           </View>
         </TouchableOpacity>
       );
@@ -126,7 +130,7 @@ const SearchScreen: React.FC = () => {
         onPress={() => handleMessagePress(message)}
       >
         <View style={styles.messageIcon}>
-          <Icon name="message-text" size={24} color={COLORS.secondary} />
+          <Icon name="message-text" size={24} color={colors.secondary} />
         </View>
         <View style={styles.resultInfo}>
           <Text style={styles.resultTitle}>{message.senderName}</Text>
@@ -147,11 +151,11 @@ const SearchScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <View style={styles.searchContainer}>
-        <Icon name="magnify" size={24} color={COLORS.textMuted} />
+        <Icon name="magnify" size={24} color={colors.textMuted} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search messages and users..."
-          placeholderTextColor={COLORS.textMuted}
+          placeholderTextColor={colors.textMuted}
           onChangeText={debouncedSearch}
           autoFocus
         />
@@ -173,18 +177,18 @@ const SearchScreen: React.FC = () => {
 
       {isLoading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : searchQuery.length < 2 ? (
         <View style={styles.emptyContainer}>
-          <Icon name="magnify" size={60} color={COLORS.textMuted} />
+          <Icon name="magnify" size={60} color={colors.textMuted} />
           <Text style={styles.emptyText}>
             Enter at least 2 characters to search
           </Text>
         </View>
       ) : results.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Icon name="file-search-outline" size={60} color={COLORS.textMuted} />
+          <Icon name="file-search-outline" size={60} color={colors.textMuted} />
           <Text style={styles.emptyText}>No results found</Text>
         </View>
       ) : (
@@ -199,15 +203,15 @@ const SearchScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.background,
     margin: SPACING.md,
     paddingHorizontal: SPACING.md,
     borderRadius: 12,
@@ -217,12 +221,12 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.sm,
     fontSize: FONTS.sizes.md,
-    color: COLORS.text,
+    color: colors.text,
   },
   tabs: {
     flexDirection: 'row',
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.divider,
+    borderBottomColor: colors.divider,
   },
   tab: {
     flex: 1,
@@ -231,15 +235,15 @@ const styles = StyleSheet.create({
   },
   tabActive: {
     borderBottomWidth: 2,
-    borderBottomColor: COLORS.secondary,
+    borderBottomColor: colors.secondary,
   },
   tabText: {
     fontSize: FONTS.sizes.md,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   tabTextActive: {
-    color: COLORS.secondary,
+    color: colors.secondary,
   },
   loadingContainer: {
     flex: 1,
@@ -254,7 +258,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: FONTS.sizes.lg,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     marginTop: SPACING.md,
     textAlign: 'center',
   },
@@ -267,7 +271,7 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -278,16 +282,16 @@ const styles = StyleSheet.create({
   resultTitle: {
     fontSize: FONTS.sizes.md,
     fontWeight: '600',
-    color: COLORS.text,
+    color: colors.text,
     marginBottom: SPACING.xs,
   },
   resultSubtitle: {
     fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
   },
   messageTime: {
     fontSize: FONTS.sizes.xs,
-    color: COLORS.textMuted,
+    color: colors.textMuted,
     marginTop: SPACING.xs,
   },
   resultBadge: {
@@ -295,7 +299,7 @@ const styles = StyleSheet.create({
   },
   separator: {
     height: 1,
-    backgroundColor: COLORS.divider,
+    backgroundColor: colors.divider,
     marginLeft: 82,
   },
 });

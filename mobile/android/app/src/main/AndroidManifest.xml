@@ -11,6 +11,7 @@
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <!-- Camera and Microphone for video/voice calls -->
     <uses-permission android:name="android.permission.CAMERA" />
@@ -45,11 +46,12 @@
         </intent-filter>
       </service>
 
-      <!-- Call Action Receiver for decline button -->
+      <!-- Call Action Receiver for answer/decline buttons from notification -->
       <receiver
         android:name=".CallActionReceiver"
         android:exported="false">
         <intent-filter>
+          <action android:name="ANSWER_CALL" />
           <action android:name="DECLINE_CALL" />
         </intent-filter>
       </receiver>
@@ -60,7 +62,10 @@
         android:foregroundServiceType="phoneCall"
         tools:replace="android:foregroundServiceType" />
 
-      <!-- CallKeep VoIP Connection Service - required for self-managed calls -->
+      <!-- CallKeep VoIP Connection Service - DISABLED on Android
+           We use native CallNotificationService and IncomingCallActivity instead.
+           CallKeep's VoiceConnectionService crashes on Android 10+ due to READ_PHONE_NUMBERS
+           runtime permission requirements that are not met when started from background.
       <service
         android:name="io.wazo.callkeep.VoiceConnectionService"
         android:label="IM Calls"
@@ -71,11 +76,25 @@
           <action android:name="android.telecom.ConnectionService" />
         </intent-filter>
       </service>
+      -->
 
-      <!-- CallKeep Ringtone Service for playing ringtone -->
+      <!-- CallKeep Ringtone Service - also disabled since we use native ringtone handling
       <service
         android:name="io.wazo.callkeep.RNCallKeepBackgroundMessagingService"
         android:exported="false" />
+      -->
+
+      <!-- Call Foreground Service for BAL exemption on Android 10+ -->
+      <service
+        android:name=".CallForegroundService"
+        android:exported="false"
+        android:foregroundServiceType="phoneCall" />
+
+      <!-- Incoming Call Overlay Service - uses SYSTEM_ALERT_WINDOW for universal BAL bypass -->
+      <service
+        android:name=".IncomingCallOverlayService"
+        android:exported="false"
+        android:foregroundServiceType="phoneCall" />
 
       <!-- High priority notification channel for calls -->
       <meta-data

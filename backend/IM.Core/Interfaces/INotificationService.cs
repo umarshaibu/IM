@@ -12,4 +12,5 @@ public interface INotificationService
     Task RegisterVoipTokenAsync(Guid userId, string token, string platform, string? deviceId);
     Task UnregisterDeviceTokenAsync(Guid userId, string token);
     Task SendBroadcastNotificationAsync(string title, string body);
+    Task SendPTTNotificationAsync(Guid conversationId, Guid senderId, string senderName, IEnumerable<Guid> recipientIds);
 }

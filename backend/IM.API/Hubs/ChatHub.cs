@@ -152,6 +152,13 @@ public class ChatHub : Hub
                 request.Content,
                 request.MediaUrl);
 
+            // Set media duration if provided (for audio/video messages)
+            if (request.MediaDuration.HasValue)
+            {
+                message.MediaDuration = request.MediaDuration.Value;
+                await _messageService.UpdateMessageAsync(message);
+            }
+
             var messageDto = await MapMessageToDto(message);
 
             // Send to all participants in the conversation
@@ -268,8 +275,21 @@ public class ChatHub : Hub
 
         _logger.LogInformation("PTT: User {UserId} started PTT in conversation {ConversationId}", userId, conversationId);
 
-        // Notify all participants that PTT has started
+        // Notify all participants that PTT has started (via SignalR)
         await Clients.OthersInGroup(conversationId.ToString()).SendAsync("PTTStarted", conversationId, userId, userName);
+
+        // Send FCM notification to wake up offline devices
+        var participants = await _conversationService.GetParticipantsAsync(conversationId);
+        var offlineUserIds = participants
+            .Where(p => p.UserId != userId && !IsUserOnline(p.UserId))
+            .Select(p => p.UserId)
+            .ToList();
+
+        if (offlineUserIds.Any())
+        {
+            _logger.LogInformation("PTT: Sending FCM notification to {Count} offline users", offlineUserIds.Count);
+            await _notificationService.SendPTTNotificationAsync(conversationId, userId, userName, offlineUserIds);
+        }
     }
 
     public async Task SendPTTChunk(Guid conversationId, string audioChunkBase64)

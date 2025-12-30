@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using IM.API.DTOs;
+using IM.API.Hubs;
 using IM.Core.Interfaces;
 using System.Security.Claims;
 
@@ -14,12 +16,18 @@ public class CallsController : ControllerBase
     private readonly ICallService _callService;
     private readonly IUserService _userService;
     private readonly IConfiguration _configuration;
+    private readonly IHubContext<CallHub> _callHub;
 
-    public CallsController(ICallService callService, IUserService userService, IConfiguration configuration)
+    public CallsController(
+        ICallService callService,
+        IUserService userService,
+        IConfiguration configuration,
+        IHubContext<CallHub> callHub)
     {
         _callService = callService;
         _userService = userService;
         _configuration = configuration;
+        _callHub = callHub;
     }
 
     private Guid GetUserId() => Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
@@ -112,11 +120,30 @@ public class CallsController : ControllerBase
     public async Task<ActionResult> DeclineCall(Guid id)
     {
         var userId = GetUserId();
+
+        // Get the call before declining to know who to notify
+        var call = await _callService.GetCallByIdAsync(id);
+
         var success = await _callService.DeclineCallAsync(id, userId);
 
         if (!success)
         {
             return BadRequest(new { message = "Failed to decline call" });
+        }
+
+        // Send SignalR event to the call group (for real-time update)
+        // This notifies the caller immediately that the call was declined
+        await _callHub.Clients.Group($"call_{id}").SendAsync("CallDeclined", id, userId);
+
+        // Also send push notification as a backup
+        // This is important when the caller's app is in background
+        if (call != null)
+        {
+            var notificationService = HttpContext.RequestServices.GetRequiredService<INotificationService>();
+            var callerId = call.InitiatorId;
+
+            // Only send to the caller
+            await notificationService.SendCallEndedNotificationAsync(id, new List<Guid> { callerId });
         }
 
         return Ok(new { message = "Call declined" });

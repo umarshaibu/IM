@@ -10,17 +10,14 @@ import {
   Platform,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import AudioRecorderPlayer from 'react-native-audio-recorder-player';
-import RNFS from 'react-native-fs';
 import { useTheme } from '../context';
 import { FONTS, SPACING, BORDER_RADIUS } from '../utils/theme';
-import * as signalr from '../services/signalr';
-import { filesApi } from '../services/api';
+import { pttStreamService } from '../services/PTTStreamService';
 
 interface PTTButtonProps {
   conversationId: string;
   onPTTStart?: () => void;
-  onPTTEnd?: (mediaUrl: string | null, duration: number) => void;
+  onPTTEnd?: (duration: number) => void;
   onPTTCancel?: () => void;
   disabled?: boolean;
 }
@@ -37,12 +34,20 @@ const PTTButton: React.FC<PTTButtonProps> = ({
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [slideOffset, setSlideOffset] = useState(0);
 
-  const audioRecorderPlayer = useRef(new AudioRecorderPlayer()).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
-  const recordPath = useRef<string>('');
   const startTime = useRef<number>(0);
+  const durationInterval = useRef<NodeJS.Timeout | null>(null);
+  const isInitialized = useRef(false);
+
+  // Initialize PTT stream service on mount
+  useEffect(() => {
+    if (!isInitialized.current) {
+      pttStreamService.init();
+      isInitialized.current = true;
+    }
+  }, []);
 
   useEffect(() => {
     if (isRecording) {
@@ -63,7 +68,17 @@ const PTTButton: React.FC<PTTButtonProps> = ({
       );
       pulse.start();
 
-      return () => pulse.stop();
+      // Start duration counter
+      durationInterval.current = setInterval(() => {
+        setRecordingDuration(Date.now() - startTime.current);
+      }, 100);
+
+      return () => {
+        pulse.stop();
+        if (durationInterval.current) {
+          clearInterval(durationInterval.current);
+        }
+      };
     }
   }, [isRecording, pulseAnim]);
 
@@ -82,21 +97,14 @@ const PTTButton: React.FC<PTTButtonProps> = ({
       startTime.current = Date.now();
       Vibration.vibrate(50);
 
-      // Notify server that PTT has started
-      await signalr.startPTT(conversationId);
+      // Start streaming audio
+      const success = await pttStreamService.startStreaming(conversationId);
 
-      // Start recording
-      const path = Platform.select({
-        ios: `${RNFS.DocumentDirectoryPath}/ptt_${Date.now()}.m4a`,
-        android: `${RNFS.CachesDirectoryPath}/ptt_${Date.now()}.mp4`,
-      })!;
-
-      await audioRecorderPlayer.startRecorder(path);
-      recordPath.current = path;
-
-      audioRecorderPlayer.addRecordBackListener((e) => {
-        setRecordingDuration(e.currentPosition);
-      });
+      if (!success) {
+        setIsRecording(false);
+        Alert.alert('Error', 'Failed to start PTT. Please try again.');
+        return;
+      }
 
       // Scale up animation for button press
       Animated.spring(scaleAnim, {
@@ -106,7 +114,7 @@ const PTTButton: React.FC<PTTButtonProps> = ({
 
       onPTTStart?.();
     } catch (error) {
-      console.error('Error starting PTT recording:', error);
+      console.error('Error starting PTT:', error);
       setIsRecording(false);
       Alert.alert('Error', 'Failed to start recording. Please try again.');
     }
@@ -116,10 +124,14 @@ const PTTButton: React.FC<PTTButtonProps> = ({
     if (!isRecording) return;
 
     try {
-      const result = await audioRecorderPlayer.stopRecorder();
-      audioRecorderPlayer.removeRecordBackListener();
-
       const duration = Date.now() - startTime.current;
+
+      // Clear duration interval
+      if (durationInterval.current) {
+        clearInterval(durationInterval.current);
+        durationInterval.current = null;
+      }
+
       setIsRecording(false);
       setRecordingDuration(0);
 
@@ -129,39 +141,17 @@ const PTTButton: React.FC<PTTButtonProps> = ({
         useNativeDriver: true,
       }).start();
 
-      // Upload the recording if it's long enough (at least 500ms)
-      if (duration >= 500 && recordPath.current) {
-        try {
-          // Upload the audio file
-          const uploadResult = await filesApi.uploadFile(recordPath.current, 'audio/mp4');
-          const mediaUrl = uploadResult.data?.fileUrl || null;
-
-          // Notify server that PTT has ended with the media URL
-          await signalr.endPTT(conversationId, mediaUrl, duration);
-
-          onPTTEnd?.(mediaUrl, duration);
-        } catch (uploadError) {
-          console.error('Error uploading PTT recording:', uploadError);
-          // Still notify server that PTT ended, but without media URL
-          await signalr.endPTT(conversationId, null, duration);
-          onPTTEnd?.(null, duration);
-        }
-
-        // Clean up the temporary file
-        try {
-          await RNFS.unlink(recordPath.current);
-        } catch {
-          // Ignore cleanup errors
-        }
+      // Stop streaming if duration is long enough (at least 500ms)
+      if (duration >= 500) {
+        const result = await pttStreamService.stopStreaming();
+        onPTTEnd?.(result.duration);
       } else {
         // Too short, treat as cancelled
-        await signalr.cancelPTT(conversationId);
+        await pttStreamService.cancelStreaming();
         onPTTCancel?.();
       }
-
-      recordPath.current = '';
     } catch (error) {
-      console.error('Error stopping PTT recording:', error);
+      console.error('Error stopping PTT:', error);
       setIsRecording(false);
     }
   };
@@ -170,8 +160,11 @@ const PTTButton: React.FC<PTTButtonProps> = ({
     if (!isRecording) return;
 
     try {
-      await audioRecorderPlayer.stopRecorder();
-      audioRecorderPlayer.removeRecordBackListener();
+      // Clear duration interval
+      if (durationInterval.current) {
+        clearInterval(durationInterval.current);
+        durationInterval.current = null;
+      }
 
       setIsRecording(false);
       setRecordingDuration(0);
@@ -184,23 +177,13 @@ const PTTButton: React.FC<PTTButtonProps> = ({
         useNativeDriver: true,
       }).start();
 
-      // Notify server that PTT was cancelled
-      await signalr.cancelPTT(conversationId);
-
-      // Clean up the temporary file
-      if (recordPath.current) {
-        try {
-          await RNFS.unlink(recordPath.current);
-        } catch {
-          // Ignore cleanup errors
-        }
-        recordPath.current = '';
-      }
+      // Cancel streaming
+      await pttStreamService.cancelStreaming();
 
       onPTTCancel?.();
       Vibration.vibrate(50);
     } catch (error) {
-      console.error('Error cancelling PTT recording:', error);
+      console.error('Error cancelling PTT:', error);
     }
   };
 

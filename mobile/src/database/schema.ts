@@ -1,7 +1,7 @@
 import { appSchema, tableSchema } from '@nozbe/watermelondb';
 
 export const schema = appSchema({
-  version: 1,
+  version: 2,
   tables: [
     // Users table - stores user profiles
     tableSchema({
@@ -31,9 +31,12 @@ export const schema = appSchema({
         { name: 'last_message_content', type: 'string', isOptional: true },
         { name: 'last_message_at', type: 'number', isOptional: true },
         { name: 'last_message_sender_id', type: 'string', isOptional: true },
+        { name: 'last_message_type', type: 'string', isOptional: true }, // Message type for preview
         { name: 'unread_count', type: 'number' },
         { name: 'is_muted', type: 'boolean' },
         { name: 'is_pinned', type: 'boolean' },
+        { name: 'is_deleted', type: 'boolean' }, // Soft delete flag
+        { name: 'deleted_at', type: 'number', isOptional: true }, // When it was soft deleted
         { name: 'created_at', type: 'number' },
         { name: 'updated_at', type: 'number' },
       ],
@@ -57,20 +60,21 @@ export const schema = appSchema({
         { name: 'server_id', type: 'string', isIndexed: true }, // UUID from server
         { name: 'conversation_id', type: 'string', isIndexed: true },
         { name: 'sender_id', type: 'string', isIndexed: true },
-        { name: 'type', type: 'string' }, // text, image, video, audio, document, location, etc.
+        { name: 'type', type: 'string' }, // text, image, video, audio, document, location, missed_call, missed_video_call, system
         { name: 'content', type: 'string', isOptional: true },
         { name: 'media_url', type: 'string', isOptional: true },
         { name: 'media_thumbnail_url', type: 'string', isOptional: true },
         { name: 'media_local_path', type: 'string', isOptional: true }, // cached file path
         { name: 'media_mime_type', type: 'string', isOptional: true },
         { name: 'media_size', type: 'number', isOptional: true },
-        { name: 'media_duration', type: 'number', isOptional: true }, // for audio/video
+        { name: 'media_duration', type: 'number', isOptional: true }, // for audio/video or call duration
         { name: 'reply_to_id', type: 'string', isOptional: true },
         { name: 'forwarded_from_id', type: 'string', isOptional: true },
         { name: 'status', type: 'string' }, // sending, sent, delivered, read, failed
         { name: 'is_edited', type: 'boolean' },
         { name: 'is_deleted', type: 'boolean' },
         { name: 'expires_at', type: 'number', isOptional: true },
+        { name: 'metadata', type: 'string', isOptional: true }, // JSON metadata for call info, etc.
         { name: 'created_at', type: 'number' },
         { name: 'updated_at', type: 'number' },
       ],

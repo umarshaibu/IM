@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,13 +7,14 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  StatusBar,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import RNFS from 'react-native-fs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useTheme } from '../../context';
+import { useTheme, ThemeColors } from '../../context/ThemeContext';
 import { FONTS, SPACING, BORDER_RADIUS } from '../../utils/theme';
 
 interface StorageInfo {
@@ -27,8 +28,9 @@ interface StorageInfo {
 
 const StorageManagementScreen: React.FC = () => {
   const navigation = useNavigation();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [storageInfo, setStorageInfo] = useState<StorageInfo>({
     totalSize: 0,
@@ -242,7 +244,7 @@ const StorageManagementScreen: React.FC = () => {
 
     return (
       <View style={styles.storageBarContainer}>
-        <View style={[styles.storageBar, { backgroundColor: colors.divider }]}>
+        <View style={styles.storageBar}>
           {segments.map((segment, index) => {
             const width = (segment.size / total) * 100;
             if (width < 1) return null;
@@ -261,9 +263,7 @@ const StorageManagementScreen: React.FC = () => {
           {segments.map((segment, index) => (
             <View key={index} style={styles.legendItem}>
               <View style={[styles.legendDot, { backgroundColor: segment.color }]} />
-              <Text style={[styles.legendText, { color: colors.textSecondary }]}>
-                {segment.label}
-              </Text>
+              <Text style={styles.legendText}>{segment.label}</Text>
             </View>
           ))}
         </View>
@@ -277,15 +277,13 @@ const StorageManagementScreen: React.FC = () => {
     size: number,
     color: string
   ) => (
-    <View style={[styles.storageItem, { backgroundColor: colors.card }]}>
+    <View style={styles.storageItem}>
       <View style={[styles.storageItemIcon, { backgroundColor: color + '20' }]}>
         <Icon name={icon} size={24} color={color} />
       </View>
       <View style={styles.storageItemInfo}>
-        <Text style={[styles.storageItemTitle, { color: colors.text }]}>{title}</Text>
-        <Text style={[styles.storageItemSize, { color: colors.textSecondary }]}>
-          {formatSize(size)}
-        </Text>
+        <Text style={styles.storageItemTitle}>{title}</Text>
+        <Text style={styles.storageItemSize}>{formatSize(size)}</Text>
       </View>
     </View>
   );
@@ -299,7 +297,7 @@ const StorageManagementScreen: React.FC = () => {
     color: string = colors.text
   ) => (
     <TouchableOpacity
-      style={[styles.actionButton, { backgroundColor: colors.card }]}
+      style={styles.actionButton}
       onPress={onPress}
       disabled={isLoading}
     >
@@ -307,9 +305,7 @@ const StorageManagementScreen: React.FC = () => {
         <Icon name={icon} size={24} color={color} />
         <View style={styles.actionButtonText}>
           <Text style={[styles.actionButtonTitle, { color }]}>{title}</Text>
-          <Text style={[styles.actionButtonSubtitle, { color: colors.textSecondary }]}>
-            {subtitle}
-          </Text>
+          <Text style={styles.actionButtonSubtitle}>{subtitle}</Text>
         </View>
       </View>
       {isLoading ? (
@@ -321,32 +317,29 @@ const StorageManagementScreen: React.FC = () => {
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={styles.container}>
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.surface} />
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.header, paddingTop: insets.top }]}>
+      <View style={[styles.header, { paddingTop: insets.top }]}>
         <View style={styles.headerContent}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
             <Icon name="arrow-left" size={24} color={colors.headerText} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.headerText }]}>
-            Storage & Data
-          </Text>
+          <Text style={styles.headerTitle}>Storage & Data</Text>
         </View>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Total Storage */}
-        <View style={[styles.section, { backgroundColor: colors.card }]}>
+        <View style={styles.section}>
           <View style={styles.totalStorage}>
             <Icon name="database" size={48} color={colors.primary} />
             <View style={styles.totalStorageInfo}>
-              <Text style={[styles.totalStorageTitle, { color: colors.text }]}>
-                Total Storage Used
-              </Text>
+              <Text style={styles.totalStorageTitle}>Total Storage Used</Text>
               {isLoading ? (
                 <ActivityIndicator size="small" color={colors.primary} />
               ) : (
-                <Text style={[styles.totalStorageSize, { color: colors.primary }]}>
+                <Text style={styles.totalStorageSize}>
                   {formatSize(storageInfo.totalSize)}
                 </Text>
               )}
@@ -356,25 +349,21 @@ const StorageManagementScreen: React.FC = () => {
         </View>
 
         {/* Storage Breakdown */}
-        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
-          STORAGE BREAKDOWN
-        </Text>
-        <View style={[styles.section, { backgroundColor: colors.card }]}>
+        <Text style={styles.sectionTitle}>STORAGE BREAKDOWN</Text>
+        <View style={styles.section}>
           {renderStorageItem('image', 'Images', storageInfo.images, '#4CAF50')}
-          <View style={[styles.itemDivider, { backgroundColor: colors.divider }]} />
+          <View style={styles.itemDivider} />
           {renderStorageItem('video', 'Videos', storageInfo.videos, '#2196F3')}
-          <View style={[styles.itemDivider, { backgroundColor: colors.divider }]} />
+          <View style={styles.itemDivider} />
           {renderStorageItem('music', 'Audio', storageInfo.audio, '#FF9800')}
-          <View style={[styles.itemDivider, { backgroundColor: colors.divider }]} />
+          <View style={styles.itemDivider} />
           {renderStorageItem('file-document', 'Documents', storageInfo.documents, '#9C27B0')}
-          <View style={[styles.itemDivider, { backgroundColor: colors.divider }]} />
+          <View style={styles.itemDivider} />
           {renderStorageItem('cached', 'Cache', storageInfo.cache, '#607D8B')}
         </View>
 
         {/* Actions */}
-        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
-          MANAGE STORAGE
-        </Text>
+        <Text style={styles.sectionTitle}>MANAGE STORAGE</Text>
         <View style={styles.actionsSection}>
           {renderActionButton(
             'broom',
@@ -403,32 +392,24 @@ const StorageManagementScreen: React.FC = () => {
         </View>
 
         {/* Network Usage Settings */}
-        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
-          NETWORK USAGE
-        </Text>
-        <View style={[styles.section, { backgroundColor: colors.card }]}>
+        <Text style={styles.sectionTitle}>NETWORK USAGE</Text>
+        <View style={styles.section}>
           <TouchableOpacity style={styles.settingItem}>
             <Icon name="download" size={24} color={colors.text} />
             <View style={styles.settingItemText}>
-              <Text style={[styles.settingItemTitle, { color: colors.text }]}>
-                Media auto-download
-              </Text>
-              <Text style={[styles.settingItemSubtitle, { color: colors.textSecondary }]}>
+              <Text style={styles.settingItemTitle}>Media auto-download</Text>
+              <Text style={styles.settingItemSubtitle}>
                 Wi-Fi: All media, Mobile: Photos only
               </Text>
             </View>
             <Icon name="chevron-right" size={24} color={colors.textSecondary} />
           </TouchableOpacity>
-          <View style={[styles.itemDivider, { backgroundColor: colors.divider }]} />
+          <View style={styles.itemDivider} />
           <TouchableOpacity style={styles.settingItem}>
             <Icon name="quality-high" size={24} color={colors.text} />
             <View style={styles.settingItemText}>
-              <Text style={[styles.settingItemTitle, { color: colors.text }]}>
-                Media upload quality
-              </Text>
-              <Text style={[styles.settingItemSubtitle, { color: colors.textSecondary }]}>
-                Standard quality
-              </Text>
+              <Text style={styles.settingItemTitle}>Media upload quality</Text>
+              <Text style={styles.settingItemSubtitle}>Standard quality</Text>
             </View>
             <Icon name="chevron-right" size={24} color={colors.textSecondary} />
           </TouchableOpacity>
@@ -440,12 +421,14 @@ const StorageManagementScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   header: {
     paddingBottom: SPACING.md,
+    backgroundColor: colors.surface,
   },
   headerContent: {
     flexDirection: 'row',
@@ -460,6 +443,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: FONTS.sizes.lg,
     fontWeight: 'bold',
+    color: colors.text,
   },
   content: {
     flex: 1,
@@ -469,6 +453,7 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.lg,
     marginBottom: SPACING.md,
     overflow: 'hidden',
+    backgroundColor: colors.surface,
   },
   sectionTitle: {
     fontSize: FONTS.sizes.xs,
@@ -476,6 +461,7 @@ const styles = StyleSheet.create({
     marginHorizontal: SPACING.lg,
     marginTop: SPACING.lg,
     marginBottom: SPACING.sm,
+    color: colors.textSecondary,
   },
   totalStorage: {
     flexDirection: 'row',
@@ -488,10 +474,12 @@ const styles = StyleSheet.create({
   totalStorageTitle: {
     fontSize: FONTS.sizes.sm,
     marginBottom: SPACING.xs,
+    color: colors.textSecondary,
   },
   totalStorageSize: {
     fontSize: FONTS.sizes.xxl,
     fontWeight: 'bold',
+    color: colors.text,
   },
   storageBarContainer: {
     paddingHorizontal: SPACING.lg,
@@ -502,6 +490,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     flexDirection: 'row',
     overflow: 'hidden',
+    backgroundColor: colors.divider,
   },
   storageBarSegment: {
     height: '100%',
@@ -524,6 +513,7 @@ const styles = StyleSheet.create({
   },
   legendText: {
     fontSize: FONTS.sizes.xs,
+    color: colors.textSecondary,
   },
   storageItem: {
     flexDirection: 'row',
@@ -543,14 +533,17 @@ const styles = StyleSheet.create({
   storageItemTitle: {
     fontSize: FONTS.sizes.md,
     fontWeight: '500',
+    color: colors.text,
   },
   storageItemSize: {
     fontSize: FONTS.sizes.sm,
     marginTop: 2,
+    color: colors.textSecondary,
   },
   itemDivider: {
     height: 1,
     marginLeft: 72,
+    backgroundColor: colors.divider,
   },
   actionsSection: {
     gap: SPACING.sm,
@@ -562,6 +555,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: SPACING.md,
     borderRadius: BORDER_RADIUS.lg,
+    backgroundColor: colors.surface,
   },
   actionButtonContent: {
     flexDirection: 'row',
@@ -579,6 +573,7 @@ const styles = StyleSheet.create({
   actionButtonSubtitle: {
     fontSize: FONTS.sizes.sm,
     marginTop: 2,
+    color: colors.textSecondary,
   },
   settingItem: {
     flexDirection: 'row',
@@ -592,10 +587,12 @@ const styles = StyleSheet.create({
   settingItemTitle: {
     fontSize: FONTS.sizes.md,
     fontWeight: '500',
+    color: colors.text,
   },
   settingItemSubtitle: {
     fontSize: FONTS.sizes.sm,
     marginTop: 2,
+    color: colors.textSecondary,
   },
 });
 

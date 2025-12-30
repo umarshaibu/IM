@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -9,13 +9,14 @@ import {
   ActivityIndicator,
   Platform,
   Share,
+  StatusBar,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import RNFS from 'react-native-fs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useTheme } from '../../context';
+import { useTheme, ThemeColors } from '../../context/ThemeContext';
 import { FONTS, SPACING, BORDER_RADIUS } from '../../utils/theme';
 import { format } from 'date-fns';
 
@@ -40,6 +41,7 @@ const ChatBackupScreen: React.FC = () => {
   const navigation = useNavigation();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [isLoading, setIsLoading] = useState(false);
   const [isBackingUp, setIsBackingUp] = useState(false);
@@ -377,32 +379,33 @@ const ChatBackupScreen: React.FC = () => {
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={styles.container}>
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.surface} />
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.header, paddingTop: insets.top }]}>
+      <View style={[styles.header, { paddingTop: insets.top }]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
           <Icon name="arrow-left" size={24} color={colors.headerText} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.headerText }]}>Chat Backup</Text>
+        <Text style={styles.headerTitle}>Chat Backup</Text>
         <View style={styles.headerSpacer} />
       </View>
 
       {isBackingUp && (
-        <View style={[styles.progressContainer, { backgroundColor: colors.primary + '15' }]}>
+        <View style={styles.progressContainer}>
           <View style={styles.progressRow}>
             <ActivityIndicator color={colors.primary} />
-            <Text style={[styles.progressText, { color: colors.text }]}>
+            <Text style={styles.progressText}>
               Creating backup... {backupProgress}%
             </Text>
           </View>
-          <View style={[styles.progressBar, { backgroundColor: colors.border }]}>
+          <View style={styles.progressBar}>
             <View
               style={[
                 styles.progressFill,
-                { backgroundColor: colors.primary, width: `${backupProgress}%` },
+                { width: `${backupProgress}%` },
               ]}
             />
           </View>
@@ -411,26 +414,26 @@ const ChatBackupScreen: React.FC = () => {
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Last Backup Info */}
-        <View style={[styles.section, { backgroundColor: colors.card }]}>
+        <View style={styles.section}>
           <View style={styles.backupInfoContainer}>
-            <View style={[styles.backupIcon, { backgroundColor: colors.primary + '15' }]}>
+            <View style={styles.backupIcon}>
               <Icon name="cloud-check" size={32} color={colors.primary} />
             </View>
             <View style={styles.backupDetails}>
               {backupInfo ? (
                 <>
-                  <Text style={[styles.backupTitle, { color: colors.text }]}>Last Backup</Text>
-                  <Text style={[styles.backupDate, { color: colors.textSecondary }]}>
+                  <Text style={styles.backupTitle}>Last Backup</Text>
+                  <Text style={styles.backupDate}>
                     {format(new Date(backupInfo.lastBackupDate), 'MMM d, yyyy h:mm a')}
                   </Text>
-                  <Text style={[styles.backupSize, { color: colors.textTertiary }]}>
+                  <Text style={styles.backupSize}>
                     {formatBytes(backupInfo.backupSize)} • {backupInfo.messageCount} messages
                   </Text>
                 </>
               ) : (
                 <>
-                  <Text style={[styles.backupTitle, { color: colors.text }]}>No Backup Found</Text>
-                  <Text style={[styles.backupDate, { color: colors.textSecondary }]}>
+                  <Text style={styles.backupTitle}>No Backup Found</Text>
+                  <Text style={styles.backupDate}>
                     Create your first backup to protect your messages
                   </Text>
                 </>
@@ -439,11 +442,11 @@ const ChatBackupScreen: React.FC = () => {
           </View>
 
           <TouchableOpacity
-            style={[styles.backupButton, { backgroundColor: colors.primary }]}
+            style={styles.backupButton}
             onPress={handleBackup}
             disabled={isBackingUp || isLoading}
           >
-            <Icon name="cloud-upload" size={20} color="#FFFFFF" />
+            <Icon name="cloud-upload" size={20} color={colors.textInverse} />
             <Text style={styles.backupButtonText}>
               {backupInfo ? 'Update Backup' : 'Create Backup'}
             </Text>
@@ -451,12 +454,12 @@ const ChatBackupScreen: React.FC = () => {
 
           {backupInfo && (
             <TouchableOpacity
-              style={[styles.restoreButton, { borderColor: colors.primary }]}
+              style={styles.restoreButton}
               onPress={handleRestore}
               disabled={isBackingUp || isLoading}
             >
               <Icon name="cloud-download" size={20} color={colors.primary} />
-              <Text style={[styles.restoreButtonText, { color: colors.primary }]}>
+              <Text style={styles.restoreButtonText}>
                 Restore from Backup
               </Text>
             </TouchableOpacity>
@@ -556,15 +559,17 @@ const ChatBackupScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: SPACING.md,
     paddingBottom: SPACING.md,
+    backgroundColor: colors.header,
   },
   backButton: {
     padding: SPACING.xs,
@@ -574,6 +579,7 @@ const styles = StyleSheet.create({
     fontSize: FONTS.sizes.lg,
     fontWeight: '600',
     marginLeft: SPACING.md,
+    color: colors.headerText,
   },
   headerSpacer: {
     width: 32,
@@ -586,6 +592,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING.md,
     padding: SPACING.md,
     borderRadius: BORDER_RADIUS.md,
+    backgroundColor: colors.primary + '15',
   },
   progressRow: {
     flexDirection: 'row',
@@ -596,21 +603,25 @@ const styles = StyleSheet.create({
     marginLeft: SPACING.sm,
     fontSize: FONTS.sizes.sm,
     fontWeight: '500',
+    color: colors.text,
   },
   progressBar: {
     height: 4,
     borderRadius: 2,
     overflow: 'hidden',
+    backgroundColor: colors.border,
   },
   progressFill: {
     height: '100%',
     borderRadius: 2,
+    backgroundColor: colors.primary,
   },
   section: {
     marginHorizontal: SPACING.md,
     marginTop: SPACING.sm,
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
+    backgroundColor: colors.card,
   },
   sectionTitle: {
     fontSize: FONTS.sizes.xs,
@@ -620,6 +631,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING.lg,
     marginBottom: SPACING.xs,
     marginLeft: SPACING.lg,
+    color: colors.textSecondary,
   },
   backupInfoContainer: {
     flexDirection: 'row',
@@ -632,6 +644,7 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: colors.primary + '15',
   },
   backupDetails: {
     flex: 1,
@@ -640,14 +653,17 @@ const styles = StyleSheet.create({
   backupTitle: {
     fontSize: FONTS.sizes.md,
     fontWeight: '600',
+    color: colors.text,
   },
   backupDate: {
     fontSize: FONTS.sizes.sm,
     marginTop: 2,
+    color: colors.textSecondary,
   },
   backupSize: {
     fontSize: FONTS.sizes.xs,
     marginTop: 2,
+    color: colors.textTertiary,
   },
   backupButton: {
     flexDirection: 'row',
@@ -658,9 +674,10 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     borderRadius: BORDER_RADIUS.md,
     gap: SPACING.sm,
+    backgroundColor: colors.primary,
   },
   backupButtonText: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontSize: FONTS.sizes.md,
     fontWeight: '600',
   },
@@ -674,10 +691,12 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.md,
     borderWidth: 1.5,
     gap: SPACING.sm,
+    borderColor: colors.primary,
   },
   restoreButtonText: {
     fontSize: FONTS.sizes.md,
     fontWeight: '600',
+    color: colors.primary,
   },
   settingRow: {
     flexDirection: 'row',
@@ -698,14 +717,17 @@ const styles = StyleSheet.create({
   settingLabel: {
     fontSize: FONTS.sizes.md,
     fontWeight: '500',
+    color: colors.text,
   },
   settingSubtitle: {
     fontSize: FONTS.sizes.sm,
     marginTop: 2,
+    color: colors.textSecondary,
   },
   divider: {
     height: StyleSheet.hairlineWidth,
     marginLeft: 56,
+    backgroundColor: colors.divider,
   },
   switch: {
     width: 48,
@@ -729,11 +751,13 @@ const styles = StyleSheet.create({
     fontSize: FONTS.sizes.sm,
     marginLeft: SPACING.sm,
     lineHeight: 18,
+    color: colors.textTertiary,
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: colors.overlay,
   },
 });
 

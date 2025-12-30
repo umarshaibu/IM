@@ -20,6 +20,9 @@ let chatConnection: HubConnection | null = null;
 let callConnection: HubConnection | null = null;
 let presenceConnection: HubConnection | null = null;
 
+// Track typing timeouts per user to properly reset them
+const typingTimeouts: Map<string, NodeJS.Timeout> = new Map();
+
 export const initializeSignalR = async (accessToken: string): Promise<void> => {
   // Clean up existing connections before reinitializing
   await disconnectSignalR();
@@ -73,7 +76,31 @@ const initializeChatHub = async (accessToken: string): Promise<void> => {
     try {
       // TODO: Decrypt the message content when proper E2E encryption is implemented
       // For now, messages are sent in plain text
-      useChatStore.getState().addMessage(message.conversationId, message);
+      const chatStore = useChatStore.getState();
+      const currentUserId = useAuthStore.getState().userId;
+
+      console.log('ReceiveMessage - senderId:', message.senderId, 'currentUserId:', currentUserId, 'activeConv:', chatStore.activeConversationId, 'messageConv:', message.conversationId);
+
+      // Populate replyToMessage from local messages if not included by server
+      if (message.replyToMessageId && !message.replyToMessage) {
+        const conversationMessages = chatStore.messages[message.conversationId] || [];
+        const replyToMsg = conversationMessages.find(m => m.id === message.replyToMessageId);
+        if (replyToMsg) {
+          message.replyToMessage = replyToMsg;
+        }
+      }
+
+      chatStore.addMessage(message.conversationId, message);
+
+      // Increment unread count if message is not from current user
+      // and user is not viewing this conversation
+      if (message.senderId !== currentUserId &&
+          chatStore.activeConversationId !== message.conversationId) {
+        console.log('Incrementing unread count for conversation:', message.conversationId);
+        chatStore.incrementUnreadCount(message.conversationId);
+      } else {
+        console.log('Not incrementing unread: isOwnMessage=', message.senderId === currentUserId, 'isActiveConv=', chatStore.activeConversationId === message.conversationId);
+      }
     } catch (error) {
       console.error('Error processing received message:', error);
       useChatStore.getState().addMessage(message.conversationId, message);
@@ -120,14 +147,42 @@ const initializeChatHub = async (accessToken: string): Promise<void> => {
   });
 
   chatConnection.on('UserTyping', (conversationId: string, userId: string) => {
+    console.log('=== USER TYPING EVENT RECEIVED ===');
+    console.log('Conversation ID:', conversationId);
+    console.log('User ID:', userId);
     useChatStore.getState().setUserTyping(conversationId, userId);
-    // Auto-remove after 3 seconds
-    setTimeout(() => {
+    console.log('Typing users after set:', useChatStore.getState().typingUsers);
+
+    // Create a unique key for this user's typing timeout
+    const timeoutKey = `${conversationId}-${userId}`;
+
+    // Clear existing timeout if any (reset the timer)
+    const existingTimeout = typingTimeouts.get(timeoutKey);
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
+    }
+
+    // Auto-remove after 4 seconds (slightly longer than send interval to account for network delay)
+    const newTimeout = setTimeout(() => {
       useChatStore.getState().removeUserTyping(conversationId, userId);
-    }, 3000);
+      typingTimeouts.delete(timeoutKey);
+    }, 4000);
+    typingTimeouts.set(timeoutKey, newTimeout);
   });
 
   chatConnection.on('UserStopTyping', (conversationId: string, userId: string) => {
+    console.log('=== USER STOP TYPING EVENT RECEIVED ===');
+    console.log('Conversation ID:', conversationId);
+    console.log('User ID:', userId);
+
+    // Clear the typing timeout for this user
+    const timeoutKey = `${conversationId}-${userId}`;
+    const existingTimeout = typingTimeouts.get(timeoutKey);
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
+      typingTimeouts.delete(timeoutKey);
+    }
+
     useChatStore.getState().removeUserTyping(conversationId, userId);
   });
 
@@ -298,8 +353,68 @@ const initializeCallHub = async (accessToken: string): Promise<void> => {
     console.log('Type:', call.type);
     console.log('Conversation:', call.conversationId);
     console.log('Full call object:', JSON.stringify(call, null, 2));
-    useCallStore.getState().setIncomingCall(call);
+
+    const callStore = useCallStore.getState();
+
+    // Check if user is already on a call (call waiting scenario)
+    if (callStore.activeCall) {
+      console.log('=== CALL WAITING: User is already on a call ===');
+      // For now, we'll set it as incoming call which will show a smaller notification
+      // The UI can decide how to display call waiting
+      callStore.setIncomingCall(call);
+    } else {
+      callStore.setIncomingCall(call);
+    }
     console.log('Call set in store');
+  });
+
+  // Handle missed call event
+  callConnection.on('CallMissed', (callId: string, callerId: string, callerName: string, callType: 'Voice' | 'Video', conversationId: string) => {
+    console.log('=== CALL MISSED EVENT RECEIVED ===');
+    console.log('Call ID:', callId);
+    console.log('Caller:', callerName);
+    console.log('Type:', callType);
+
+    // Add missed call message to the conversation
+    useChatStore.getState().addMissedCallMessage(
+      conversationId,
+      callerId,
+      callerName,
+      callType
+    );
+
+    // Clear any pending incoming call state
+    const { incomingCall } = useCallStore.getState();
+    if (incomingCall?.id === callId) {
+      callSoundService.stopAllSounds();
+      NativeCallSound.stopRingtone();
+      endNativeCall(callId);
+      useCallStore.getState().setIncomingCall(null);
+    }
+  });
+
+  // Handle busy call event (when user is on another call and caller times out)
+  callConnection.on('CallBusy', (callId: string, callerId: string, callerName: string, callType: 'Voice' | 'Video', conversationId: string) => {
+    console.log('=== CALL BUSY EVENT RECEIVED ===');
+    console.log('Call ID:', callId);
+    console.log('Caller was busy:', callerName);
+
+    // Add missed call message since user was busy
+    useChatStore.getState().addMissedCallMessage(
+      conversationId,
+      callerId,
+      callerName,
+      callType
+    );
+
+    // Clear any pending incoming call state
+    const { incomingCall } = useCallStore.getState();
+    if (incomingCall?.id === callId) {
+      callSoundService.stopAllSounds();
+      NativeCallSound.stopRingtone();
+      endNativeCall(callId);
+      useCallStore.getState().setIncomingCall(null);
+    }
   });
 
   callConnection.on('UserJoinedCall', (callId: string, participant: any) => {
@@ -472,12 +587,43 @@ export const leaveConversation = async (conversationId: string): Promise<void> =
   }
 };
 
+// Helper function to wait for chat connection with timeout
+const waitForChatConnection = async (timeoutMs: number = 5000): Promise<boolean> => {
+  if (chatConnection?.state === HubConnectionState.Connected) {
+    return true;
+  }
+
+  const startTime = Date.now();
+  while (Date.now() - startTime < timeoutMs) {
+    if (chatConnection?.state === HubConnectionState.Connected) {
+      return true;
+    }
+    // If connection is reconnecting, wait a bit
+    if (chatConnection?.state === HubConnectionState.Reconnecting) {
+      await new Promise(resolve => setTimeout(resolve, 200));
+      continue;
+    }
+    // If disconnected, try to restart
+    if (chatConnection?.state === HubConnectionState.Disconnected) {
+      try {
+        await chatConnection.start();
+        return true;
+      } catch (e) {
+        console.log('Failed to restart chat connection:', e);
+      }
+    }
+    await new Promise(resolve => setTimeout(resolve, 200));
+  }
+  return false;
+};
+
 export const sendMessage = async (
   conversationId: string,
   message: {
     type: string;
     content?: string;
     mediaUrl?: string;
+    mediaDuration?: number;
     metadata?: string;
     replyToMessageId?: string;
   }
@@ -493,6 +639,9 @@ export const sendMessage = async (
   if (message.mediaUrl !== undefined) {
     cleanMessage.mediaUrl = message.mediaUrl;
   }
+  if (message.mediaDuration !== undefined) {
+    cleanMessage.mediaDuration = message.mediaDuration;
+  }
   if (message.metadata !== undefined) {
     cleanMessage.metadata = message.metadata;
   }
@@ -500,8 +649,12 @@ export const sendMessage = async (
     cleanMessage.replyToMessageId = message.replyToMessageId;
   }
 
-  console.log('SignalR sendMessage called:', { conversationId, cleanMessage, state: chatConnection?.state });
-  if (chatConnection?.state === HubConnectionState.Connected) {
+  console.log('SignalR sendMessage called:', { conversationId, mediaUrl: cleanMessage.mediaUrl, state: chatConnection?.state });
+
+  // Wait for connection if not connected (with 5 second timeout)
+  const isConnected = await waitForChatConnection(5000);
+
+  if (isConnected && chatConnection?.state === HubConnectionState.Connected) {
     try {
       await chatConnection.invoke('SendMessage', conversationId, cleanMessage);
       console.log('Message sent successfully via SignalR');
@@ -510,20 +663,29 @@ export const sendMessage = async (
       throw error;
     }
   } else {
-    console.warn('Chat connection not connected. State:', chatConnection?.state);
+    console.warn('Chat connection not connected after waiting. State:', chatConnection?.state);
     throw new Error('Chat connection is not established');
   }
 };
 
 export const sendTyping = async (conversationId: string): Promise<void> => {
+  console.log('=== SENDING TYPING EVENT ===');
+  console.log('Conversation ID:', conversationId);
+  console.log('Chat connection state:', chatConnection?.state);
   if (chatConnection?.state === HubConnectionState.Connected) {
     await chatConnection.invoke('SendTyping', conversationId);
+    console.log('Typing event sent successfully');
+  } else {
+    console.log('Chat connection not connected, cannot send typing event');
   }
 };
 
 export const sendStopTyping = async (conversationId: string): Promise<void> => {
+  console.log('=== SENDING STOP TYPING EVENT ===');
+  console.log('Conversation ID:', conversationId);
   if (chatConnection?.state === HubConnectionState.Connected) {
     await chatConnection.invoke('SendStopTyping', conversationId);
+    console.log('Stop typing event sent successfully');
   }
 };
 
@@ -610,8 +772,34 @@ export const joinCall = async (callId: string): Promise<any> => {
 };
 
 export const declineCall = async (callId: string): Promise<void> => {
+  console.log('declineCall called for:', callId);
+
+  // Try SignalR first for real-time notification
+  let signalRSuccess = false;
   if (callConnection?.state === HubConnectionState.Connected) {
-    await callConnection.invoke('DeclineCall', callId);
+    try {
+      await callConnection.invoke('DeclineCall', callId);
+      signalRSuccess = true;
+      console.log('DeclineCall via SignalR succeeded');
+    } catch (error) {
+      console.error('SignalR DeclineCall failed:', error);
+    }
+  } else {
+    console.log('SignalR not connected, state:', callConnection?.state);
+  }
+
+  // Always call HTTP API as well to ensure the decline is recorded
+  // and a push notification is sent to the caller
+  try {
+    const { callsApi } = await import('./api');
+    await callsApi.decline(callId);
+    console.log('DeclineCall via HTTP API succeeded');
+  } catch (error) {
+    console.error('HTTP API DeclineCall failed:', error);
+    // If both SignalR and HTTP failed, throw the error
+    if (!signalRSuccess) {
+      throw error;
+    }
   }
 };
 
@@ -629,7 +817,7 @@ export const endCall = async (callId: string): Promise<void> => {
 
 export const updateCallStatus = async (
   callId: string,
-  status: { isMuted?: boolean; isVideoEnabled?: boolean }
+  status: { isMuted?: boolean; isVideoEnabled?: boolean; isOnHold?: boolean }
 ): Promise<void> => {
   if (callConnection?.state === HubConnectionState.Connected) {
     await callConnection.invoke('UpdateCallStatus', callId, status);

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,51 +13,54 @@ import {
   PermissionsAndroid,
   Modal,
 } from 'react-native';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import AudioRecorderPlayer from 'react-native-audio-recorder-player';
-import RNFS from 'react-native-fs';
 import { useQuery } from '@tanstack/react-query';
 import { useChatStore } from '../../stores/chatStore';
 import { useAuthStore } from '../../stores/authStore';
-import { COLORS, FONTS, SPACING, BORDER_RADIUS } from '../../utils/theme';
-import * as signalr from '../../services/signalr';
-import { filesApi, conversationsApi } from '../../services/api';
+import { useTheme, ThemeColors } from '../../context/ThemeContext';
+import { FONTS, SPACING, BORDER_RADIUS } from '../../utils/theme';
+import { conversationsApi } from '../../services/api';
+import { pttStreamService } from '../../services/PTTStreamService';
 import { Conversation, Participant } from '../../types';
 import { RootStackParamList } from '../../navigation/RootNavigator';
 
 type PTTScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
+type PTTScreenRouteProp = RouteProp<RootStackParamList, 'PTT'>;
 
 const PTTScreen: React.FC = () => {
   const navigation = useNavigation<PTTScreenNavigationProp>();
+  const route = useRoute<PTTScreenRouteProp>();
   const { userId } = useAuthStore();
+  const initialConversationId = route.params?.conversationId;
   const { setPTTActive, clearPTTActive } = useChatStore();
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [selectedChannel, setSelectedChannel] = useState<Conversation | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [showChannelPicker, setShowChannelPicker] = useState(false);
   const [activePTTUser, setActivePTTUser] = useState<{ name: string; conversationId: string } | null>(null);
 
-  const audioRecorderPlayer = useRef(new AudioRecorderPlayer()).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
-  const recordPath = useRef<string>('');
-  const startTime = useRef<number>(0);
 
-  // Fetch group conversations for PTT
-  const { data: groups, refetch } = useQuery({
-    queryKey: ['ptt-groups'],
+  // Initialize PTT stream service
+  useEffect(() => {
+    pttStreamService.init();
+  }, []);
+
+  // Fetch all conversations for PTT (both individual and group)
+  const { data: conversations, refetch } = useQuery({
+    queryKey: ['ptt-conversations'],
     queryFn: async () => {
       try {
         const response = await conversationsApi.getAll();
-        // Filter only group conversations
-        const groupConversations = (response.data as Conversation[]).filter(
-          (c) => c.type === 'Group'
-        );
-        return groupConversations;
+        // Return all conversations (Individual and Group)
+        return response.data as Conversation[];
       } catch (error) {
-        console.error('Error fetching groups:', error);
+        console.error('Error fetching conversations:', error);
         return [];
       }
     },
@@ -69,11 +72,29 @@ const PTTScreen: React.FC = () => {
     }, [refetch])
   );
 
+  // Auto-select the conversation passed from navigation, or default to first one
   useEffect(() => {
-    if (groups && groups.length > 0 && !selectedChannel) {
-      setSelectedChannel(groups[0]);
+    console.log('PTTScreen useEffect - conversations:', conversations?.length, 'initialConversationId:', initialConversationId, 'selectedChannel:', selectedChannel?.id);
+
+    if (!conversations || conversations.length === 0) return;
+
+    // If a specific conversation was passed from navigation, always select it first
+    if (initialConversationId) {
+      const targetConversation = conversations.find(c => c.id === initialConversationId);
+      console.log('PTTScreen - looking for conversation:', initialConversationId, 'found:', targetConversation?.id, targetConversation?.type);
+      if (targetConversation) {
+        console.log('PTTScreen - setting selected channel to:', targetConversation.id);
+        setSelectedChannel(targetConversation);
+        return;
+      }
     }
-  }, [groups, selectedChannel]);
+
+    // Default to first conversation only if nothing is selected
+    if (!selectedChannel) {
+      console.log('PTTScreen - defaulting to first conversation:', conversations[0]?.id);
+      setSelectedChannel(conversations[0]);
+    }
+  }, [conversations, initialConversationId]);
 
   // Pulse animation for recording
   useEffect(() => {
@@ -155,28 +176,26 @@ const PTTScreen: React.FC = () => {
 
     try {
       setIsRecording(true);
-      startTime.current = Date.now();
       Vibration.vibrate(50);
 
-      await signalr.startPTT(selectedChannel.id);
+      // Start live audio streaming
+      const success = await pttStreamService.startStreaming(selectedChannel.id);
+      if (!success) {
+        setIsRecording(false);
+        Alert.alert('Error', 'Failed to start PTT stream. Please try again.');
+        return;
+      }
+
       setPTTActive(selectedChannel.id, userId || '', 'You');
-
-      const path = Platform.select({
-        ios: `${RNFS.DocumentDirectoryPath}/ptt_${Date.now()}.m4a`,
-        android: `${RNFS.CachesDirectoryPath}/ptt_${Date.now()}.mp4`,
-      })!;
-
-      await audioRecorderPlayer.startRecorder(path);
-      recordPath.current = path;
 
       Animated.spring(scaleAnim, {
         toValue: 0.95,
         useNativeDriver: true,
       }).start();
     } catch (error) {
-      console.error('Error starting PTT recording:', error);
+      console.error('Error starting PTT streaming:', error);
       setIsRecording(false);
-      Alert.alert('Error', 'Failed to start recording. Please try again.');
+      Alert.alert('Error', 'Failed to start streaming. Please try again.');
     }
   };
 
@@ -184,10 +203,8 @@ const PTTScreen: React.FC = () => {
     if (!isRecording || !selectedChannel) return;
 
     try {
-      const result = await audioRecorderPlayer.stopRecorder();
-      audioRecorderPlayer.removeRecordBackListener();
-
-      const duration = Date.now() - startTime.current;
+      // Stop live audio streaming
+      const { duration } = await pttStreamService.stopStreaming();
       setIsRecording(false);
 
       Animated.spring(scaleAnim, {
@@ -195,30 +212,12 @@ const PTTScreen: React.FC = () => {
         useNativeDriver: true,
       }).start();
 
-      if (duration >= 500 && recordPath.current) {
-        try {
-          const uploadResult = await filesApi.uploadFile(recordPath.current, 'audio/mp4');
-          const mediaUrl = uploadResult.data?.fileUrl || null;
-          await signalr.endPTT(selectedChannel.id, mediaUrl, duration);
-        } catch (uploadError) {
-          console.error('Error uploading PTT recording:', uploadError);
-          await signalr.endPTT(selectedChannel.id, null, duration);
-        }
-
-        try {
-          await RNFS.unlink(recordPath.current);
-        } catch {
-          // Ignore cleanup errors
-        }
-      } else {
-        await signalr.cancelPTT(selectedChannel.id);
-      }
-
       clearPTTActive(selectedChannel.id, userId || '');
-      recordPath.current = '';
       Vibration.vibrate(50);
+
+      console.log('PTT streaming stopped, duration:', duration, 'ms');
     } catch (error) {
-      console.error('Error stopping PTT recording:', error);
+      console.error('Error stopping PTT streaming:', error);
       setIsRecording(false);
     }
   };
@@ -263,6 +262,22 @@ const PTTScreen: React.FC = () => {
     );
   };
 
+  const getConversationName = (conversation: Conversation): string => {
+    if (conversation.type === 'Group') {
+      return conversation.name || 'Unnamed Group';
+    }
+    // For individual chats, show the other participant's name
+    const otherParticipant = conversation.participants?.find(p => p.userId !== userId);
+    return otherParticipant?.displayName || otherParticipant?.fullName || 'Unknown';
+  };
+
+  const getConversationSubtitle = (conversation: Conversation): string => {
+    if (conversation.type === 'Group') {
+      return `${conversation.participants?.length || 0} members`;
+    }
+    return 'Individual chat';
+  };
+
   const renderChannelItem = ({ item }: { item: Conversation }) => (
     <TouchableOpacity
       style={[
@@ -275,23 +290,27 @@ const PTTScreen: React.FC = () => {
       }}
     >
       <View style={styles.channelItemIcon}>
-        <Icon name="account-group" size={24} color={COLORS.primary} />
+        <Icon
+          name={item.type === 'Group' ? 'account-group' : 'account'}
+          size={24}
+          color={colors.primary}
+        />
       </View>
       <View style={styles.channelItemInfo}>
-        <Text style={styles.channelItemName}>{item.name || 'Unnamed Group'}</Text>
+        <Text style={styles.channelItemName}>{getConversationName(item)}</Text>
         <Text style={styles.channelItemMembers}>
-          {item.participants?.length || 0} members
+          {getConversationSubtitle(item)}
         </Text>
       </View>
       {selectedChannel?.id === item.id && (
-        <Icon name="check-circle" size={24} color={COLORS.primary} />
+        <Icon name="check-circle" size={24} color={colors.primary} />
       )}
     </TouchableOpacity>
   );
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#1a1a1a" />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.surface} />
 
       {/* Main Card */}
       <View style={styles.card}>
@@ -324,14 +343,14 @@ const PTTScreen: React.FC = () => {
                 style={styles.callButton}
                 onPress={handleCallPress}
               >
-                <Icon name="phone" size={20} color={COLORS.error} />
+                <Icon name="phone" size={20} color={colors.error} />
               </TouchableOpacity>
             </>
           ) : (
             <View style={styles.selectChannelButton}>
-              <Icon name="account-group-outline" size={24} color={COLORS.textSecondary} />
+              <Icon name="account-group-outline" size={24} color={colors.textSecondary} />
               <Text style={styles.selectChannelText}>Tap to select a channel</Text>
-              <Icon name="chevron-down" size={24} color={COLORS.textSecondary} />
+              <Icon name="chevron-down" size={24} color={colors.textSecondary} />
             </View>
           )}
         </TouchableOpacity>
@@ -402,13 +421,13 @@ const PTTScreen: React.FC = () => {
                 onPress={() => setShowChannelPicker(false)}
                 style={styles.modalClose}
               >
-                <Icon name="close" size={24} color={COLORS.text} />
+                <Icon name="close" size={24} color={colors.text} />
               </TouchableOpacity>
             </View>
 
-            {groups && groups.length > 0 ? (
+            {conversations && conversations.length > 0 ? (
               <FlatList
-                data={groups}
+                data={conversations}
                 renderItem={renderChannelItem}
                 keyExtractor={(item) => item.id}
                 ItemSeparatorComponent={() => <View style={styles.channelSeparator} />}
@@ -416,10 +435,10 @@ const PTTScreen: React.FC = () => {
               />
             ) : (
               <View style={styles.emptyChannels}>
-                <Icon name="account-group-outline" size={48} color={COLORS.textSecondary} />
-                <Text style={styles.emptyChannelsText}>No groups available</Text>
+                <Icon name="message-outline" size={48} color={colors.textSecondary} />
+                <Text style={styles.emptyChannelsText}>No conversations available</Text>
                 <Text style={styles.emptyChannelsSubtext}>
-                  Create or join a group to use PTT
+                  Start a chat to use PTT
                 </Text>
               </View>
             )}
@@ -430,16 +449,16 @@ const PTTScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
     padding: SPACING.lg,
   },
   card: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     borderRadius: BORDER_RADIUS.xl,
     width: '100%',
     maxWidth: 400,
@@ -457,11 +476,11 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: FONTS.sizes.xl,
     fontWeight: 'bold',
-    color: COLORS.primary,
+    color: colors.primary,
   },
   divider: {
     height: 1,
-    backgroundColor: COLORS.divider,
+    backgroundColor: colors.divider,
   },
   channelInfo: {
     flexDirection: 'row',
@@ -474,7 +493,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: COLORS.primary,
+    backgroundColor: colors.primary,
     flexDirection: 'row',
     flexWrap: 'wrap',
     overflow: 'hidden',
@@ -484,7 +503,7 @@ const styles = StyleSheet.create({
     height: '50%',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORS.primary,
+    backgroundColor: colors.primary,
     borderWidth: 0.5,
     borderColor: 'rgba(255,255,255,0.2)',
   },
@@ -495,7 +514,7 @@ const styles = StyleSheet.create({
   avatarInitials: {
     fontSize: 10,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: colors.textInverse,
   },
   avatarInitialsLarge: {
     fontSize: 14,
@@ -507,18 +526,18 @@ const styles = StyleSheet.create({
   channelNames: {
     fontSize: FONTS.sizes.md,
     fontWeight: '600',
-    color: COLORS.text,
+    color: colors.text,
   },
   onlineStatus: {
     fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     marginTop: 2,
   },
   callButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: COLORS.error + '15',
+    backgroundColor: colors.error + '15',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -532,7 +551,7 @@ const styles = StyleSheet.create({
   },
   selectChannelText: {
     fontSize: FONTS.sizes.md,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
   },
   pttContainer: {
     alignItems: 'center',
@@ -545,23 +564,23 @@ const styles = StyleSheet.create({
     borderRadius: 110,
     backgroundColor: 'transparent',
     borderWidth: 3,
-    borderColor: COLORS.primary,
+    borderColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
   pttButtonOuterActive: {
-    borderColor: COLORS.secondary,
+    borderColor: colors.secondary,
   },
   pttButtonInner: {
     width: 180,
     height: 180,
     borderRadius: 90,
-    backgroundColor: COLORS.primary,
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
   pttButtonInnerActive: {
-    backgroundColor: COLORS.secondary,
+    backgroundColor: colors.secondary,
   },
   pttTouchable: {
     width: '100%',
@@ -572,14 +591,14 @@ const styles = StyleSheet.create({
   pttLabel: {
     fontSize: FONTS.sizes.lg,
     fontWeight: 'bold',
-    color: COLORS.text,
+    color: colors.text,
     marginTop: SPACING.lg,
   },
   activePTTBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.secondary,
+    backgroundColor: colors.secondary,
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.lg,
     borderRadius: BORDER_RADIUS.md,
@@ -589,11 +608,11 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.textInverse,
     marginRight: SPACING.sm,
   },
   activePTTText: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontSize: FONTS.sizes.sm,
     fontWeight: '600',
   },
@@ -603,7 +622,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     borderTopLeftRadius: BORDER_RADIUS.xl,
     borderTopRightRadius: BORDER_RADIUS.xl,
     maxHeight: '70%',
@@ -614,12 +633,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: SPACING.lg,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.divider,
+    borderBottomColor: colors.divider,
   },
   modalTitle: {
     fontSize: FONTS.sizes.lg,
     fontWeight: 'bold',
-    color: COLORS.text,
+    color: colors.text,
   },
   modalClose: {
     padding: SPACING.xs,
@@ -634,13 +653,13 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.lg,
   },
   channelItemSelected: {
-    backgroundColor: COLORS.primary + '15',
+    backgroundColor: colors.primary + '15',
   },
   channelItemIcon: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: COLORS.primary + '15',
+    backgroundColor: colors.primary + '15',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -651,16 +670,16 @@ const styles = StyleSheet.create({
   channelItemName: {
     fontSize: FONTS.sizes.md,
     fontWeight: '600',
-    color: COLORS.text,
+    color: colors.text,
   },
   channelItemMembers: {
     fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     marginTop: 2,
   },
   channelSeparator: {
     height: 1,
-    backgroundColor: COLORS.divider,
+    backgroundColor: colors.divider,
     marginVertical: SPACING.xs,
   },
   emptyChannels: {
@@ -670,12 +689,12 @@ const styles = StyleSheet.create({
   emptyChannelsText: {
     fontSize: FONTS.sizes.lg,
     fontWeight: '600',
-    color: COLORS.text,
+    color: colors.text,
     marginTop: SPACING.md,
   },
   emptyChannelsSubtext: {
     fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     marginTop: SPACING.xs,
     textAlign: 'center',
   },

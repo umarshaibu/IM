@@ -10,6 +10,8 @@ import {
   TouchableOpacity,
   Alert,
   Animated,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Clipboard from '@react-native-clipboard/clipboard';
@@ -24,6 +26,7 @@ import MediaPicker, { SelectedMedia, LocationData, ContactData } from '../../com
 import SwipeableMessage from '../../components/SwipeableMessage';
 import MessageSelectionBar from '../../components/MessageSelectionBar';
 import ReactionsPopup from '../../components/ReactionsPopup';
+import TypingIndicator from '../../components/TypingIndicator';
 import { conversationsApi, filesApi } from '../../services/api';
 import {
   sendMessage,
@@ -36,6 +39,7 @@ import {
   addReaction,
   starMessage,
   pinMessage,
+  editMessage,
 } from '../../services/signalr';
 import { useChatStore } from '../../stores/chatStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -60,9 +64,14 @@ const ChatScreen: React.FC = () => {
     messages,
     setMessages,
     prependMessages,
-    typingUsers,
     getConversation,
   } = useChatStore();
+
+  // Subscribe specifically to typing users for this conversation to ensure re-renders
+  // Using JSON.stringify for deep comparison since arrays don't compare by value
+  const typingUsersRaw = useChatStore((state) => state.typingUsers[conversationId] || []);
+  const typingUsersKey = JSON.stringify(typingUsersRaw);
+  const typingUserIds = React.useMemo(() => typingUsersRaw, [typingUsersKey]);
 
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
@@ -76,14 +85,16 @@ const ChatScreen: React.FC = () => {
   const [reactionsPosition, setReactionsPosition] = useState({ x: 0, y: 0 });
   const [reactionTargetMessage, setReactionTargetMessage] = useState<Message | null>(null);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+  const [editingMessage, setEditingMessage] = useState<Message | null>(null);
+  const [showCallMenu, setShowCallMenu] = useState(false);
   const highlightAnim = useRef(new Animated.Value(0)).current;
   const flatListRef = useRef<FlatList>(null);
 
   const conversation = getConversation(conversationId);
   const conversationMessages = messages[conversationId] || [];
-  const typingUserIds = typingUsers[conversationId] || [];
 
   console.log('Chat render - conversationMessages count:', conversationMessages.length);
+  console.log('Chat render - typingUserIds:', typingUserIds);
 
   const { data: messagesData, isLoading, refetch } = useQuery({
     queryKey: ['messages', conversationId],
@@ -114,8 +125,16 @@ const ChatScreen: React.FC = () => {
     joinConversation(conversationId);
     markConversationRead(conversationId);
 
+    // Set active conversation to track which chat is currently open
+    useChatStore.getState().setActiveConversation(conversationId);
+
+    // Reset unread count when entering the chat
+    useChatStore.getState().resetUnreadCount(conversationId);
+
     return () => {
       leaveConversation(conversationId);
+      // Clear active conversation when leaving
+      useChatStore.getState().setActiveConversation(null);
     };
   }, [conversationId]);
 
@@ -178,32 +197,37 @@ const ChatScreen: React.FC = () => {
         <View style={styles.headerRight}>
           <TouchableOpacity
             style={styles.headerButton}
-            onPress={() => {
-              navigation.navigate('Call', {
-                conversationId,
-                type: 'Video',
-              });
-            }}
+            onPress={() => setShowMediaPicker(true)}
           >
-            <Icon name="video" size={24} color={colors.headerText} />
+            <Icon name="camera" size={24} color={colors.headerText} />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.headerButton}
-            onPress={() => {
-              navigation.navigate('Call', {
-                conversationId,
-                type: 'Voice',
-              });
-            }}
+            onPress={() => setShowCallMenu(true)}
           >
             <Icon name="phone" size={24} color={colors.headerText} />
           </TouchableOpacity>
         </View>
       ),
     });
-  }, [navigation, conversation, typingUserIds, userId, conversationId]);
+  }, [navigation, conversation, typingUserIds, userId, conversationId, colors]);
 
   const handleSendMessage = async (content: string) => {
+    // Add optimistic message immediately for instant display
+    const tempId = useChatStore.getState().addOptimisticMessage(
+      conversationId,
+      {
+        type: 'Text',
+        content: content,
+        replyToMessageId: replyingTo?.id,
+        replyToMessage: replyingTo || undefined,
+      },
+      userId || '',
+      undefined // Will use current user's name from server response
+    );
+
+    setReplyingTo(null);
+
     try {
       console.log('Sending message:', content);
       // TODO: Implement proper end-to-end encryption with key exchange
@@ -215,18 +239,23 @@ const ChatScreen: React.FC = () => {
         replyToMessageId: replyingTo?.id,
       });
       console.log('Message sent successfully');
-      setReplyingTo(null);
+      // Server will broadcast the message back via SignalR with proper ID
+      // The ReceiveMessage handler will replace the optimistic message
     } catch (error) {
       console.error('Failed to send message:', error);
+      // Mark the optimistic message as failed
+      useChatStore.getState().failOptimisticMessage(conversationId, tempId);
       Alert.alert('Error', 'Failed to send message. Please try again.');
     }
   };
 
   const handleTypingStart = () => {
+    console.log('handleTypingStart called for conversation:', conversationId);
     sendTyping(conversationId);
   };
 
   const handleTypingEnd = () => {
+    console.log('handleTypingEnd called for conversation:', conversationId);
     sendStopTyping(conversationId);
   };
 
@@ -272,8 +301,9 @@ const ChatScreen: React.FC = () => {
     }
   };
 
-  const handleSendVoiceNote = async (uri: string, _duration: number) => {
+  const handleSendVoiceNote = async (uri: string, duration: number) => {
     setIsUploading(true);
+    console.log('handleSendVoiceNote called with uri:', uri, 'duration:', duration);
 
     try {
       // Create form data for file upload
@@ -288,10 +318,11 @@ const ChatScreen: React.FC = () => {
       const uploadResponse = await filesApi.upload(formData);
       const { fileUrl } = uploadResponse.data;
 
-      // Send message with audio
+      // Send message with audio and duration
       await sendMessage(conversationId, {
         type: 'Audio',
         mediaUrl: fileUrl,
+        mediaDuration: duration,
         replyToMessageId: replyingTo?.id,
       });
 
@@ -510,6 +541,24 @@ const ChatScreen: React.FC = () => {
     exitSelectionMode();
   };
 
+  const handleEdit = () => {
+    const message = getSelectedMessage();
+    if (message && message.type === 'Text' && message.content) {
+      setEditingMessage(message);
+      exitSelectionMode();
+    }
+  };
+
+  const handleEditMessage = async (messageId: string, newContent: string) => {
+    try {
+      await editMessage(messageId, newContent);
+      // The message will be updated via SignalR MessageEdited event
+    } catch (error) {
+      console.error('Failed to edit message:', error);
+      Alert.alert('Error', 'Failed to edit message. Please try again.');
+    }
+  };
+
   const handleReact = async (emoji: string) => {
     if (reactionTargetMessage) {
       try {
@@ -609,6 +658,12 @@ const ChatScreen: React.FC = () => {
                 scrollToAndHighlightMessage(item.replyToMessageId);
               }
             }}
+            onCallBack={(type) => {
+              navigation.navigate('Call', {
+                conversationId,
+                type,
+              });
+            }}
           />
         </Animated.View>
       </TouchableOpacity>
@@ -637,6 +692,21 @@ const ChatScreen: React.FC = () => {
       </View>
     );
   };
+
+  // Filter out current user - we only want to show when OTHERS are typing
+  const otherTypingUserIds = React.useMemo(() => {
+    return typingUserIds.filter(id => id !== userId);
+  }, [typingUserIds, userId]);
+
+  // Get the names of typing users
+  const typingNames = React.useMemo(() => {
+    return otherTypingUserIds.map(id => {
+      const participant = conversation?.participants.find(p => p.userId === id);
+      return participant?.displayName || participant?.fullName || 'Someone';
+    });
+  }, [otherTypingUserIds, conversation?.participants]);
+
+  console.log('ChatScreen typing state - typingUserIds:', typingUserIds, 'otherTypingUserIds:', otherTypingUserIds, 'typingNames:', typingNames);
 
   if (isLoading) {
     return (
@@ -667,6 +737,7 @@ const ChatScreen: React.FC = () => {
             onCopy={handleCopy}
             onReply={handleReply}
             onStar={handleStar}
+            onEdit={handleEdit}
             canCopy={canCopy}
             canReply={selectedMessages.size === 1}
             canEdit={canEdit}
@@ -680,8 +751,14 @@ const ChatScreen: React.FC = () => {
             renderItem={renderMessage}
             keyExtractor={(item) => item.id}
             inverted
+            extraData={{ typingUsersKey, otherTypingUserIds, typingNames }}
             onEndReached={loadMoreMessages}
             onEndReachedThreshold={0.5}
+            ListHeaderComponent={
+              otherTypingUserIds.length > 0 ? (
+                <TypingIndicator isVisible={true} names={typingNames} />
+              ) : null
+            }
             ListFooterComponent={renderFooter}
             contentContainerStyle={styles.messagesList}
             onScrollToIndexFailed={(info) => {
@@ -714,6 +791,16 @@ const ChatScreen: React.FC = () => {
                 : null
             }
             onCancelReply={() => setReplyingTo(null)}
+            editingMessage={
+              editingMessage
+                ? {
+                    id: editingMessage.id,
+                    content: editingMessage.content || '',
+                  }
+                : null
+            }
+            onEditMessage={handleEditMessage}
+            onCancelEdit={() => setEditingMessage(null)}
             disabled={isUploading}
           />
         )}
@@ -736,6 +823,64 @@ const ChatScreen: React.FC = () => {
             setReactionTargetMessage(null);
           }}
         />
+
+        {/* Call Options Menu */}
+        <Modal
+          visible={showCallMenu}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowCallMenu(false)}
+        >
+          <Pressable
+            style={styles.callMenuOverlay}
+            onPress={() => setShowCallMenu(false)}
+          >
+            <View style={[styles.callMenuContainer, { backgroundColor: colors.surface }]}>
+              <TouchableOpacity
+                style={styles.callMenuItem}
+                onPress={() => {
+                  setShowCallMenu(false);
+                  navigation.navigate('Call', {
+                    conversationId,
+                    type: 'Voice',
+                  });
+                }}
+              >
+                <Icon name="phone" size={24} color={colors.primary} />
+                <Text style={[styles.callMenuText, { color: colors.text }]}>Voice Call</Text>
+              </TouchableOpacity>
+
+              <View style={[styles.callMenuDivider, { backgroundColor: colors.divider }]} />
+
+              <TouchableOpacity
+                style={styles.callMenuItem}
+                onPress={() => {
+                  setShowCallMenu(false);
+                  navigation.navigate('Call', {
+                    conversationId,
+                    type: 'Video',
+                  });
+                }}
+              >
+                <Icon name="video" size={24} color={colors.primary} />
+                <Text style={[styles.callMenuText, { color: colors.text }]}>Video Call</Text>
+              </TouchableOpacity>
+
+              <View style={[styles.callMenuDivider, { backgroundColor: colors.divider }]} />
+
+              <TouchableOpacity
+                style={styles.callMenuItem}
+                onPress={() => {
+                  setShowCallMenu(false);
+                  navigation.navigate('PTT', { conversationId });
+                }}
+              >
+                <Icon name="radio-handheld" size={24} color={colors.primary} />
+                <Text style={[styles.callMenuText, { color: colors.text }]}>Push to Talk</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Modal>
       </KeyboardAvoidingView>
     </GestureHandlerRootView>
   );
@@ -794,6 +939,39 @@ const styles = StyleSheet.create({
   loadingMore: {
     padding: SPACING.md,
     alignItems: 'center',
+  },
+  callMenuOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-end',
+    paddingTop: Platform.OS === 'ios' ? 100 : 60,
+    paddingRight: SPACING.md,
+  },
+  callMenuContainer: {
+    borderRadius: 12,
+    paddingVertical: SPACING.sm,
+    minWidth: 180,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  callMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+  },
+  callMenuText: {
+    fontSize: FONTS.sizes.md,
+    marginLeft: SPACING.md,
+    fontWeight: '500',
+  },
+  callMenuDivider: {
+    height: 1,
+    marginHorizontal: SPACING.md,
   },
 });
 

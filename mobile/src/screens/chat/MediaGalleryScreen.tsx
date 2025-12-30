@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Image,
   Dimensions,
   ActivityIndicator,
+  StatusBar,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -16,7 +17,8 @@ import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { filesApi } from '../../services/api';
 import { RootStackParamList } from '../../navigation/RootNavigator';
-import { COLORS, FONTS, SPACING } from '../../utils/theme';
+import { FONTS, SPACING } from '../../utils/theme';
+import { useTheme, ThemeColors } from '../../context/ThemeContext';
 
 type MediaGalleryRouteProp = RouteProp<RootStackParamList, 'MediaGallery'>;
 type MediaGalleryNavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -38,6 +40,8 @@ const MediaGalleryScreen: React.FC = () => {
   const route = useRoute<MediaGalleryRouteProp>();
   const navigation = useNavigation<MediaGalleryNavigationProp>();
   const { conversationId } = route.params;
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [activeTab, setActiveTab] = useState<'media' | 'docs' | 'links'>('media');
 
@@ -129,7 +133,7 @@ const MediaGalleryScreen: React.FC = () => {
         >
           <Image source={{ uri: item.url }} style={styles.mediaImage} />
           <View style={styles.videoOverlay}>
-            <Icon name="play-circle" size={32} color={COLORS.textLight} />
+            <Icon name="play-circle" size={32} color={colors.textInverse} />
           </View>
         </TouchableOpacity>
       );
@@ -143,7 +147,7 @@ const MediaGalleryScreen: React.FC = () => {
         <Icon
           name={getDocumentIcon(item.fileName)}
           size={40}
-          color={COLORS.secondary}
+          color={colors.secondary}
         />
         <View style={styles.documentInfo}>
           <Text style={styles.documentName} numberOfLines={1}>
@@ -177,13 +181,15 @@ const MediaGalleryScreen: React.FC = () => {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
+        <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.surface} />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.surface} />
       <View style={styles.tabs}>
         {(['media', 'docs', 'links'] as const).map((tab) => (
           <TouchableOpacity
@@ -200,7 +206,7 @@ const MediaGalleryScreen: React.FC = () => {
                   : 'link-variant'
               }
               size={24}
-              color={activeTab === tab ? COLORS.secondary : COLORS.textSecondary}
+              color={activeTab === tab ? colors.secondary : colors.textSecondary}
             />
             <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
               {tab.charAt(0).toUpperCase() + tab.slice(1)}
@@ -220,7 +226,7 @@ const MediaGalleryScreen: React.FC = () => {
                 : 'link-off'
             }
             size={60}
-            color={COLORS.textMuted}
+            color={colors.textMuted}
           />
           <Text style={styles.emptyText}>
             No {activeTab === 'media' ? 'photos or videos' : activeTab} yet
@@ -237,22 +243,22 @@ const MediaGalleryScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
   },
   tabs: {
     flexDirection: 'row',
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.divider,
+    borderBottomColor: colors.divider,
   },
   tab: {
     flex: 1,
@@ -264,15 +270,15 @@ const styles = StyleSheet.create({
   },
   tabActive: {
     borderBottomWidth: 2,
-    borderBottomColor: COLORS.secondary,
+    borderBottomColor: colors.secondary,
   },
   tabText: {
     fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   tabTextActive: {
-    color: COLORS.secondary,
+    color: colors.secondary,
   },
   section: {
     marginBottom: SPACING.lg,
@@ -280,9 +286,9 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: FONTS.sizes.sm,
     fontWeight: '600',
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     padding: SPACING.md,
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.background,
   },
   mediaGrid: {
     flexDirection: 'row',
@@ -311,7 +317,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: SPACING.lg,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.divider,
+    borderBottomColor: colors.divider,
   },
   documentInfo: {
     flex: 1,
@@ -319,12 +325,12 @@ const styles = StyleSheet.create({
   },
   documentName: {
     fontSize: FONTS.sizes.md,
-    color: COLORS.text,
+    color: colors.text,
     fontWeight: '500',
   },
   documentMeta: {
     fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     marginTop: SPACING.xs,
   },
   emptyContainer: {
@@ -335,7 +341,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: FONTS.sizes.lg,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     marginTop: SPACING.md,
   },
 });

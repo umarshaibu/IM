@@ -86,7 +86,7 @@ public class ConversationService : IConversationService
                 .ThenInclude(p => p.User)
                     .ThenInclude(u => u.NominalRoll)
             .Include(c => c.Messages.OrderByDescending(m => m.CreatedAt).Take(1))
-            .Where(c => c.Participants.Any(p => p.UserId == userId && p.IsActive))
+            .Where(c => c.Participants.Any(p => p.UserId == userId && p.IsActive && !p.IsDeletedByUser))
             .OrderByDescending(c => c.LastMessageAt ?? c.CreatedAt)
             .ToListAsync();
     }
@@ -289,5 +289,34 @@ public class ConversationService : IConversationService
                 .ThenInclude(u => u.NominalRoll)
             .Where(p => p.ConversationId == conversationId && p.IsActive)
             .ToListAsync();
+    }
+
+    // Soft delete for user
+    public async Task<bool> SoftDeleteConversationForUserAsync(Guid conversationId, Guid userId)
+    {
+        var participant = await _context.ConversationParticipants
+            .FirstOrDefaultAsync(p => p.ConversationId == conversationId && p.UserId == userId && p.IsActive);
+
+        if (participant == null)
+            return false;
+
+        participant.IsDeletedByUser = true;
+        participant.DeletedByUserAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> RestoreConversationForUserAsync(Guid conversationId, Guid userId)
+    {
+        var participant = await _context.ConversationParticipants
+            .FirstOrDefaultAsync(p => p.ConversationId == conversationId && p.UserId == userId && p.IsActive);
+
+        if (participant == null)
+            return false;
+
+        participant.IsDeletedByUser = false;
+        participant.DeletedByUserAt = null;
+        await _context.SaveChangesAsync();
+        return true;
     }
 }

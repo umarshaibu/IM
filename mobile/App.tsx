@@ -1,12 +1,14 @@
-import React, { useEffect, useRef } from 'react';
-import { StatusBar, LogBox, AppState, AppStateStatus, Platform } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { StatusBar, LogBox, AppState, AppStateStatus, Platform, Alert, Linking } from 'react-native';
 import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { check, request, PERMISSIONS, RESULTS, Permission } from 'react-native-permissions';
 
 import RootNavigator, { RootStackParamList } from './src/navigation/RootNavigator';
 import IncomingCallListener from './src/components/IncomingCallListener';
+import GlobalPTTNotification from './src/components/GlobalPTTNotification';
 import { useAuthStore } from './src/stores/authStore';
 import { useCallStore } from './src/stores/callStore';
 import { initializeSignalR, declineCall, joinCall } from './src/services/signalr';
@@ -19,6 +21,7 @@ import {
 import { CallManager } from './src/services/CallManager';
 import { initializeVoipPush, setVoipCallHandler, VoipCallData } from './src/services/VoipPushService';
 import { nativeCallEventService, NativeCallEventData } from './src/services/NativeCallEvent';
+import NativeBatteryOptimization from './src/services/NativeBatteryOptimization';
 import { ThemeProvider, useTheme, NotificationProvider } from './src/context';
 
 // Ignore specific warnings in development
@@ -37,6 +40,91 @@ const queryClient = new QueryClient({
   },
 });
 
+/**
+ * Request camera and microphone permissions on app launch
+ * This ensures permissions are granted before a call comes in
+ */
+const requestMediaPermissions = async (): Promise<void> => {
+  try {
+    const permissions: Permission[] = Platform.select({
+      android: [
+        PERMISSIONS.ANDROID.CAMERA,
+        PERMISSIONS.ANDROID.RECORD_AUDIO,
+      ],
+      ios: [
+        PERMISSIONS.IOS.CAMERA,
+        PERMISSIONS.IOS.MICROPHONE,
+      ],
+      default: [],
+    }) as Permission[];
+
+    for (const permission of permissions) {
+      const status = await check(permission);
+      if (status === RESULTS.DENIED) {
+        const result = await request(permission);
+        console.log(`Permission ${permission}: ${result}`);
+      } else if (status === RESULTS.BLOCKED) {
+        console.log(`Permission ${permission} is blocked, user needs to enable in settings`);
+      }
+    }
+  } catch (error) {
+    console.error('Error requesting media permissions:', error);
+  }
+};
+
+/**
+ * Request battery optimization exemption on Android
+ * Critical for receiving calls when app is in background
+ */
+const requestBatteryOptimizationExemption = async (): Promise<void> => {
+  if (Platform.OS !== 'android') return;
+
+  try {
+    const isIgnoring = await NativeBatteryOptimization.isIgnoringBatteryOptimizations();
+    if (!isIgnoring) {
+      const hasAggressive = await NativeBatteryOptimization.hasAggressiveBatteryManagement();
+      const manufacturer = await NativeBatteryOptimization.getDeviceManufacturer();
+
+      // Show explanation dialog
+      Alert.alert(
+        'Battery Optimization',
+        'To receive calls reliably when the app is in the background or your phone is locked, please disable battery optimization for this app.',
+        [
+          {
+            text: 'Not Now',
+            style: 'cancel',
+          },
+          {
+            text: 'Open Settings',
+            onPress: async () => {
+              await NativeBatteryOptimization.requestIgnoreBatteryOptimizations();
+
+              // If device has aggressive battery management, show additional guidance
+              if (hasAggressive) {
+                setTimeout(() => {
+                  Alert.alert(
+                    'Additional Settings Required',
+                    `Your ${manufacturer.charAt(0).toUpperCase() + manufacturer.slice(1)} device has additional battery settings. For best call reliability, also disable any "App sleeping" or "Background restrictions" in your device settings.`,
+                    [
+                      { text: 'OK', style: 'default' },
+                      {
+                        text: 'Open Device Settings',
+                        onPress: () => NativeBatteryOptimization.openManufacturerBatterySettings(),
+                      },
+                    ]
+                  );
+                }, 2000);
+              }
+            },
+          },
+        ]
+      );
+    }
+  } catch (error) {
+    console.error('Error checking battery optimization:', error);
+  }
+};
+
 // Inner app component that can use theme context
 const AppContent: React.FC = () => {
   const { isAuthenticated, accessToken } = useAuthStore();
@@ -44,6 +132,22 @@ const AppContent: React.FC = () => {
   const { colors, isDark } = useTheme();
   const navigationRef = useRef<NavigationContainerRef<RootStackParamList>>(null);
   const appState = useRef(AppState.currentState);
+
+  // Request permissions on app launch (even before authentication)
+  useEffect(() => {
+    const initializePermissions = async () => {
+      // Request camera and microphone permissions early
+      await requestMediaPermissions();
+
+      // Request battery optimization exemption (Android only)
+      // Slight delay to not overwhelm user with dialogs
+      setTimeout(() => {
+        requestBatteryOptimizationExemption();
+      }, 1500);
+    };
+
+    initializePermissions();
+  }, []); // Run once on app launch
 
   // Initialize notifications, CallManager, and VoIP push
   useEffect(() => {
@@ -144,7 +248,9 @@ const AppContent: React.FC = () => {
       } else if (event.action === 'answer' && event.callId) {
         // User answered call from native notification - navigate to call screen
         console.log('Answering call from native notification:', event.callId);
-        console.log('Room token from native:', event.roomToken ? 'present' : 'not present');
+        console.log('Room token from native:', event.roomToken ? `present (${event.roomToken.substring(0, 20)}...)` : 'NOT PRESENT');
+        console.log('Room ID from native:', event.roomId || 'NOT PRESENT');
+        console.log('LiveKit URL from native:', event.liveKitUrl || 'NOT PRESENT');
         clearIncomingCall();
         navigationRef.current?.navigate('Call', {
           callId: event.callId,
@@ -267,6 +373,11 @@ const AppContent: React.FC = () => {
     return () => subscription.remove();
   }, [isAuthenticated, accessToken]);
 
+  const handlePTTNotificationPress = (conversationId: string) => {
+    // Navigate to PTT screen when notification is tapped
+    navigationRef.current?.navigate('PTT' as any);
+  };
+
   return (
     <>
       <StatusBar
@@ -275,6 +386,7 @@ const AppContent: React.FC = () => {
       />
       <NavigationContainer ref={navigationRef}>
         {isAuthenticated && <IncomingCallListener />}
+        {isAuthenticated && <GlobalPTTNotification onPress={handlePTTNotificationPress} />}
         <RootNavigator />
       </NavigationContainer>
     </>

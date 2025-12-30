@@ -35,15 +35,15 @@ const SwipeableMessage: React.FC<SwipeableMessageProps> = ({
     .activeOffsetX([-10, 10])
     .failOffsetY([-20, 20])
     .onUpdate((event) => {
-      // Only allow left swipe (negative x)
-      if (event.translationX < 0) {
+      // Only allow right swipe (positive x)
+      if (event.translationX > 0) {
         // Limit the swipe distance with resistance
         const resistance = 0.5;
-        translateX.value = Math.max(event.translationX * resistance, -80);
+        translateX.value = Math.min(event.translationX * resistance, 80);
       }
     })
     .onEnd((event) => {
-      if (event.translationX < -SWIPE_THRESHOLD) {
+      if (event.translationX > SWIPE_THRESHOLD) {
         runOnJS(triggerReply)();
       }
       translateX.value = withSpring(0, {
@@ -89,7 +89,7 @@ const styles = StyleSheet.create({
   },
   replyIconContainer: {
     position: 'absolute',
-    right: 8,
+    left: 8,
     top: 0,
     bottom: 0,
     justifyContent: 'center',

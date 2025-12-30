@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -9,12 +9,13 @@ import {
   Animated,
   Platform,
   Share,
+  StatusBar,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Rect, G } from 'react-native-svg';
-import { useTheme } from '../../context';
+import { useTheme, ThemeColors } from '../../context/ThemeContext';
 import { useAuthStore } from '../../stores/authStore';
 import { FONTS, SPACING, BORDER_RADIUS } from '../../utils/theme';
 import Avatar from '../../components/Avatar';
@@ -102,6 +103,7 @@ const QRCodeScreen: React.FC = () => {
   const { colors, isDark } = useTheme();
   const { user } = useAuthStore();
   const insets = useSafeAreaInsets();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [activeTab, setActiveTab] = useState<'my-code' | 'scan'>('my-code');
   const [isScanning, setIsScanning] = useState(false);
@@ -185,34 +187,35 @@ const QRCodeScreen: React.FC = () => {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={styles.container}>
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.surface} />
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.header, paddingTop: insets.top }]}>
+      <View style={[styles.header, { paddingTop: insets.top }]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
           <Icon name="arrow-left" size={24} color={colors.headerText} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.headerText }]}>QR Code</Text>
+        <Text style={styles.headerTitle}>QR Code</Text>
         <TouchableOpacity style={styles.headerButton} onPress={handleShare}>
           <Icon name="share-variant" size={22} color={colors.headerText} />
         </TouchableOpacity>
       </View>
 
       {/* Tab Switcher */}
-      <View style={[styles.tabContainer, { backgroundColor: colors.card }]}>
+      <View style={styles.tabContainer}>
         <TouchableOpacity
           style={[
             styles.tab,
-            activeTab === 'my-code' && [styles.activeTab, { backgroundColor: colors.primary }],
+            activeTab === 'my-code' && styles.activeTab,
           ]}
           onPress={() => handleTabChange('my-code')}
         >
           <Text
             style={[
               styles.tabText,
-              { color: activeTab === 'my-code' ? '#FFFFFF' : colors.textSecondary },
+              activeTab === 'my-code' && styles.activeTabText,
             ]}
           >
             My Code
@@ -221,14 +224,14 @@ const QRCodeScreen: React.FC = () => {
         <TouchableOpacity
           style={[
             styles.tab,
-            activeTab === 'scan' && [styles.activeTab, { backgroundColor: colors.primary }],
+            activeTab === 'scan' && styles.activeTab,
           ]}
           onPress={() => handleTabChange('scan')}
         >
           <Text
             style={[
               styles.tabText,
-              { color: activeTab === 'scan' ? '#FFFFFF' : colors.textSecondary },
+              activeTab === 'scan' && styles.activeTabText,
             ]}
           >
             Scan Code
@@ -382,15 +385,17 @@ const QRCodeScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: SPACING.md,
     paddingBottom: SPACING.md,
+    backgroundColor: colors.header,
   },
   backButton: {
     padding: SPACING.xs,
@@ -400,6 +405,7 @@ const styles = StyleSheet.create({
     fontSize: FONTS.sizes.lg,
     fontWeight: '600',
     marginLeft: SPACING.md,
+    color: colors.headerText,
   },
   headerButton: {
     padding: SPACING.xs,
@@ -410,6 +416,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING.md,
     borderRadius: BORDER_RADIUS.lg,
     padding: 4,
+    backgroundColor: colors.card,
   },
   tab: {
     flex: 1,
@@ -418,6 +425,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   activeTab: {
+    backgroundColor: colors.primary,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
@@ -427,6 +435,10 @@ const styles = StyleSheet.create({
   tabText: {
     fontSize: FONTS.sizes.md,
     fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  activeTabText: {
+    color: colors.textInverse,
   },
   content: {
     flex: 1,
@@ -437,6 +449,7 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.xl,
     padding: SPACING.lg,
     alignItems: 'center',
+    backgroundColor: colors.card,
   },
   userInfo: {
     flexDirection: 'row',
@@ -450,19 +463,23 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: FONTS.sizes.lg,
     fontWeight: '600',
+    color: colors.text,
   },
   userService: {
     fontSize: FONTS.sizes.sm,
     marginTop: 2,
+    color: colors.textSecondary,
   },
   qrContainer: {
     padding: SPACING.md,
     borderRadius: BORDER_RADIUS.lg,
+    backgroundColor: '#FFFFFF',
   },
   instructions: {
     marginTop: SPACING.lg,
     fontSize: FONTS.sizes.sm,
     textAlign: 'center',
+    color: colors.textSecondary,
   },
   actionButtons: {
     flexDirection: 'row',
@@ -475,6 +492,7 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     borderRadius: BORDER_RADIUS.lg,
     minWidth: 80,
+    backgroundColor: colors.card,
   },
   actionIcon: {
     width: 48,
@@ -483,10 +501,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: SPACING.xs,
+    backgroundColor: colors.primary + '15',
   },
   actionText: {
     fontSize: FONTS.sizes.sm,
     fontWeight: '500',
+    color: colors.text,
   },
   scanContent: {
     flex: 1,
@@ -512,6 +532,7 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderWidth: 3,
+    borderColor: colors.primary,
   },
   topLeft: {
     top: 0,
@@ -543,6 +564,7 @@ const styles = StyleSheet.create({
     right: 10,
     height: 2,
     opacity: 0.8,
+    backgroundColor: colors.primary,
   },
   scanCenterIcon: {
     position: 'absolute',
@@ -555,6 +577,7 @@ const styles = StyleSheet.create({
     borderRadius: 40,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: colors.overlay,
   },
   scanInstructions: {
     flexDirection: 'row',
@@ -566,6 +589,7 @@ const styles = StyleSheet.create({
     marginLeft: SPACING.sm,
     fontSize: FONTS.sizes.sm,
     textAlign: 'center',
+    color: colors.textSecondary,
   },
   enableCameraButton: {
     flexDirection: 'row',
@@ -575,9 +599,10 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.full,
     marginTop: SPACING.xl,
     gap: SPACING.sm,
+    backgroundColor: colors.primary,
   },
   enableCameraText: {
-    color: '#FFFFFF',
+    color: colors.textInverse,
     fontSize: FONTS.sizes.md,
     fontWeight: '600',
   },
@@ -587,9 +612,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.lg,
     borderWidth: 1,
     borderRadius: BORDER_RADIUS.md,
+    borderColor: colors.border,
   },
   demoButtonText: {
     fontSize: FONTS.sizes.sm,
+    color: colors.textSecondary,
   },
 });
 

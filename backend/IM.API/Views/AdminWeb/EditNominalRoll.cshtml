@@ -1,0 +1,96 @@
+@model EditNominalRollViewModel
+@{
+    ViewData["Title"] = "Edit Nominal Roll Entry";
+    ViewData["ActivePage"] = "NominalRoll";
+}
+
+<!-- Back Button -->
+<div class="mb-5">
+    <a href="/admin/nominal-roll" class="btn btn-sm btn-flex btn-light-primary">
+        <i class="bi bi-arrow-left me-2"></i>Back to Nominal Roll
+    </a>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-xl-6 col-lg-8">
+        <div class="card">
+            <div class="card-header border-0 pt-5">
+                <h3 class="card-title align-items-start flex-column">
+                    <span class="card-label fw-bold fs-3 mb-1">
+                        <i class="bi bi-pencil me-2 text-primary"></i>Edit Entry
+                    </span>
+                    <span class="text-muted fw-semibold fs-7">Update nominal roll entry details</span>
+                </h3>
+            </div>
+            <div class="card-body">
+                <form asp-action="EditNominalRoll" asp-route-id="@Model.Id" method="post">
+                    <div class="row">
+                        <div class="col-md-6 mb-7">
+                            <label class="form-label fs-6 fw-semibold mb-3">Service Number</label>
+                            <input type="text" class="form-control form-control-solid bg-light-secondary"
+                                   value="@Model.ServiceNumber" disabled />
+                            <div class="form-text text-muted">
+                                <i class="bi bi-lock me-1"></i>Service number cannot be changed
+                            </div>
+                        </div>
+
+                        <div class="col-md-6 mb-7">
+                            <label asp-for="FullName" class="form-label fs-6 fw-semibold mb-3">
+                                Full Name <span class="text-danger">*</span>
+                            </label>
+                            <input asp-for="FullName" class="form-control form-control-solid"
+                                   placeholder="Enter full name" required />
+                            <span asp-validation-for="FullName" class="text-danger fs-7"></span>
+                        </div>
+                    </div>
+
+                    <div class="mb-7">
+                        <label asp-for="PhoneNumber" class="form-label fs-6 fw-semibold mb-3">
+                            Phone Number
+                        </label>
+                        <input asp-for="PhoneNumber" class="form-control form-control-solid"
+                               placeholder="+234..." />
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-7">
+                            <label asp-for="Department" class="form-label fs-6 fw-semibold mb-3">
+                                Department
+                            </label>
+                            <input asp-for="Department" class="form-control form-control-solid"
+                                   placeholder="e.g., Operations" />
+                        </div>
+
+                        <div class="col-md-6 mb-7">
+                            <label asp-for="RankPosition" class="form-label fs-6 fw-semibold mb-3">
+                                Rank/Position
+                            </label>
+                            <input asp-for="RankPosition" class="form-control form-control-solid"
+                                   placeholder="e.g., Inspector" />
+                        </div>
+                    </div>
+
+                    <div class="mb-7">
+                        <label asp-for="Status" class="form-label fs-6 fw-semibold mb-3">
+                            Status
+                        </label>
+                        <select asp-for="Status" class="form-select form-select-solid">
+                            <option value="@IM.Core.Enums.UserStatus.Active">Active</option>
+                            <option value="@IM.Core.Enums.UserStatus.Suspended">Suspended</option>
+                            <option value="@IM.Core.Enums.UserStatus.Inactive">Inactive</option>
+                        </select>
+                    </div>
+
+                    <div class="separator my-6"></div>
+
+                    <div class="d-flex justify-content-end gap-3">
+                        <a href="/admin/nominal-roll" class="btn btn-light">Cancel</a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg me-2"></i>Save Changes
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

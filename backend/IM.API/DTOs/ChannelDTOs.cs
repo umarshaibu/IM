@@ -6,6 +6,7 @@ public class ChannelDto
 {
     public Guid Id { get; set; }
     public string Name { get; set; } = string.Empty;
+    public string ShortName { get; set; } = string.Empty;
     public string? Description { get; set; }
     public string? IconUrl { get; set; }
     public Guid OwnerId { get; set; }
@@ -51,6 +52,7 @@ public class ReactionSummaryDto
 public class CreateChannelRequest
 {
     public string Name { get; set; } = string.Empty;
+    public string ShortName { get; set; } = string.Empty;
     public string? Description { get; set; }
     public string? IconUrl { get; set; }
     public bool IsPublic { get; set; } = true;
@@ -59,6 +61,7 @@ public class CreateChannelRequest
 public class UpdateChannelRequest
 {
     public string? Name { get; set; }
+    public string? ShortName { get; set; }
     public string? Description { get; set; }
     public string? IconUrl { get; set; }
 }

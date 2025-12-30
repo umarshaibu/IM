@@ -12,11 +12,16 @@ import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.View
+import android.view.WindowInsets
+import android.view.WindowInsetsController
 import android.view.WindowManager
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.ImageButton
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 
 /**
@@ -80,7 +85,26 @@ class IncomingCallActivity : AppCompatActivity() {
         // Start pulse animation
         startPulseAnimation()
 
+        // Pre-warm React Native in background so it's ready when user accepts call
+        preWarmReactNative()
+
         Log.d(TAG, "IncomingCallActivity created for call: $callId from $callerName")
+    }
+
+    /**
+     * Pre-warm React Native so it's ready when user accepts the call.
+     * This runs on the main thread to initialize RN context in background.
+     */
+    private fun preWarmReactNative() {
+        try {
+            val app = application as? MainApplication
+            if (app != null) {
+                Log.d(TAG, "Pre-warming React Native from IncomingCallActivity")
+                app.preWarmReactNative()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error pre-warming React Native: ${e.message}")
+        }
     }
 
     private fun registerCloseReceiver() {
@@ -100,37 +124,61 @@ class IncomingCallActivity : AppCompatActivity() {
     }
 
     private fun configureWindowFlags() {
-        // Show activity over lock screen and turn screen on
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-            setShowWhenLocked(true)
-            setTurnScreenOn(true)
+        try {
+            // CRITICAL: These flags must be set BEFORE setContentView for best results
+            // Show activity over lock screen and turn screen on
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                setShowWhenLocked(true)
+                setTurnScreenOn(true)
 
-            val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
-            keyguardManager.requestDismissKeyguard(this, null)
-        } else {
+                val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+                keyguardManager?.requestDismissKeyguard(this, object : KeyguardManager.KeyguardDismissCallback() {
+                    override fun onDismissSucceeded() {
+                        Log.d(TAG, "Keyguard dismissed successfully")
+                    }
+                    override fun onDismissCancelled() {
+                        Log.d(TAG, "Keyguard dismiss cancelled")
+                    }
+                    override fun onDismissError() {
+                        Log.e(TAG, "Keyguard dismiss error")
+                    }
+                })
+            }
+
+            // Always add these flags for maximum compatibility
             @Suppress("DEPRECATION")
             window.addFlags(
                 WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
                 WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-                WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
+                WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
+                WindowManager.LayoutParams.FLAG_ALLOW_LOCK_WHILE_SCREEN_ON
             )
-        }
 
-        // Keep screen on while this activity is visible
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            // Keep screen on while this activity is visible
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
-        // Make status bar transparent for full-screen effect
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            // Make status bar and navigation bar transparent for full-screen effect
             window.statusBarColor = android.graphics.Color.TRANSPARENT
             window.navigationBarColor = android.graphics.Color.TRANSPARENT
-        }
 
-        // Full screen immersive mode
-        window.decorView.systemUiVisibility = (
-            View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-            or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-            or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-        )
+            // Use modern WindowInsetsController API for Android 11+ or fallback for older
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                // Modern approach for Android 11+
+                WindowCompat.setDecorFitsSystemWindows(window, false)
+            } else {
+                // Legacy approach for older Android versions
+                @Suppress("DEPRECATION")
+                window.decorView.systemUiVisibility = (
+                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                    or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                    or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                )
+            }
+
+            Log.d(TAG, "Window flags configured successfully")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error configuring window flags: ${e.message}", e)
+        }
     }
 
     private fun extractCallData(intent: Intent) {
@@ -260,53 +308,130 @@ class IncomingCallActivity : AppCompatActivity() {
         findViewById<ImageButton>(R.id.acceptButton)?.isEnabled = false
         findViewById<ImageButton>(R.id.declineButton)?.isEnabled = false
 
-        // Update status text
+        // Update status text to show we're connecting
         findViewById<TextView>(R.id.statusText)?.text = "Connecting..."
 
-        // Stop ringtone and cancel notification
-        stopRingtoneAndNotification()
+        // Stop ringtone but keep this activity visible
+        CallNotificationService.stopRingtone()
 
         // Join the call via HTTP API BEFORE launching the app
         // This ensures the backend knows we answered even if React Native takes time to load
         CallApiClient.joinCall(this, currentCallId) { result ->
             runOnUiThread {
                 if (result.success) {
-                    Log.d(TAG, "Call joined via API successfully, launching app")
+                    Log.d(TAG, "Call joined via API successfully")
+                    Log.d(TAG, "Room token: ${result.roomToken?.take(20)}...")
+                    Log.d(TAG, "Room ID: ${result.roomId}")
+                    Log.d(TAG, "LiveKit URL: ${result.liveKitUrl}")
 
-                    // Launch MainActivity with call data including the room token
-                    val intent = Intent(this, MainActivity::class.java).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                        putExtra("type", "call")
-                        putExtra("callId", currentCallId)
-                        putExtra("callerId", callerId)
-                        putExtra("callerName", callerName)
-                        putExtra("callType", callType)
-                        putExtra("conversationId", conversationId)
-                        putExtra("action", "answer")
-                        // Pass the room token so React Native can connect directly
-                        putExtra("roomToken", result.roomToken)
-                        putExtra("roomId", result.roomId)
-                        putExtra("liveKitUrl", result.liveKitUrl)
-                    }
-                    startActivity(intent)
-                    finish()
+                    // Update status to show call is connected
+                    findViewById<TextView>(R.id.statusText)?.text = "Connected - Opening app..."
+
+                    // Store pending call info BEFORE launching MainActivity
+                    // This ensures React Native can pick it up when it's ready
+                    CallEventModule.storePendingCallInfo(
+                        "answer",
+                        currentCallId,
+                        callerId ?: "",
+                        callerName ?: "Unknown",
+                        callType ?: "Voice",
+                        conversationId ?: "",
+                        result.roomToken,
+                        result.roomId,
+                        result.liveKitUrl
+                    )
+
+                    // Wait for React Native to be ready, then launch MainActivity
+                    waitForReactNativeAndLaunch()
+
                 } else {
                     Log.e(TAG, "Failed to join call via API: ${result.error}")
-                    // Still try to launch the app - maybe React Native can handle it
-                    val intent = Intent(this, MainActivity::class.java).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                        putExtra("type", "call")
-                        putExtra("callId", currentCallId)
-                        putExtra("callerId", callerId)
-                        putExtra("callerName", callerName)
-                        putExtra("callType", callType)
-                        putExtra("conversationId", conversationId)
-                        putExtra("action", "answer")
-                    }
-                    startActivity(intent)
-                    finish()
+                    findViewById<TextView>(R.id.statusText)?.text = "Connection failed - Opening app..."
+
+                    // Store pending call info without room token - React Native will try to join
+                    CallEventModule.storePendingCallInfo(
+                        "answer",
+                        currentCallId,
+                        callerId ?: "",
+                        callerName ?: "Unknown",
+                        callType ?: "Voice",
+                        conversationId ?: "",
+                        null, null, null
+                    )
+
+                    // Wait for React Native to be ready, then launch MainActivity
+                    waitForReactNativeAndLaunch()
                 }
             }
+        }
+    }
+
+    /**
+     * Wait for React Native context to be ready before launching MainActivity.
+     * This prevents the "UIManager not properly initialized" crash.
+     */
+    private fun waitForReactNativeAndLaunch() {
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        val app = application as? MainApplication
+        var attempts = 0
+        val maxAttempts = 50 // 5 seconds max wait (50 * 100ms)
+
+        val checkReactNative = object : Runnable {
+            override fun run() {
+                attempts++
+                val isReady = app?.isReactContextReady() == true
+                Log.d(TAG, "Waiting for React Native... attempt=$attempts, ready=$isReady")
+
+                if (isReady || attempts >= maxAttempts) {
+                    if (isReady) {
+                        Log.d(TAG, "React Native is ready, launching MainActivity")
+                    } else {
+                        Log.w(TAG, "React Native not ready after $maxAttempts attempts, launching anyway")
+                    }
+                    launchMainActivity()
+                } else {
+                    // Check again in 100ms
+                    handler.postDelayed(this, 100)
+                }
+            }
+        }
+
+        // Start checking
+        handler.post(checkReactNative)
+    }
+
+    /**
+     * Launch MainActivity after React Native is ready
+     */
+    private fun launchMainActivity() {
+        if (isFinishing || isDestroyed) return
+
+        try {
+            val intent = Intent(this, MainActivity::class.java).apply {
+                // FLAG_ACTIVITY_NEW_TASK - Start activity in a new task
+                // FLAG_ACTIVITY_CLEAR_TOP - If activity exists, bring it to front and clear activities above it
+                // FLAG_ACTIVITY_SINGLE_TOP - Don't create new instance if already at top
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP
+                // Add extra to indicate this is from an incoming call
+                putExtra("fromIncomingCall", true)
+            }
+            Log.d(TAG, "Launching MainActivity to foreground (React Native should be ready)")
+            startActivity(intent)
+
+            // Wait a bit for MainActivity to fully load, then finish this activity
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                if (!isFinishing && !isDestroyed) {
+                    Log.d(TAG, "Finishing IncomingCallActivity after MainActivity launched")
+                    val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                    notificationManager.cancel(CallNotificationService.CALL_NOTIFICATION_ID)
+                    CallForegroundService.stopService(this)
+                    finish()
+                }
+            }, 1000) // 1 second delay for smooth transition
+        } catch (e: Exception) {
+            Log.e(TAG, "Error launching MainActivity: ${e.message}", e)
         }
     }
 
@@ -345,6 +470,9 @@ class IncomingCallActivity : AppCompatActivity() {
         // Cancel the notification
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.cancel(CallNotificationService.CALL_NOTIFICATION_ID)
+
+        // Stop the foreground service that launched this activity
+        CallForegroundService.stopService(this)
     }
 
     override fun onDestroy() {

@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useState } from 'react';
+import React, { useEffect, useCallback, useState, useMemo } from 'react';
 import {
   View,
   FlatList,
@@ -8,18 +8,24 @@ import {
   Text,
   StatusBar,
   Alert,
+  Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import ConversationItem from '../../components/ConversationItem';
-import { conversationsApi } from '../../services/api';
+import MediaPicker, { SelectedMedia } from '../../components/MediaPicker';
+import Avatar from '../../components/Avatar';
+import { conversationsApi, filesApi } from '../../services/api';
+import { sendMessage } from '../../services/signalr';
 import { useChatStore } from '../../stores/chatStore';
 import { useAuthStore } from '../../stores/authStore';
 import { RootStackParamList } from '../../navigation/RootNavigator';
 import { Conversation } from '../../types';
-import { COLORS, FONTS, SPACING, BORDER_RADIUS } from '../../utils/theme';
+import { useTheme } from '../../context/ThemeContext';
+import { FONTS, SPACING, BORDER_RADIUS } from '../../utils/theme';
 
 type ChatsScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -27,10 +33,27 @@ type FilterType = 'all' | 'personal' | 'groups';
 
 const ChatsScreen: React.FC = () => {
   const navigation = useNavigation<ChatsScreenNavigationProp>();
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { userId } = useAuthStore();
   const { conversations, setConversations } = useChatStore();
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
+  const [showMediaPicker, setShowMediaPicker] = useState(false);
+  const [selectedMedia, setSelectedMedia] = useState<SelectedMedia | null>(null);
+  const [showConversationPicker, setShowConversationPicker] = useState(false);
+  const [isSendingMedia, setIsSendingMedia] = useState(false);
   const queryClient = useQueryClient();
+
+  // Subscribe to all typing users to show in chat list
+  // Using JSON.stringify for deep comparison since typingUsers is a nested object
+  const typingUsersRaw = useChatStore((state) => state.typingUsers);
+  const typingUsersKey = JSON.stringify(typingUsersRaw);
+  const typingUsers = React.useMemo(() => typingUsersRaw, [typingUsersKey]);
+
+  // Debug: Log typing users changes
+  useEffect(() => {
+    console.log('ChatsScreen - typingUsers changed:', typingUsersKey);
+  }, [typingUsersKey]);
 
   const { data, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ['conversations'],
@@ -66,9 +89,9 @@ const ChatsScreen: React.FC = () => {
     },
   });
 
-  // Filter out archived conversations
+  // Filter out archived and deleted conversations
   const nonArchivedConversations = React.useMemo(() => {
-    return conversations.filter((c) => !c.isArchived);
+    return conversations.filter((c) => !c.isArchived && !c.isDeleted);
   }, [conversations]);
 
   // Count archived conversations
@@ -122,8 +145,91 @@ const ChatsScreen: React.FC = () => {
           text: 'Archive',
           onPress: () => archiveMutation.mutate(conversation.id),
         },
+        {
+          text: 'Delete Chat',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Delete Chat',
+              'Are you sure you want to delete this chat? This action cannot be undone.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete',
+                  style: 'destructive',
+                  onPress: () => {
+                    useChatStore.getState().softDeleteConversation(conversation.id);
+                  },
+                },
+              ]
+            );
+          },
+        },
       ]
     );
+  };
+
+  const handleMediaSelected = (media: SelectedMedia) => {
+    setSelectedMedia(media);
+    setShowMediaPicker(false);
+    setShowConversationPicker(true);
+  };
+
+  const handleSendMediaToConversation = async (conversation: Conversation) => {
+    if (!selectedMedia) return;
+
+    setIsSendingMedia(true);
+    try {
+      // Upload the media file
+      const uploadResponse = await filesApi.upload(selectedMedia.uri);
+      const fileData = uploadResponse.data;
+
+      // Determine message type based on media type
+      const messageType = selectedMedia.type === 'video' ? 'Video' : 'Image';
+
+      // Send the message
+      await sendMessage(
+        conversation.id,
+        '', // No text content
+        messageType,
+        fileData.id,
+        undefined, // parentMessageId
+        undefined  // forwardedFromId
+      );
+
+      setShowConversationPicker(false);
+      setSelectedMedia(null);
+
+      // Navigate to the chat
+      const title = conversation.type === 'Private'
+        ? conversation.participants.find((p) => p.userId !== userId)?.displayName ||
+          conversation.participants.find((p) => p.userId !== userId)?.fullName ||
+          'Chat'
+        : conversation.name || 'Group';
+
+      navigation.navigate('Chat', { conversationId: conversation.id, title });
+    } catch (error) {
+      console.error('Error sending media:', error);
+      Alert.alert('Error', 'Failed to send media');
+    } finally {
+      setIsSendingMedia(false);
+    }
+  };
+
+  const getConversationTitle = (conversation: Conversation) => {
+    return conversation.type === 'Private'
+      ? conversation.participants.find((p) => p.userId !== userId)?.displayName ||
+        conversation.participants.find((p) => p.userId !== userId)?.fullName ||
+        'Chat'
+      : conversation.name || 'Group';
+  };
+
+  const getConversationAvatar = (conversation: Conversation) => {
+    if (conversation.type === 'Private') {
+      const otherParticipant = conversation.participants.find((p) => p.userId !== userId);
+      return otherParticipant?.profilePictureUrl;
+    }
+    return conversation.groupPictureUrl;
   };
 
   const renderFilterTab = (
@@ -160,13 +266,13 @@ const ChatsScreen: React.FC = () => {
         activeOpacity={0.7}
       >
         <View style={styles.archivedIconContainer}>
-          <Icon name="archive-outline" size={20} color={COLORS.primary} />
+          <Icon name="archive-outline" size={20} color={colors.primary} />
         </View>
         <Text style={styles.archivedText}>Archived</Text>
         <View style={styles.archivedBadge}>
           <Text style={styles.archivedBadgeText}>{archivedCount}</Text>
         </View>
-        <Icon name="chevron-right" size={20} color={COLORS.textSecondary} />
+        <Icon name="chevron-right" size={20} color={colors.textSecondary} />
       </TouchableOpacity>
     );
   };
@@ -174,7 +280,7 @@ const ChatsScreen: React.FC = () => {
   const renderEmptyList = () => (
     <View style={styles.emptyContainer}>
       <View style={styles.emptyIconContainer}>
-        <Icon name="chat-processing-outline" size={64} color={COLORS.primary} />
+        <Icon name="chat-processing-outline" size={64} color={colors.primary} />
       </View>
       <Text style={styles.emptyTitle}>No conversations yet</Text>
       <Text style={styles.emptySubtitle}>
@@ -185,24 +291,40 @@ const ChatsScreen: React.FC = () => {
         onPress={() => navigation.navigate('NewChat')}
         activeOpacity={0.8}
       >
-        <Icon name="message-plus" size={20} color={COLORS.textLight} />
+        <Icon name="message-plus" size={20} color={colors.textInverse} />
         <Text style={styles.startChatButtonText}>Start a new chat</Text>
       </TouchableOpacity>
     </View>
   );
 
-  const renderItem = ({ item }: { item: Conversation }) => (
-    <ConversationItem
-      conversation={item}
-      currentUserId={userId || ''}
-      onPress={() => handleConversationPress(item)}
-      onLongPress={() => handleConversationLongPress(item)}
-    />
-  );
+  const renderItem = ({ item }: { item: Conversation }) => {
+    const conversationTypingUsers = typingUsers[item.id] || [];
+    const otherTypingUsers = conversationTypingUsers.filter(id => id !== userId);
+    const isTyping = otherTypingUsers.length > 0;
+
+    // Get first typing user's name for groups
+    let typingUserName: string | undefined;
+    if (isTyping && item.type === 'Group') {
+      const typingUserId = otherTypingUsers[0];
+      const participant = item.participants.find(p => p.userId === typingUserId);
+      typingUserName = participant?.displayName || participant?.fullName;
+    }
+
+    return (
+      <ConversationItem
+        conversation={item}
+        currentUserId={userId || ''}
+        onPress={() => handleConversationPress(item)}
+        onLongPress={() => handleConversationLongPress(item)}
+        isTyping={isTyping}
+        typingUserName={typingUserName}
+      />
+    );
+  };
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.surface} />
 
       {/* Header */}
       <View style={styles.header}>
@@ -210,18 +332,18 @@ const ChatsScreen: React.FC = () => {
         <View style={styles.headerRight}>
           <TouchableOpacity
             style={styles.headerButton}
-            onPress={() => {/* Camera action */}}
+            onPress={() => setShowMediaPicker(true)}
           >
-            <Icon name="camera-outline" size={24} color={COLORS.text} />
+            <Icon name="camera-outline" size={24} color={colors.text} />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.headerButton}
             onPress={() => navigation.navigate('Search')}
           >
-            <Icon name="magnify" size={24} color={COLORS.text} />
+            <Icon name="magnify" size={24} color={colors.text} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.headerButton}>
-            <Icon name="dots-vertical" size={24} color={COLORS.text} />
+            <Icon name="dots-vertical" size={24} color={colors.text} />
           </TouchableOpacity>
         </View>
       </View>
@@ -237,6 +359,7 @@ const ChatsScreen: React.FC = () => {
         data={filteredConversations}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
+        extraData={typingUsers}
         ListHeaderComponent={renderArchivedButton}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         ListEmptyComponent={!isLoading ? renderEmptyList : null}
@@ -244,8 +367,8 @@ const ChatsScreen: React.FC = () => {
           <RefreshControl
             refreshing={isRefetching}
             onRefresh={refetch}
-            colors={[COLORS.primary]}
-            tintColor={COLORS.primary}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
           />
         }
         contentContainerStyle={filteredConversations.length === 0 && archivedCount === 0 ? styles.emptyListContent : styles.listContent}
@@ -258,30 +381,105 @@ const ChatsScreen: React.FC = () => {
         onPress={() => navigation.navigate('NewChat')}
         activeOpacity={0.8}
       >
-        <Icon name="message-plus" size={26} color={COLORS.textLight} />
+        <Icon name="message-plus" size={26} color={colors.textInverse} />
       </TouchableOpacity>
+
+      {/* Media Picker */}
+      <MediaPicker
+        visible={showMediaPicker}
+        onClose={() => setShowMediaPicker(false)}
+        onMediaSelected={handleMediaSelected}
+      />
+
+      {/* Conversation Picker Modal */}
+      <Modal
+        visible={showConversationPicker}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => {
+          setShowConversationPicker(false);
+          setSelectedMedia(null);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Send to...</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowConversationPicker(false);
+                  setSelectedMedia(null);
+                }}
+                style={styles.modalCloseButton}
+              >
+                <Icon name="close" size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            {isSendingMedia ? (
+              <View style={styles.sendingContainer}>
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={styles.sendingText}>Sending...</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={nonArchivedConversations}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.conversationPickerItem}
+                    onPress={() => handleSendMediaToConversation(item)}
+                    activeOpacity={0.7}
+                  >
+                    <Avatar
+                      uri={getConversationAvatar(item)}
+                      name={getConversationTitle(item)}
+                      size={50}
+                    />
+                    <View style={styles.conversationPickerInfo}>
+                      <Text style={styles.conversationPickerName}>
+                        {getConversationTitle(item)}
+                      </Text>
+                      <Text style={styles.conversationPickerType}>
+                        {item.type === 'Private' ? 'Private chat' : `${item.participants.length} members`}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
+                ItemSeparatorComponent={() => <View style={styles.conversationPickerSeparator} />}
+                ListEmptyComponent={
+                  <View style={styles.emptyPickerContainer}>
+                    <Text style={styles.emptyPickerText}>No conversations available</Text>
+                  </View>
+                }
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
 
-const styles = StyleSheet.create({
+// Dynamic styles based on theme
+const createStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.xl + 20, // Account for status bar
+    paddingTop: SPACING.xl + 20,
     paddingBottom: SPACING.md,
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
   },
   headerTitle: {
     fontSize: FONTS.sizes.title,
     fontWeight: 'bold',
-    color: COLORS.text,
+    color: colors.text,
   },
   headerRight: {
     flexDirection: 'row',
@@ -306,49 +504,49 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   filterTabActive: {
-    backgroundColor: COLORS.primary + '15',
+    backgroundColor: colors.primary + '15',
   },
   filterTabText: {
     fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     fontWeight: '500',
   },
   filterTabTextActive: {
-    color: COLORS.primary,
+    color: colors.primary,
     fontWeight: '600',
   },
   filterBadge: {
     marginLeft: SPACING.xs,
-    backgroundColor: COLORS.textSecondary + '30',
+    backgroundColor: colors.textSecondary + '30',
     borderRadius: BORDER_RADIUS.sm,
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
   filterBadgeActive: {
-    backgroundColor: COLORS.primary + '20',
+    backgroundColor: colors.primary + '20',
   },
   filterBadgeText: {
     fontSize: FONTS.sizes.xs,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     fontWeight: '600',
   },
   filterBadgeTextActive: {
-    color: COLORS.primary,
+    color: colors.primary,
   },
   archivedButton: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.divider,
+    borderBottomColor: colors.divider,
   },
   archivedIconContainer: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: COLORS.primary + '15',
+    backgroundColor: colors.primary + '15',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: SPACING.md,
@@ -356,11 +554,11 @@ const styles = StyleSheet.create({
   archivedText: {
     flex: 1,
     fontSize: FONTS.sizes.md,
-    color: COLORS.text,
+    color: colors.text,
     fontWeight: '500',
   },
   archivedBadge: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: colors.primary,
     borderRadius: 12,
     minWidth: 24,
     height: 24,
@@ -370,7 +568,7 @@ const styles = StyleSheet.create({
     marginRight: SPACING.sm,
   },
   archivedBadgeText: {
-    color: COLORS.textLight,
+    color: colors.textInverse,
     fontSize: FONTS.sizes.xs,
     fontWeight: 'bold',
   },
@@ -379,7 +577,7 @@ const styles = StyleSheet.create({
   },
   separator: {
     height: 1,
-    backgroundColor: COLORS.divider,
+    backgroundColor: colors.divider,
     marginLeft: 88,
   },
   emptyContainer: {
@@ -395,7 +593,7 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: COLORS.primary + '15',
+    backgroundColor: colors.primary + '15',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: SPACING.xl,
@@ -403,12 +601,12 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: FONTS.sizes.xl,
     fontWeight: 'bold',
-    color: COLORS.text,
+    color: colors.text,
     marginBottom: SPACING.sm,
   },
   emptySubtitle: {
     fontSize: FONTS.sizes.md,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     textAlign: 'center',
     marginBottom: SPACING.xxl,
     lineHeight: 22,
@@ -416,37 +614,110 @@ const styles = StyleSheet.create({
   startChatButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.primary,
+    backgroundColor: colors.primary,
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.xl,
     borderRadius: BORDER_RADIUS.xl,
     gap: SPACING.sm,
-    shadowColor: COLORS.primary,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 4,
   },
   startChatButtonText: {
-    color: COLORS.textLight,
+    color: colors.textInverse,
     fontSize: FONTS.sizes.md,
     fontWeight: '600',
   },
   fab: {
     position: 'absolute',
     right: SPACING.lg,
-    bottom: 90, // Above the tab bar
+    bottom: 90,
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: COLORS.primary,
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: COLORS.primary,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 6,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: BORDER_RADIUS.xl,
+    borderTopRightRadius: BORDER_RADIUS.xl,
+    maxHeight: '80%',
+    paddingBottom: SPACING.xxl,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
+  },
+  modalTitle: {
+    fontSize: FONTS.sizes.lg,
+    fontWeight: 'bold',
+    color: colors.text,
+  },
+  modalCloseButton: {
+    padding: SPACING.xs,
+  },
+  sendingContainer: {
+    padding: SPACING.xxl,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sendingText: {
+    marginTop: SPACING.md,
+    fontSize: FONTS.sizes.md,
+    color: colors.textSecondary,
+  },
+  conversationPickerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+  },
+  conversationPickerInfo: {
+    flex: 1,
+    marginLeft: SPACING.md,
+  },
+  conversationPickerName: {
+    fontSize: FONTS.sizes.md,
+    fontWeight: '500',
+    color: colors.text,
+    marginBottom: 2,
+  },
+  conversationPickerType: {
+    fontSize: FONTS.sizes.sm,
+    color: colors.textSecondary,
+  },
+  conversationPickerSeparator: {
+    height: 1,
+    backgroundColor: colors.divider,
+    marginLeft: 82,
+  },
+  emptyPickerContainer: {
+    padding: SPACING.xxl,
+    alignItems: 'center',
+  },
+  emptyPickerText: {
+    fontSize: FONTS.sizes.md,
+    color: colors.textSecondary,
+    textAlign: 'center',
   },
 });
 

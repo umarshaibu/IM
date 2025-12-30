@@ -26,44 +26,54 @@ public class ChannelsController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<IEnumerable<ChannelDto>>> GetChannels([FromQuery] string? search, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        var userId = GetUserId();
-
-        var query = _context.Channels
-            .Include(c => c.Owner)
-                .ThenInclude(o => o.NominalRoll)
-            .Include(c => c.Followers)
-            .Where(c => c.IsPublic)
-            .AsQueryable();
-
-        if (!string.IsNullOrWhiteSpace(search))
+        try
         {
-            query = query.Where(c => c.Name.ToLower().Contains(search.ToLower()) ||
-                                     (c.Description != null && c.Description.ToLower().Contains(search.ToLower())));
-        }
+            var userId = GetUserId();
 
-        var channels = await query
-            .OrderByDescending(c => c.FollowerCount)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .Select(c => new ChannelDto
+            var query = _context.Channels
+                .Include(c => c.Owner)
+                    .ThenInclude(o => o.NominalRoll)
+                .Include(c => c.Followers)
+                .Where(c => c.IsPublic)
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(search))
             {
-                Id = c.Id,
-                Name = c.Name,
-                Description = c.Description,
-                IconUrl = c.IconUrl,
-                OwnerId = c.OwnerId,
-                OwnerName = c.Owner.DisplayName ?? c.Owner.NominalRoll.FullName,
-                IsPublic = c.IsPublic,
-                IsVerified = c.IsVerified,
-                FollowerCount = c.FollowerCount,
-                IsFollowing = c.Followers.Any(f => f.UserId == userId),
-                IsMuted = c.Followers.Any(f => f.UserId == userId && f.IsMuted),
-                LastPostAt = c.LastPostAt,
-                CreatedAt = c.CreatedAt
-            })
-            .ToListAsync();
+                query = query.Where(c => c.Name.ToLower().Contains(search.ToLower()) ||
+                                         (c.Description != null && c.Description.ToLower().Contains(search.ToLower())));
+            }
 
-        return Ok(channels);
+            var channels = await query
+                .OrderByDescending(c => c.FollowerCount)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(c => new ChannelDto
+                {
+                    Id = c.Id,
+                    Name = c.Name,
+                    ShortName = c.ShortName ?? c.Name,
+                    Description = c.Description,
+                    IconUrl = c.IconUrl,
+                    OwnerId = c.OwnerId,
+                    OwnerName = c.Owner != null
+                        ? (c.Owner.DisplayName ?? (c.Owner.NominalRoll != null ? c.Owner.NominalRoll.FullName : "Unknown"))
+                        : "Unknown",
+                    IsPublic = c.IsPublic,
+                    IsVerified = c.IsVerified,
+                    FollowerCount = c.FollowerCount,
+                    IsFollowing = c.Followers.Any(f => f.UserId == userId),
+                    IsMuted = c.Followers.Any(f => f.UserId == userId && f.IsMuted),
+                    LastPostAt = c.LastPostAt,
+                    CreatedAt = c.CreatedAt
+                })
+                .ToListAsync();
+
+            return Ok(channels);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "Failed to load channels", error = ex.Message });
+        }
     }
 
     // GET: api/channels/following
@@ -82,10 +92,13 @@ public class ChannelsController : ControllerBase
             {
                 Id = cf.Channel.Id,
                 Name = cf.Channel.Name,
+                ShortName = cf.Channel.ShortName,
                 Description = cf.Channel.Description,
                 IconUrl = cf.Channel.IconUrl,
                 OwnerId = cf.Channel.OwnerId,
-                OwnerName = cf.Channel.Owner.DisplayName ?? cf.Channel.Owner.NominalRoll.FullName,
+                OwnerName = cf.Channel.Owner != null
+                    ? (cf.Channel.Owner.DisplayName ?? (cf.Channel.Owner.NominalRoll != null ? cf.Channel.Owner.NominalRoll.FullName : "Unknown"))
+                    : "Unknown",
                 IsPublic = cf.Channel.IsPublic,
                 IsVerified = cf.Channel.IsVerified,
                 FollowerCount = cf.Channel.FollowerCount,
@@ -115,10 +128,13 @@ public class ChannelsController : ControllerBase
             {
                 Id = c.Id,
                 Name = c.Name,
+                ShortName = c.ShortName,
                 Description = c.Description,
                 IconUrl = c.IconUrl,
                 OwnerId = c.OwnerId,
-                OwnerName = c.Owner.DisplayName ?? c.Owner.NominalRoll.FullName,
+                OwnerName = c.Owner != null
+                    ? (c.Owner.DisplayName ?? (c.Owner.NominalRoll != null ? c.Owner.NominalRoll.FullName : "Unknown"))
+                    : "Unknown",
                 IsPublic = c.IsPublic,
                 IsVerified = c.IsVerified,
                 FollowerCount = c.FollowerCount,
@@ -153,10 +169,13 @@ public class ChannelsController : ControllerBase
         {
             Id = channel.Id,
             Name = channel.Name,
+            ShortName = channel.ShortName,
             Description = channel.Description,
             IconUrl = channel.IconUrl,
             OwnerId = channel.OwnerId,
-            OwnerName = channel.Owner.DisplayName ?? channel.Owner.NominalRoll.FullName,
+            OwnerName = channel.Owner != null
+                ? (channel.Owner.DisplayName ?? (channel.Owner.NominalRoll != null ? channel.Owner.NominalRoll.FullName : "Unknown"))
+                : "Unknown",
             IsPublic = channel.IsPublic,
             IsVerified = channel.IsVerified,
             FollowerCount = channel.FollowerCount,
@@ -181,6 +200,7 @@ public class ChannelsController : ControllerBase
         var channel = new Channel
         {
             Name = request.Name,
+            ShortName = request.ShortName,
             Description = request.Description,
             IconUrl = request.IconUrl,
             OwnerId = userId,
@@ -208,6 +228,7 @@ public class ChannelsController : ControllerBase
         {
             Id = channel.Id,
             Name = channel.Name,
+            ShortName = channel.ShortName,
             Description = channel.Description,
             IconUrl = channel.IconUrl,
             OwnerId = channel.OwnerId,
@@ -248,6 +269,10 @@ public class ChannelsController : ControllerBase
         {
             channel.Name = request.Name;
         }
+        if (!string.IsNullOrWhiteSpace(request.ShortName))
+        {
+            channel.ShortName = request.ShortName;
+        }
         if (request.Description != null)
         {
             channel.Description = request.Description;
@@ -263,10 +288,13 @@ public class ChannelsController : ControllerBase
         {
             Id = channel.Id,
             Name = channel.Name,
+            ShortName = channel.ShortName,
             Description = channel.Description,
             IconUrl = channel.IconUrl,
             OwnerId = channel.OwnerId,
-            OwnerName = channel.Owner.DisplayName ?? channel.Owner.NominalRoll.FullName,
+            OwnerName = channel.Owner != null
+                ? (channel.Owner.DisplayName ?? (channel.Owner.NominalRoll != null ? channel.Owner.NominalRoll.FullName : "Unknown"))
+                : "Unknown",
             IsPublic = channel.IsPublic,
             IsVerified = channel.IsVerified,
             FollowerCount = channel.FollowerCount,

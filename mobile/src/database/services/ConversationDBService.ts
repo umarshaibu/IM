@@ -224,6 +224,67 @@ class ConversationDBService {
   }
 
   /**
+   * Soft delete a conversation (marks as deleted without removing from DB)
+   */
+  async softDeleteConversation(conversationServerId: string): Promise<void> {
+    try {
+      await database.write(async () => {
+        const conversations = await this.conversationsCollection
+          .query(Q.where('server_id', conversationServerId))
+          .fetch();
+
+        if (conversations.length > 0) {
+          await conversations[0].update(conv => {
+            conv.isDeleted = true;
+            conv.deletedAt = Date.now();
+          });
+        }
+      });
+    } catch (error) {
+      console.error('Error soft deleting conversation:', error);
+    }
+  }
+
+  /**
+   * Restore a soft-deleted conversation
+   */
+  async restoreConversation(conversationServerId: string): Promise<void> {
+    try {
+      await database.write(async () => {
+        const conversations = await this.conversationsCollection
+          .query(Q.where('server_id', conversationServerId))
+          .fetch();
+
+        if (conversations.length > 0) {
+          await conversations[0].update(conv => {
+            conv.isDeleted = false;
+            conv.deletedAt = null;
+          });
+        }
+      });
+    } catch (error) {
+      console.error('Error restoring conversation:', error);
+    }
+  }
+
+  /**
+   * Get all non-deleted conversations
+   */
+  async getActiveConversations(): Promise<Conversation[]> {
+    try {
+      return await this.conversationsCollection
+        .query(
+          Q.where('is_deleted', Q.notEq(true)),
+          Q.sortBy('last_message_at', Q.desc)
+        )
+        .fetch();
+    } catch (error) {
+      console.error('Error fetching active conversations from DB:', error);
+      return [];
+    }
+  }
+
+  /**
    * Clear all conversations (for logout)
    */
   async clearAll(): Promise<void> {

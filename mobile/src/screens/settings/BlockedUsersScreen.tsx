@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,12 +7,14 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  StatusBar,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Avatar from '../../components/Avatar';
 import { usersApi } from '../../services/api';
-import { COLORS, FONTS, SPACING } from '../../utils/theme';
+import { useTheme, ThemeColors } from '../../context/ThemeContext';
+import { FONTS, SPACING } from '../../utils/theme';
 
 interface BlockedUser {
   id: string;
@@ -24,6 +26,8 @@ interface BlockedUser {
 }
 
 const BlockedUsersScreen: React.FC = () => {
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const queryClient = useQueryClient();
 
   const { data: blockedUsers, isLoading } = useQuery({
@@ -76,13 +80,13 @@ const BlockedUsersScreen: React.FC = () => {
         </Text>
         <Text style={styles.userHint}>Tap to unblock</Text>
       </View>
-      <Icon name="close-circle" size={24} color={COLORS.error} />
+      <Icon name="close-circle" size={24} color={colors.error} />
     </TouchableOpacity>
   );
 
   const renderEmptyList = () => (
     <View style={styles.emptyContainer}>
-      <Icon name="account-check" size={80} color={COLORS.textMuted} />
+      <Icon name="account-check" size={80} color={colors.textMuted} />
       <Text style={styles.emptyTitle}>No blocked contacts</Text>
       <Text style={styles.emptySubtitle}>
         Blocked contacts will appear here. Tap to unblock them.
@@ -93,13 +97,15 @@ const BlockedUsersScreen: React.FC = () => {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
+        <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.surface} />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.surface} />
       <FlatList
         data={blockedUsers}
         renderItem={renderBlockedUser}
@@ -114,16 +120,16 @@ const BlockedUsersScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
   },
   userItem: {
     flexDirection: 'row',
@@ -137,16 +143,16 @@ const styles = StyleSheet.create({
   userName: {
     fontSize: FONTS.sizes.lg,
     fontWeight: '500',
-    color: COLORS.text,
+    color: colors.text,
   },
   userHint: {
     fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     marginTop: SPACING.xs,
   },
   separator: {
     height: 1,
-    backgroundColor: COLORS.divider,
+    backgroundColor: colors.divider,
     marginLeft: 82,
   },
   emptyContainer: {
@@ -161,13 +167,13 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: FONTS.sizes.xl,
     fontWeight: 'bold',
-    color: COLORS.text,
+    color: colors.text,
     marginTop: SPACING.lg,
     marginBottom: SPACING.sm,
   },
   emptySubtitle: {
     fontSize: FONTS.sizes.md,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
   },

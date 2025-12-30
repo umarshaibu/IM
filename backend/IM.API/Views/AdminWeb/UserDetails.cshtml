@@ -1,0 +1,274 @@
+@model IM.Core.Entities.User
+@{
+    ViewData["Title"] = $"User - {Model.NominalRoll.FullName}";
+    ViewData["ActivePage"] = "Users";
+}
+
+<!-- Back Button -->
+<div class="mb-5">
+    <a href="/admin/users" class="btn btn-sm btn-flex btn-light-primary">
+        <i class="bi bi-arrow-left me-2"></i>Back to Users
+    </a>
+</div>
+
+<div class="row g-5 g-xl-10">
+    <!-- Profile Card -->
+    <div class="col-xl-4">
+        <div class="card mb-5 mb-xl-10">
+            <div class="card-body pt-9 pb-0">
+                <!-- Avatar -->
+                <div class="d-flex flex-center flex-column mb-5">
+                    <div class="symbol symbol-100px symbol-circle mb-7">
+                        @if (!string.IsNullOrEmpty(Model.ProfilePictureUrl))
+                        {
+                            <img src="@Model.ProfilePictureUrl" alt="@Model.NominalRoll.FullName" />
+                        }
+                        else
+                        {
+                            <div class="symbol-label fs-2hx fw-semibold bg-light-primary text-primary">
+                                @Model.NominalRoll.FullName.Substring(0, 1).ToUpper()
+                            </div>
+                        }
+                    </div>
+
+                    <a href="#" class="fs-3 text-gray-800 text-hover-primary fw-bold mb-1">
+                        @Model.NominalRoll.FullName
+                    </a>
+
+                    <div class="fs-5 fw-semibold text-muted mb-4">
+                        @(Model.DisplayName ?? Model.NominalRoll.FullName)
+                    </div>
+
+                    <div class="d-flex flex-wrap flex-center gap-2">
+                        <span class="badge badge-light-dark fs-7 fw-bold py-3 px-4">
+                            @Model.NominalRoll.ServiceNumber
+                        </span>
+
+                        @switch (Model.NominalRoll.Status)
+                        {
+                            case IM.Core.Enums.UserStatus.Active:
+                                <span class="badge badge-light-success fs-7 fw-bold py-3 px-4">Active</span>
+                                break;
+                            case IM.Core.Enums.UserStatus.Suspended:
+                                <span class="badge badge-light-danger fs-7 fw-bold py-3 px-4">Suspended</span>
+                                break;
+                            case IM.Core.Enums.UserStatus.Inactive:
+                                <span class="badge badge-light-warning fs-7 fw-bold py-3 px-4">Inactive</span>
+                                break;
+                        }
+                    </div>
+                </div>
+
+                <!-- Stats -->
+                <div class="d-flex flex-stack fs-4 py-3">
+                    <div class="fw-bold rotate collapsible" data-bs-toggle="collapse" href="#kt_user_view_details" role="button">
+                        Details
+                        <i class="bi bi-chevron-down rotate-180 ms-2 fs-6"></i>
+                    </div>
+                    @if (Model.IsOnline)
+                    {
+                        <span class="badge badge-light-success fs-8 fw-bold">
+                            <span class="bullet bullet-dot bg-success me-2"></span>Online
+                        </span>
+                    }
+                    else
+                    {
+                        <span class="badge badge-light-secondary fs-8 fw-bold">Offline</span>
+                    }
+                </div>
+
+                <div class="separator separator-dashed my-3"></div>
+
+                <!-- Details -->
+                <div id="kt_user_view_details" class="collapse show">
+                    <div class="pb-5 fs-6">
+                        <div class="fw-bold mt-5">Phone</div>
+                        <div class="text-gray-600">@Model.PhoneNumber</div>
+
+                        <div class="fw-bold mt-5">Department</div>
+                        <div class="text-gray-600">@(Model.NominalRoll.Department ?? "-")</div>
+
+                        <div class="fw-bold mt-5">Rank/Position</div>
+                        <div class="text-gray-600">@(Model.NominalRoll.RankPosition ?? "-")</div>
+
+                        <div class="fw-bold mt-5">About</div>
+                        <div class="text-gray-600">@(Model.About ?? "-")</div>
+
+                        <div class="fw-bold mt-5">Registered</div>
+                        <div class="text-gray-600">@Model.CreatedAt.ToString("MMMM dd, yyyy HH:mm")</div>
+
+                        <div class="fw-bold mt-5">Last Seen</div>
+                        <div class="text-gray-600">@(Model.LastSeen?.ToString("MMMM dd, yyyy HH:mm") ?? "Never")</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="card mb-5 mb-xl-10">
+            <div class="card-header border-0">
+                <div class="card-title m-0">
+                    <h3 class="fw-bold m-0">Quick Actions</h3>
+                </div>
+            </div>
+            <div class="card-body py-3">
+                <form asp-action="UpdateUserStatus" method="post" class="d-grid gap-3">
+                    <input type="hidden" name="id" value="@Model.Id" />
+                    @if (Model.NominalRoll.Status == IM.Core.Enums.UserStatus.Active)
+                    {
+                        <button type="submit" name="status" value="@IM.Core.Enums.UserStatus.Suspended"
+                                class="btn btn-light-danger">
+                            <i class="bi bi-slash-circle me-2"></i>Suspend User
+                        </button>
+                    }
+                    else
+                    {
+                        <button type="submit" name="status" value="@IM.Core.Enums.UserStatus.Active"
+                                class="btn btn-light-success">
+                            <i class="bi bi-check-circle me-2"></i>Activate User
+                        </button>
+                    }
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Details Section -->
+    <div class="col-xl-8">
+        <!-- Privacy Settings -->
+        <div class="card mb-5 mb-xl-10">
+            <div class="card-header border-0">
+                <div class="card-title m-0">
+                    <h3 class="fw-bold m-0">
+                        <i class="bi bi-shield-lock me-2 text-primary"></i>Privacy Settings
+                    </h3>
+                </div>
+            </div>
+            <div class="card-body py-3">
+                <div class="row g-5">
+                    <div class="col-md-4">
+                        <div class="d-flex align-items-center py-3 px-4 rounded bg-light-primary">
+                            <div class="symbol symbol-40px me-4">
+                                <span class="symbol-label bg-primary">
+                                    <i class="bi @(Model.ShowLastSeen ? "bi-eye" : "bi-eye-slash") text-white fs-4"></i>
+                                </span>
+                            </div>
+                            <div class="d-flex flex-column">
+                                <span class="fw-bold fs-6">Last Seen</span>
+                                <span class="fw-semibold fs-7 text-muted">@(Model.ShowLastSeen ? "Visible" : "Hidden")</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="d-flex align-items-center py-3 px-4 rounded bg-light-info">
+                            <div class="symbol symbol-40px me-4">
+                                <span class="symbol-label bg-info">
+                                    <i class="bi @(Model.ShowProfilePhoto ? "bi-image" : "bi-image-alt") text-white fs-4"></i>
+                                </span>
+                            </div>
+                            <div class="d-flex flex-column">
+                                <span class="fw-bold fs-6">Profile Photo</span>
+                                <span class="fw-semibold fs-7 text-muted">@(Model.ShowProfilePhoto ? "Visible" : "Hidden")</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="d-flex align-items-center py-3 px-4 rounded bg-light-success">
+                            <div class="symbol symbol-40px me-4">
+                                <span class="symbol-label bg-success">
+                                    <i class="bi @(Model.ReadReceipts ? "bi-check2-all" : "bi-check2") text-white fs-4"></i>
+                                </span>
+                            </div>
+                            <div class="d-flex flex-column">
+                                <span class="fw-bold fs-6">Read Receipts</span>
+                                <span class="fw-semibold fs-7 text-muted">@(Model.ReadReceipts ? "Enabled" : "Disabled")</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Devices -->
+        <div class="card mb-5 mb-xl-10">
+            <div class="card-header border-0">
+                <div class="card-title m-0">
+                    <h3 class="fw-bold m-0">
+                        <i class="bi bi-phone me-2 text-primary"></i>Registered Devices
+                    </h3>
+                </div>
+                <div class="card-toolbar">
+                    <span class="badge badge-light-primary fs-7 fw-bold">@Model.Devices.Count device(s)</span>
+                </div>
+            </div>
+            <div class="card-body py-3">
+                @if (Model.Devices.Any())
+                {
+                    <div class="table-responsive">
+                        <table class="table align-middle table-row-dashed fs-6 gy-5">
+                            <thead>
+                                <tr class="text-start text-muted fw-bold fs-7 text-uppercase gs-0">
+                                    <th class="min-w-150px">Device</th>
+                                    <th class="min-w-100px">Platform</th>
+                                    <th class="min-w-100px">Push Token</th>
+                                    <th class="min-w-125px">Last Active</th>
+                                </tr>
+                            </thead>
+                            <tbody class="text-gray-600 fw-semibold">
+                                @foreach (var device in Model.Devices)
+                                {
+                                    <tr>
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <div class="symbol symbol-40px me-3">
+                                                    <span class="symbol-label bg-light-dark">
+                                                        <i class="bi @(device.Platform == DevicePlatform.iOS ? "bi-apple" : "bi-android2") fs-4 text-gray-700"></i>
+                                                    </span>
+                                                </div>
+                                                <div class="d-flex flex-column">
+                                                    <span class="fw-bold">@(device.DeviceName ?? "Unknown Device")</span>
+                                                    <span class="text-muted fs-7">@(device.DeviceId ?? "-")</span>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="badge @(device.Platform == DevicePlatform.iOS ? "badge-light-dark" : "badge-light-success") fs-7">
+                                                @device.Platform.ToString()
+                                            </span>
+                                        </td>
+                                        <td>
+                                            @if (!string.IsNullOrEmpty(device.DeviceToken))
+                                            {
+                                                <span class="badge badge-light-success">
+                                                    <i class="bi bi-check2 me-1"></i>Registered
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge badge-light-secondary">Not Set</span>
+                                            }
+                                        </td>
+                                        <td>
+                                            <span class="text-gray-600">@device.UpdatedAt.ToString("MMM dd, yyyy HH:mm")</span>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <div class="d-flex flex-column align-items-center py-10">
+                        <div class="symbol symbol-80px mb-5">
+                            <span class="symbol-label bg-light-secondary">
+                                <i class="bi bi-phone text-gray-400 fs-2hx"></i>
+                            </span>
+                        </div>
+                        <span class="text-gray-500 fs-5">No devices registered</span>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>

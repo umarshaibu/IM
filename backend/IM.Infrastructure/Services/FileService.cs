@@ -101,6 +101,16 @@ public class FileService : IFileService
         return new FileStream(fullPath, FileMode.Open, FileAccess.Read);
     }
 
+    public Task<Stream?> DownloadFileByPathAsync(string relativePath)
+    {
+        var fullPath = Path.Combine(_uploadPath, relativePath);
+
+        if (!File.Exists(fullPath))
+            return Task.FromResult<Stream?>(null);
+
+        return Task.FromResult<Stream?>(new FileStream(fullPath, FileMode.Open, FileAccess.Read));
+    }
+
     public async Task<bool> DeleteFileAsync(Guid fileId, Guid userId)
     {
         var mediaFile = await _context.MediaFiles.FindAsync(fileId);

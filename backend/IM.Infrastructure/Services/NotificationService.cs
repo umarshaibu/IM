@@ -458,6 +458,86 @@ public class NotificationService : INotificationService
         }
     }
 
+    public async Task SendPTTNotificationAsync(Guid conversationId, Guid senderId, string senderName, IEnumerable<Guid> recipientIds)
+    {
+        if (_firebaseMessaging == null)
+        {
+            _logger.LogWarning("Firebase messaging not initialized, cannot send PTT notification");
+            return;
+        }
+
+        var devices = await _context.UserDevices
+            .Where(d => recipientIds.Contains(d.UserId) && d.IsActive)
+            .ToListAsync();
+
+        if (!devices.Any())
+        {
+            _logger.LogWarning("No active devices found for PTT notification recipients");
+            return;
+        }
+
+        _logger.LogInformation("Sending PTT notification to {DeviceCount} devices for conversation {ConversationId}", devices.Count, conversationId);
+
+        foreach (var device in devices)
+        {
+            try
+            {
+                // Data-only message with high priority to wake the device
+                var firebaseMessage = new FirebaseMessage
+                {
+                    Token = device.DeviceToken,
+                    Data = new Dictionary<string, string>
+                    {
+                        { "type", "ptt" },
+                        { "conversationId", conversationId.ToString() },
+                        { "senderId", senderId.ToString() },
+                        { "senderName", senderName }
+                    },
+                    Android = new AndroidConfig
+                    {
+                        // High priority ensures the message is delivered immediately
+                        Priority = Priority.High,
+                        // Short TTL for PTT - they're time-sensitive
+                        TimeToLive = TimeSpan.FromSeconds(15)
+                    },
+                    Apns = new ApnsConfig
+                    {
+                        Headers = new Dictionary<string, string>
+                        {
+                            { "apns-priority", "10" },
+                            { "apns-expiration", "15" }
+                        },
+                        Aps = new Aps
+                        {
+                            ContentAvailable = true,
+                            Sound = "default"
+                        }
+                    }
+                };
+
+                var messageId = await _firebaseMessaging.SendAsync(firebaseMessage);
+                _logger.LogInformation("PTT notification sent successfully. MessageId: {MessageId}, Device: {DeviceToken}",
+                    messageId, device.DeviceToken[..Math.Min(20, device.DeviceToken.Length)] + "...");
+            }
+            catch (FirebaseMessagingException fex)
+            {
+                _logger.LogError(fex, "Firebase error sending PTT notification. Code: {Code}, Message: {Message}",
+                    fex.ErrorCode, fex.Message);
+
+                if (fex.ErrorCode == ErrorCode.NotFound || fex.ErrorCode == ErrorCode.InvalidArgument)
+                {
+                    device.IsActive = false;
+                    await _context.SaveChangesAsync();
+                    _logger.LogWarning("Marked device as inactive due to invalid token");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send PTT notification to device");
+            }
+        }
+    }
+
     private static string GetMessageTypePreview(MessageType type)
     {
         return type switch

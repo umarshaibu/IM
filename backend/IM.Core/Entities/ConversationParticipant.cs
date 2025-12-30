@@ -15,6 +15,10 @@ public class ConversationParticipant : BaseEntity
     public bool IsMuted { get; set; }
     public DateTime? MutedUntil { get; set; }
 
+    // Soft delete (user deleted this conversation for themselves)
+    public bool IsDeletedByUser { get; set; }
+    public DateTime? DeletedByUserAt { get; set; }
+
     // Navigation
     public Conversation Conversation { get; set; } = null!;
     public User User { get; set; } = null!;

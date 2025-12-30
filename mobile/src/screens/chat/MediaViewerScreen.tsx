@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -16,7 +16,8 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Video, { ResizeMode, OnProgressData, OnLoadData } from 'react-native-video';
 import { RootStackParamList } from '../../navigation/RootNavigator';
-import { COLORS, FONTS, SPACING } from '../../utils/theme';
+import { FONTS, SPACING } from '../../utils/theme';
+import { useTheme, ThemeColors } from '../../context/ThemeContext';
 
 type MediaViewerRouteProp = RouteProp<RootStackParamList, 'MediaViewer'>;
 
@@ -25,6 +26,8 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const MediaViewerScreen: React.FC = () => {
   const route = useRoute<MediaViewerRouteProp>();
   const navigation = useNavigation();
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { mediaUrl, mediaType, senderName, timestamp } = route.params;
 
   const [showControls, setShowControls] = useState(true);
@@ -121,7 +124,7 @@ const MediaViewerScreen: React.FC = () => {
                 <Icon
                   name={isPaused ? 'play' : 'pause'}
                   size={48}
-                  color={COLORS.textLight}
+                  color={colors.textInverse}
                 />
               </TouchableOpacity>
               <View style={styles.progressBar}>
@@ -175,7 +178,7 @@ const MediaViewerScreen: React.FC = () => {
             style={styles.backButton}
             onPress={() => navigation.goBack()}
           >
-            <Icon name="arrow-left" size={24} color={COLORS.textLight} />
+            <Icon name="arrow-left" size={24} color={colors.textInverse} />
           </TouchableOpacity>
           <View style={styles.headerInfo}>
             <Text style={styles.senderName}>{senderName}</Text>
@@ -183,10 +186,10 @@ const MediaViewerScreen: React.FC = () => {
           </View>
           <View style={styles.headerActions}>
             <TouchableOpacity style={styles.headerButton}>
-              <Icon name="star-outline" size={24} color={COLORS.textLight} />
+              <Icon name="star-outline" size={24} color={colors.textInverse} />
             </TouchableOpacity>
             <TouchableOpacity style={styles.headerButton} onPress={handleShare}>
-              <Icon name="share-variant" size={24} color={COLORS.textLight} />
+              <Icon name="share-variant" size={24} color={colors.textInverse} />
             </TouchableOpacity>
           </View>
         </View>
@@ -197,13 +200,13 @@ const MediaViewerScreen: React.FC = () => {
       {showControls && (
         <View style={styles.footer}>
           <TouchableOpacity style={styles.footerButton}>
-            <Icon name="download" size={24} color={COLORS.textLight} />
+            <Icon name="download" size={24} color={colors.textInverse} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.footerButton}>
-            <Icon name="share" size={24} color={COLORS.textLight} />
+            <Icon name="share" size={24} color={colors.textInverse} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.footerButton}>
-            <Icon name="delete" size={24} color={COLORS.textLight} />
+            <Icon name="delete" size={24} color={colors.textInverse} />
           </TouchableOpacity>
         </View>
       )}
@@ -211,7 +214,7 @@ const MediaViewerScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
@@ -238,11 +241,11 @@ const styles = StyleSheet.create({
   senderName: {
     fontSize: FONTS.sizes.lg,
     fontWeight: '600',
-    color: COLORS.textLight,
+    color: colors.textInverse,
   },
   timestamp: {
     fontSize: FONTS.sizes.sm,
-    color: COLORS.textLight,
+    color: colors.textInverse,
     opacity: 0.8,
   },
   headerActions: {
@@ -291,12 +294,12 @@ const styles = StyleSheet.create({
   },
   progress: {
     height: '100%',
-    backgroundColor: COLORS.secondary,
+    backgroundColor: colors.secondary,
     borderRadius: 2,
   },
   timeText: {
     fontSize: FONTS.sizes.sm,
-    color: COLORS.textLight,
+    color: colors.textInverse,
   },
   footer: {
     position: 'absolute',

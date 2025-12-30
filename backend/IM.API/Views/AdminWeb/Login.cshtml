@@ -1,0 +1,84 @@
+@model AdminLoginViewModel
+@{
+    ViewData["Title"] = "Login";
+    Layout = "_Layout";
+}
+
+<div class="login-wrapper">
+    <div class="login-card">
+        <!-- Logo -->
+        <div class="login-logo">
+            <i class="bi bi-chat-square-dots-fill"></i>
+        </div>
+
+        <!-- Title -->
+        <h1 class="login-title">Sign In</h1>
+        <p class="login-subtitle">Welcome to IM Admin Panel</p>
+
+        <!-- Error Messages -->
+        @if (!string.IsNullOrEmpty(ViewData["Error"]?.ToString()))
+        {
+            <div class="alert alert-danger d-flex align-items-center mb-4" role="alert">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                <div>@ViewData["Error"]</div>
+            </div>
+        }
+
+        @if (!ViewContext.ModelState.IsValid)
+        {
+            <div class="alert alert-danger d-flex align-items-center mb-4" role="alert">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                <div>
+                    @foreach (var error in ViewContext.ModelState.Values.SelectMany(v => v.Errors))
+                    {
+                        <div>@error.ErrorMessage</div>
+                    }
+                </div>
+            </div>
+        }
+
+        <!-- Login Form -->
+        <form asp-action="Login" method="post">
+            <input type="hidden" name="returnUrl" value="@ViewData["ReturnUrl"]" />
+
+            <!-- Username -->
+            <div class="form-floating mb-4">
+                <input type="text" class="form-control form-control-lg" id="username" asp-for="Username"
+                       placeholder="Username" required autofocus />
+                <label for="username">
+                    <i class="bi bi-person me-2"></i>Username
+                </label>
+            </div>
+
+            <!-- Password -->
+            <div class="form-floating mb-4">
+                <input type="password" class="form-control form-control-lg" id="password" asp-for="Password"
+                       placeholder="Password" required />
+                <label for="password">
+                    <i class="bi bi-lock me-2"></i>Password
+                </label>
+            </div>
+
+            <!-- Remember Me -->
+            <div class="d-flex justify-content-between align-items-center mb-5">
+                <label class="form-check form-check-custom form-check-solid">
+                    <input class="form-check-input" type="checkbox" asp-for="RememberMe" />
+                    <span class="form-check-label text-gray-600 fw-medium">Remember me</span>
+                </label>
+            </div>
+
+            <!-- Submit Button -->
+            <button type="submit" class="btn btn-primary w-100 py-3 fs-6 fw-semibold">
+                <span class="indicator-label">
+                    Sign In
+                    <i class="bi bi-arrow-right ms-2"></i>
+                </span>
+            </button>
+        </form>
+
+        <!-- Footer -->
+        <div class="login-footer">
+            <span class="text-gray-500">&copy; @DateTime.Now.Year IM Admin Panel</span>
+        </div>
+    </div>
+</div>

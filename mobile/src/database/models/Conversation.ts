@@ -18,9 +18,12 @@ export default class Conversation extends Model {
   @text('last_message_content') lastMessageContent!: string | null;
   @field('last_message_at') lastMessageAt!: number | null;
   @text('last_message_sender_id') lastMessageSenderId!: string | null;
+  @text('last_message_type') lastMessageType!: string | null;
   @field('unread_count') unreadCount!: number;
   @field('is_muted') isMuted!: boolean;
   @field('is_pinned') isPinned!: boolean;
+  @field('is_deleted') isDeleted!: boolean;
+  @field('deleted_at') deletedAt!: number | null;
   @readonly @date('created_at') createdAt!: Date;
   @readonly @date('updated_at') updatedAt!: Date;
 

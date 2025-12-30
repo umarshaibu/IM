@@ -221,6 +221,10 @@ export const callsApi = {
 
   updateStatus: (id: string, data: { isMuted?: boolean; isVideoEnabled?: boolean }) =>
     api.put(`/calls/${id}/status`, data),
+
+  deleteCall: (id: string) => api.delete(`/calls/${id}`),
+
+  clearHistory: () => api.delete('/calls/history'),
 };
 
 // Contacts API
@@ -272,13 +276,17 @@ export const filesApi = {
   uploadFile: async (filePath: string, mimeType: string) => {
     const formData = new FormData();
     const fileName = filePath.split('/').pop() || 'file';
+    // Ensure file:// prefix for Android
+    const fileUri = filePath.startsWith('file://') ? filePath : `file://${filePath}`;
+    console.log('uploadFile: uploading', fileUri, 'mimeType:', mimeType);
     formData.append('file', {
-      uri: filePath,
+      uri: fileUri,
       type: mimeType,
       name: fileName,
     } as any);
     return api.post('/files/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 60000, // 60 second timeout for file uploads
     });
   },
 
@@ -307,11 +315,51 @@ export const channelsApi = {
 
   get: (id: string) => api.get(`/channels/${id}`),
 
+  create: (data: {
+    name: string;
+    shortName: string;
+    description?: string;
+    iconUrl?: string;
+  }) => api.post('/channels', data),
+
+  update: (id: string, data: {
+    name?: string;
+    shortName?: string;
+    description?: string;
+    iconUrl?: string;
+  }) => api.put(`/channels/${id}`, data),
+
+  delete: (id: string) => api.delete(`/channels/${id}`),
+
   follow: (id: string) => api.post(`/channels/${id}/follow`),
 
   unfollow: (id: string) => api.delete(`/channels/${id}/follow`),
 
   getFollowing: () => api.get('/channels/following'),
+
+  // Channel Posts
+  getPosts: (id: string, page: number = 1, pageSize: number = 20) =>
+    api.get(`/channels/${id}/posts`, { params: { page, pageSize } }),
+
+  createPost: (channelId: string, data: {
+    content?: string;
+    type?: string;
+    mediaUrl?: string;
+    mediaMimeType?: string;
+    mediaSize?: number;
+    mediaDuration?: number;
+    thumbnailUrl?: string;
+  }) => api.post(`/channels/${channelId}/posts`, data),
+
+  deletePost: (postId: string) => api.delete(`/channels/posts/${postId}`),
+
+  pinPost: (postId: string, pin: boolean = true) =>
+    api.put(`/channels/posts/${postId}/pin`, null, { params: { pin } }),
+
+  reactToPost: (postId: string, emoji: string) =>
+    api.post(`/channels/posts/${postId}/react`, { emoji }),
+
+  viewPost: (postId: string) => api.post(`/channels/posts/${postId}/view`),
 };
 
 export default api;

@@ -202,7 +202,10 @@ export const setupBackgroundHandler = (): void => {
 
     const messageType = data.type as string;
 
-    // Handle incoming call - use CallKeep for device wake-up
+    // Handle incoming call
+    // NOTE: On Android, native CallNotificationService already handles FCM call messages
+    // and displays the IncomingCallActivity. We skip CallKeep here to avoid crashes
+    // caused by CallKeep trying to access Telecom API without runtime permissions.
     if (messageType === 'call') {
       const callData: BackgroundCallData = {
         callId: data.callId as string,
@@ -212,24 +215,24 @@ export const setupBackgroundHandler = (): void => {
         conversationId: data.conversationId as string,
       };
 
-      console.log('Background call received:', callData);
+      console.log('Background call received (RN handler):', callData);
 
-      // Use CallKeep to display incoming call UI and wake device
-      try {
-        await CallManager.displayIncomingCall(
-          callData.callId,
-          callData.callerName,
-          callData.callType === 'Video'
-        );
-      } catch (error) {
-        console.error('Failed to display incoming call via CallKeep:', error);
-        // Fallback to notification
-        await displayCallNotification(
-          callData.callId,
-          callData.callerName,
-          undefined,
-          callData.callType
-        );
+      // On Android, native CallNotificationService handles this - don't use CallKeep
+      // which can crash due to permission issues with VoiceConnectionService
+      if (Platform.OS === 'ios') {
+        // iOS: Use CallKeep to display incoming call UI
+        try {
+          await CallManager.displayIncomingCall(
+            callData.callId,
+            callData.callerName,
+            callData.callType === 'Video'
+          );
+        } catch (error) {
+          console.error('Failed to display incoming call via CallKeep:', error);
+        }
+      } else {
+        // Android: Native handling already done by CallNotificationService
+        console.log('Android: Skipping CallKeep - native handler already processed this');
       }
 
       // Notify the app if handler is set
@@ -240,14 +243,20 @@ export const setupBackgroundHandler = (): void => {
     }
 
     // Handle call ended
+    // NOTE: On Android, native CallNotificationService.endCall() handles this
     if (messageType === 'call_ended') {
       const callId = data.callId as string;
-      console.log('Background call ended:', callId);
+      console.log('Background call ended (RN handler):', callId);
 
-      try {
-        await CallManager.endCall(callId);
-      } catch (error) {
-        console.error('Failed to end call via CallKeep:', error);
+      // On iOS, use CallKeep. On Android, native code handles it.
+      if (Platform.OS === 'ios') {
+        try {
+          await CallManager.endCall(callId);
+        } catch (error) {
+          console.error('Failed to end call via CallKeep:', error);
+        }
+      } else {
+        console.log('Android: Skipping CallKeep endCall - native handler processes this');
       }
 
       // Cancel the call notification

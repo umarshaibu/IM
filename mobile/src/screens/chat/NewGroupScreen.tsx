@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -9,32 +9,40 @@ import {
   ActivityIndicator,
   ScrollView,
   Alert,
+  StatusBar,
 } from 'react-native';
+import { useTheme, ThemeColors } from '../../context/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import Avatar from '../../components/Avatar';
-import { contactsApi, conversationsApi } from '../../services/api';
+import { usersApi, conversationsApi } from '../../services/api';
 import { RootStackParamList } from '../../navigation/RootNavigator';
-import { Contact } from '../../types';
-import { COLORS, FONTS, SPACING } from '../../utils/theme';
+import { User } from '../../types';
+import { FONTS, SPACING } from '../../utils/theme';
+import { useAuthStore } from '../../stores/authStore';
+import { useChatStore } from '../../stores/chatStore';
 
 type NewGroupScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 const NewGroupScreen: React.FC = () => {
   const navigation = useNavigation<NewGroupScreenNavigationProp>();
+  const { userId } = useAuthStore();
+  const { addConversation } = useChatStore();
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [step, setStep] = useState<'select' | 'details'>('select');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedContacts, setSelectedContacts] = useState<Contact[]>([]);
+  const [selectedUsers, setSelectedUsers] = useState<User[]>([]);
   const [groupName, setGroupName] = useState('');
   const [groupDescription, setGroupDescription] = useState('');
 
-  const { data: contacts, isLoading } = useQuery({
-    queryKey: ['contacts'],
+  const { data: users, isLoading } = useQuery({
+    queryKey: ['all-users'],
     queryFn: async () => {
-      const response = await contactsApi.getAll();
-      return response.data as Contact[];
+      const response = await usersApi.getAll();
+      return (response.data as User[]).filter(user => user.id !== userId);
     },
   });
 
@@ -43,11 +51,13 @@ const NewGroupScreen: React.FC = () => {
       const response = await conversationsApi.createGroup({
         name: groupName,
         description: groupDescription,
-        memberIds: selectedContacts.map((c) => c.contactUserId),
+        memberIds: selectedUsers.map((u) => u.id),
       });
       return response.data;
     },
     onSuccess: (data) => {
+      // Add conversation to store before navigating
+      addConversation(data);
       navigation.replace('Chat', { conversationId: data.id });
     },
     onError: () => {
@@ -55,27 +65,27 @@ const NewGroupScreen: React.FC = () => {
     },
   });
 
-  const filteredContacts = contacts?.filter((contact) =>
-    contact.displayName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    contact.fullName?.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredUsers = users?.filter((user) =>
+    user.displayName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    user.fullName?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const toggleContact = (contact: Contact) => {
-    setSelectedContacts((prev) => {
-      const isSelected = prev.some((c) => c.contactUserId === contact.contactUserId);
+  const toggleUser = (user: User) => {
+    setSelectedUsers((prev) => {
+      const isSelected = prev.some((u) => u.id === user.id);
       if (isSelected) {
-        return prev.filter((c) => c.contactUserId !== contact.contactUserId);
+        return prev.filter((u) => u.id !== user.id);
       }
-      return [...prev, contact];
+      return [...prev, user];
     });
   };
 
-  const isSelected = (contact: Contact) =>
-    selectedContacts.some((c) => c.contactUserId === contact.contactUserId);
+  const isSelected = (user: User) =>
+    selectedUsers.some((u) => u.id === user.id);
 
   const handleNext = () => {
-    if (selectedContacts.length < 1) {
-      Alert.alert('Error', 'Please select at least one contact');
+    if (selectedUsers.length < 1) {
+      Alert.alert('Error', 'Please select at least one member');
       return;
     }
     setStep('details');
@@ -89,15 +99,16 @@ const NewGroupScreen: React.FC = () => {
     createGroupMutation.mutate();
   };
 
-  const renderContact = ({ item }: { item: Contact }) => (
+  const renderUser = ({ item }: { item: User }) => (
     <TouchableOpacity
       style={styles.contactItem}
-      onPress={() => toggleContact(item)}
+      onPress={() => toggleUser(item)}
     >
       <Avatar
         uri={item.profilePictureUrl}
         name={item.displayName || item.fullName || ''}
         size={50}
+        isOnline={item.isOnline}
       />
       <View style={styles.contactInfo}>
         <Text style={styles.contactName}>
@@ -109,7 +120,7 @@ const NewGroupScreen: React.FC = () => {
       </View>
       <View style={[styles.checkbox, isSelected(item) && styles.checkboxSelected]}>
         {isSelected(item) && (
-          <Icon name="check" size={16} color={COLORS.textLight} />
+          <Icon name="check" size={16} color={colors.textInverse} />
         )}
       </View>
     </TouchableOpacity>
@@ -118,7 +129,8 @@ const NewGroupScreen: React.FC = () => {
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
+        <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.surface} />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -126,10 +138,11 @@ const NewGroupScreen: React.FC = () => {
   if (step === 'details') {
     return (
       <View style={styles.container}>
+        <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.surface} />
         <View style={styles.detailsContainer}>
           <TouchableOpacity style={styles.groupIconContainer}>
             <View style={styles.groupIcon}>
-              <Icon name="camera" size={32} color={COLORS.textLight} />
+              <Icon name="camera" size={32} color={colors.textInverse} />
             </View>
             <Text style={styles.addPhotoText}>Add group icon</Text>
           </TouchableOpacity>
@@ -137,7 +150,7 @@ const NewGroupScreen: React.FC = () => {
           <TextInput
             style={styles.groupNameInput}
             placeholder="Group name"
-            placeholderTextColor={COLORS.textMuted}
+            placeholderTextColor={colors.textMuted}
             value={groupName}
             onChangeText={setGroupName}
             maxLength={50}
@@ -146,7 +159,7 @@ const NewGroupScreen: React.FC = () => {
           <TextInput
             style={styles.groupDescInput}
             placeholder="Group description (optional)"
-            placeholderTextColor={COLORS.textMuted}
+            placeholderTextColor={colors.textMuted}
             value={groupDescription}
             onChangeText={setGroupDescription}
             multiline
@@ -154,20 +167,20 @@ const NewGroupScreen: React.FC = () => {
           />
 
           <Text style={styles.participantsLabel}>
-            Participants: {selectedContacts.length}
+            Participants: {selectedUsers.length}
           </Text>
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={styles.selectedList}>
-              {selectedContacts.map((contact) => (
-                <View key={contact.contactUserId} style={styles.selectedItem}>
+              {selectedUsers.map((user) => (
+                <View key={user.id} style={styles.selectedItem}>
                   <Avatar
-                    uri={contact.profilePictureUrl}
-                    name={contact.displayName || contact.fullName || ''}
+                    uri={user.profilePictureUrl}
+                    name={user.displayName || user.fullName || ''}
                     size={50}
                   />
                   <Text style={styles.selectedName} numberOfLines={1}>
-                    {contact.displayName || contact.fullName}
+                    {user.displayName || user.fullName}
                   </Text>
                 </View>
               ))}
@@ -181,9 +194,9 @@ const NewGroupScreen: React.FC = () => {
           disabled={createGroupMutation.isPending}
         >
           {createGroupMutation.isPending ? (
-            <ActivityIndicator color={COLORS.textLight} />
+            <ActivityIndicator color={colors.textInverse} />
           ) : (
-            <Icon name="check" size={28} color={COLORS.textLight} />
+            <Icon name="check" size={28} color={colors.textInverse} />
           )}
         </TouchableOpacity>
       </View>
@@ -192,78 +205,86 @@ const NewGroupScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.surface} />
       <View style={styles.searchContainer}>
-        <Icon name="magnify" size={20} color={COLORS.textMuted} />
+        <Icon name="magnify" size={20} color={colors.textMuted} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search contacts..."
-          placeholderTextColor={COLORS.textMuted}
+          placeholderTextColor={colors.textMuted}
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
       </View>
 
-      {selectedContacts.length > 0 && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.selectedContainer}
-        >
-          {selectedContacts.map((contact) => (
-            <TouchableOpacity
-              key={contact.contactUserId}
-              style={styles.selectedChip}
-              onPress={() => toggleContact(contact)}
-            >
-              <Avatar
-                uri={contact.profilePictureUrl}
-                name={contact.displayName || contact.fullName || ''}
-                size={40}
-              />
-              <View style={styles.removeIcon}>
-                <Icon name="close" size={12} color={COLORS.textLight} />
-              </View>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+      {selectedUsers.length > 0 && (
+        <View style={styles.selectedWrapper}>
+          <Text style={styles.selectedCount}>{selectedUsers.length} selected</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.selectedContainer}
+            contentContainerStyle={styles.selectedContentContainer}
+          >
+            {selectedUsers.map((user) => (
+              <TouchableOpacity
+                key={user.id}
+                style={styles.selectedChip}
+                onPress={() => toggleUser(user)}
+              >
+                <Avatar
+                  uri={user.profilePictureUrl}
+                  name={user.displayName || user.fullName || ''}
+                  size={36}
+                />
+                <Text style={styles.selectedChipName} numberOfLines={1}>
+                  {(user.displayName || user.fullName || '').split(' ')[0]}
+                </Text>
+                <View style={styles.removeIcon}>
+                  <Icon name="close" size={10} color={colors.textInverse} />
+                </View>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
       )}
 
       <FlatList
-        data={filteredContacts}
-        renderItem={renderContact}
-        keyExtractor={(item) => item.contactUserId}
+        data={filteredUsers}
+        renderItem={renderUser}
+        keyExtractor={(item) => item.id}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No contacts found</Text>
+            <Text style={styles.emptyText}>No users found</Text>
           </View>
         }
       />
 
-      {selectedContacts.length > 0 && (
+      {selectedUsers.length > 0 && (
         <TouchableOpacity style={styles.fab} onPress={handleNext}>
-          <Icon name="arrow-right" size={28} color={COLORS.textLight} />
+          <Icon name="arrow-right" size={28} color={colors.textInverse} />
         </TouchableOpacity>
       )}
     </View>
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.background,
     margin: SPACING.md,
     paddingHorizontal: SPACING.md,
     borderRadius: 8,
@@ -273,26 +294,48 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.sm,
     fontSize: FONTS.sizes.md,
-    color: COLORS.text,
+    color: colors.text,
+  },
+  selectedWrapper: {
+    backgroundColor: colors.background,
+    paddingVertical: SPACING.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
+  },
+  selectedCount: {
+    fontSize: FONTS.sizes.xs,
+    color: colors.textMuted,
+    paddingHorizontal: SPACING.md,
+    marginBottom: SPACING.xs,
   },
   selectedContainer: {
+    maxHeight: 70,
+  },
+  selectedContentContainer: {
     paddingHorizontal: SPACING.md,
-    paddingBottom: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.divider,
+    alignItems: 'center',
   },
   selectedChip: {
-    marginRight: SPACING.sm,
+    alignItems: 'center',
+    marginRight: SPACING.md,
     position: 'relative',
+    width: 50,
+  },
+  selectedChipName: {
+    fontSize: 10,
+    color: colors.textSecondary,
+    marginTop: 2,
+    textAlign: 'center',
+    width: 50,
   },
   removeIcon: {
     position: 'absolute',
     top: -2,
-    right: -2,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: COLORS.textSecondary,
+    right: 2,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.error,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -308,29 +351,29 @@ const styles = StyleSheet.create({
   contactName: {
     fontSize: FONTS.sizes.lg,
     fontWeight: '500',
-    color: COLORS.text,
+    color: colors.text,
     marginBottom: SPACING.xs,
   },
   contactAbout: {
     fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
   },
   checkbox: {
     width: 24,
     height: 24,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: COLORS.textMuted,
+    borderColor: colors.textMuted,
     justifyContent: 'center',
     alignItems: 'center',
   },
   checkboxSelected: {
-    backgroundColor: COLORS.secondary,
-    borderColor: COLORS.secondary,
+    backgroundColor: colors.secondary,
+    borderColor: colors.secondary,
   },
   separator: {
     height: 1,
-    backgroundColor: COLORS.divider,
+    backgroundColor: colors.divider,
     marginLeft: 82,
   },
   emptyContainer: {
@@ -339,7 +382,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: FONTS.sizes.md,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
   },
   fab: {
     position: 'absolute',
@@ -348,7 +391,7 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: COLORS.secondary,
+    backgroundColor: colors.secondary,
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 4,
@@ -371,29 +414,29 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: COLORS.primary,
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: SPACING.sm,
   },
   addPhotoText: {
     fontSize: FONTS.sizes.sm,
-    color: COLORS.secondary,
+    color: colors.secondary,
     fontWeight: '500',
   },
   groupNameInput: {
     fontSize: FONTS.sizes.lg,
-    color: COLORS.text,
+    color: colors.text,
     borderBottomWidth: 2,
-    borderBottomColor: COLORS.secondary,
+    borderBottomColor: colors.secondary,
     paddingVertical: SPACING.sm,
     marginBottom: SPACING.lg,
   },
   groupDescInput: {
     fontSize: FONTS.sizes.md,
-    color: COLORS.text,
+    color: colors.text,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.divider,
+    borderBottomColor: colors.divider,
     paddingVertical: SPACING.sm,
     marginBottom: SPACING.lg,
     minHeight: 60,
@@ -401,7 +444,7 @@ const styles = StyleSheet.create({
   participantsLabel: {
     fontSize: FONTS.sizes.sm,
     fontWeight: '600',
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     marginBottom: SPACING.md,
   },
   selectedList: {
@@ -414,7 +457,7 @@ const styles = StyleSheet.create({
   },
   selectedName: {
     fontSize: FONTS.sizes.xs,
-    color: COLORS.text,
+    color: colors.text,
     marginTop: SPACING.xs,
     textAlign: 'center',
   },

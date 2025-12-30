@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -18,17 +18,21 @@ import LinearGradient from 'react-native-linear-gradient';
 import Avatar from '../../components/Avatar';
 import { usersApi, filesApi } from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
-import { COLORS, FONTS, SPACING, BORDER_RADIUS } from '../../utils/theme';
+import { useTheme, ThemeColors } from '../../context/ThemeContext';
+import { FONTS, SPACING, BORDER_RADIUS } from '../../utils/theme';
 
 const ProfileScreen: React.FC = () => {
   const navigation = useNavigation();
   const queryClient = useQueryClient();
   const { user, setUser } = useAuthStore();
+  const { colors, isDark } = useTheme();
 
   const [displayName, setDisplayName] = useState(user?.displayName || '');
   const [about, setAbout] = useState(user?.about || '');
   const [isEditing, setIsEditing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const updateMutation = useMutation({
     mutationFn: async () => {
@@ -85,11 +89,11 @@ const ProfileScreen: React.FC = () => {
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.primary} />
 
       {/* Profile Header with Gradient */}
       <LinearGradient
-        colors={[COLORS.primary, COLORS.secondary]}
+        colors={[colors.primary, colors.secondary]}
         style={styles.headerGradient}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
@@ -103,7 +107,7 @@ const ProfileScreen: React.FC = () => {
           >
             {isUploading ? (
               <View style={styles.uploadingOverlay}>
-                <ActivityIndicator size="large" color={COLORS.textLight} />
+                <ActivityIndicator size="large" color={colors.textInverse} />
               </View>
             ) : null}
             <View style={styles.avatarWrapper}>
@@ -118,7 +122,7 @@ const ProfileScreen: React.FC = () => {
                 colors={['#FFFFFF', '#F0F0F0']}
                 style={styles.cameraIcon}
               >
-                <Icon name="camera" size={20} color={COLORS.primary} />
+                <Icon name="camera" size={20} color={colors.primary} />
               </LinearGradient>
             </View>
           </TouchableOpacity>
@@ -140,8 +144,8 @@ const ProfileScreen: React.FC = () => {
             onPress={() => setIsEditing(true)}
             activeOpacity={0.7}
           >
-            <View style={[styles.fieldIconContainer, { backgroundColor: COLORS.primary + '15' }]}>
-              <Icon name="account-outline" size={22} color={COLORS.primary} />
+            <View style={[styles.fieldIconContainer, { backgroundColor: colors.primary + '15' }]}>
+              <Icon name="account-outline" size={22} color={colors.primary} />
             </View>
             <View style={styles.fieldContent}>
               <Text style={styles.fieldLabel}>Display Name</Text>
@@ -151,7 +155,7 @@ const ProfileScreen: React.FC = () => {
                   value={displayName}
                   onChangeText={setDisplayName}
                   placeholder="Enter your name"
-                  placeholderTextColor={COLORS.textMuted}
+                  placeholderTextColor={colors.textMuted}
                   autoFocus
                 />
               ) : (
@@ -162,7 +166,7 @@ const ProfileScreen: React.FC = () => {
             </View>
             {!isEditing && (
               <View style={styles.editIconContainer}>
-                <Icon name="pencil-outline" size={18} color={COLORS.secondary} />
+                <Icon name="pencil-outline" size={18} color={colors.secondary} />
               </View>
             )}
           </TouchableOpacity>
@@ -189,7 +193,7 @@ const ProfileScreen: React.FC = () => {
                   value={about}
                   onChangeText={setAbout}
                   placeholder="Write something about yourself"
-                  placeholderTextColor={COLORS.textMuted}
+                  placeholderTextColor={colors.textMuted}
                   multiline
                   maxLength={139}
                 />
@@ -201,7 +205,7 @@ const ProfileScreen: React.FC = () => {
             </View>
             {!isEditing && (
               <View style={styles.editIconContainer}>
-                <Icon name="pencil-outline" size={18} color={COLORS.secondary} />
+                <Icon name="pencil-outline" size={18} color={colors.secondary} />
               </View>
             )}
           </TouchableOpacity>
@@ -225,7 +229,7 @@ const ProfileScreen: React.FC = () => {
               </Text>
             </View>
             <View style={styles.verifiedBadge}>
-              <Icon name="check-decagram" size={16} color={COLORS.secondary} />
+              <Icon name="check-decagram" size={16} color={colors.secondary} />
             </View>
           </View>
         </View>
@@ -264,7 +268,7 @@ const ProfileScreen: React.FC = () => {
             }}
             activeOpacity={0.7}
           >
-            <Icon name="close" size={20} color={COLORS.textSecondary} />
+            <Icon name="close" size={20} color={colors.textSecondary} />
             <Text style={styles.cancelButtonText}>Cancel</Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -277,16 +281,16 @@ const ProfileScreen: React.FC = () => {
             activeOpacity={0.8}
           >
             <LinearGradient
-              colors={[COLORS.secondary, COLORS.primary]}
+              colors={[colors.secondary, colors.primary]}
               style={styles.saveButtonGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             >
               {updateMutation.isPending ? (
-                <ActivityIndicator size="small" color={COLORS.textLight} />
+                <ActivityIndicator size="small" color={colors.textInverse} />
               ) : (
                 <>
-                  <Icon name="check" size={20} color={COLORS.textLight} />
+                  <Icon name="check" size={20} color={colors.textInverse} />
                   <Text style={styles.saveButtonText}>Save Changes</Text>
                 </>
               )}
@@ -300,10 +304,10 @@ const ProfileScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.background,
   },
   headerGradient: {
     paddingTop: SPACING.xl,
@@ -353,7 +357,7 @@ const styles = StyleSheet.create({
   headerName: {
     fontSize: FONTS.sizes.xxl,
     fontWeight: 'bold',
-    color: COLORS.textLight,
+    color: colors.textInverse,
     marginBottom: SPACING.xs,
   },
   headerAbout: {
@@ -367,7 +371,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
   },
   fieldCard: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     borderRadius: BORDER_RADIUS.xl,
     marginBottom: SPACING.md,
     shadowColor: '#000',
@@ -396,23 +400,23 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: FONTS.sizes.xs,
     fontWeight: '600',
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: SPACING.xs,
   },
   fieldValue: {
     fontSize: FONTS.sizes.md,
-    color: COLORS.text,
+    color: colors.text,
     fontWeight: '500',
     lineHeight: 22,
   },
   fieldInput: {
     fontSize: FONTS.sizes.md,
-    color: COLORS.text,
+    color: colors.text,
     fontWeight: '500',
     borderBottomWidth: 2,
-    borderBottomColor: COLORS.secondary,
+    borderBottomColor: colors.secondary,
     paddingVertical: SPACING.xs,
     paddingBottom: SPACING.sm,
   },
@@ -424,7 +428,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: COLORS.secondary + '15',
+    backgroundColor: colors.secondary + '15',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -432,13 +436,13 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: COLORS.inputBackground,
+    backgroundColor: colors.inputBackground,
     justifyContent: 'center',
     alignItems: 'center',
   },
   fieldHint: {
     fontSize: FONTS.sizes.xs,
-    color: COLORS.textMuted,
+    color: colors.textMuted,
     paddingHorizontal: SPACING.lg,
     paddingBottom: SPACING.md,
     paddingLeft: SPACING.lg + 44 + SPACING.md,
@@ -446,7 +450,7 @@ const styles = StyleSheet.create({
   },
   charCount: {
     fontSize: FONTS.sizes.xs,
-    color: COLORS.textMuted,
+    color: colors.textMuted,
     textAlign: 'right',
     paddingHorizontal: SPACING.lg,
     paddingBottom: SPACING.md,
@@ -464,7 +468,7 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.xl,
     borderRadius: BORDER_RADIUS.xl,
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     gap: SPACING.xs,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -474,13 +478,13 @@ const styles = StyleSheet.create({
   },
   cancelButtonText: {
     fontSize: FONTS.sizes.md,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     fontWeight: '600',
   },
   saveButton: {
     borderRadius: BORDER_RADIUS.xl,
     overflow: 'hidden',
-    shadowColor: COLORS.primary,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -498,7 +502,7 @@ const styles = StyleSheet.create({
   },
   saveButtonText: {
     fontSize: FONTS.sizes.md,
-    color: COLORS.textLight,
+    color: colors.textInverse,
     fontWeight: '600',
   },
   bottomPadding: {

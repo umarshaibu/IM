@@ -22,10 +22,21 @@ class CallManagerClass {
   private onMuteCall: ((callId: string, muted: boolean) => void) | null = null;
 
   /**
-   * Initialize CallKeep (CallKit on iOS, ConnectionService on Android)
+   * Initialize CallKeep (CallKit on iOS only)
+   * On Android, we use native CallNotificationService and IncomingCallActivity instead.
+   * CallKeep's VoiceConnectionService crashes on Android 10+ due to READ_PHONE_NUMBERS
+   * permission requirements that are not met when started from background.
    */
   async initialize(): Promise<void> {
     if (this.isInitialized) return;
+
+    // Only initialize CallKeep on iOS
+    // On Android, native handling is done by CallNotificationService
+    if (Platform.OS !== 'ios') {
+      console.log('CallManager: Skipping CallKeep initialization on Android - using native handling');
+      this.isInitialized = true;
+      return;
+    }
 
     const options = {
       ios: {
@@ -68,9 +79,14 @@ class CallManagerClass {
   }
 
   /**
-   * Set up event listeners for CallKeep events
+   * Set up event listeners for CallKeep events (iOS only)
    */
   private setupEventListeners(): void {
+    // Only set up listeners on iOS - Android uses native handling
+    if (Platform.OS !== 'ios') {
+      return;
+    }
+
     // Answer call from native UI
     RNCallKeep.addEventListener('answerCall', ({ callUUID }) => {
       console.log('CallKeep: answerCall', callUUID);
@@ -129,7 +145,7 @@ class CallManagerClass {
   }
 
   /**
-   * Display incoming call (wakes device on both iOS and Android)
+   * Display incoming call (iOS only - Android uses native handling)
    */
   async displayIncomingCall(
     callId: string,
@@ -137,6 +153,12 @@ class CallManagerClass {
     isVideo: boolean = false,
     callerNumber?: string
   ): Promise<string> {
+    // On Android, native CallNotificationService handles incoming calls
+    if (Platform.OS !== 'ios') {
+      console.log('CallManager: Skipping displayIncomingCall on Android - native handling');
+      return '';
+    }
+
     await this.ensureInitialized();
 
     const uuid = uuidv4();
@@ -165,7 +187,7 @@ class CallManagerClass {
   }
 
   /**
-   * Start an outgoing call
+   * Start an outgoing call (iOS only - Android uses native handling)
    */
   async startOutgoingCall(
     callId: string,
@@ -173,6 +195,12 @@ class CallManagerClass {
     isVideo: boolean = false,
     callerNumber?: string
   ): Promise<string> {
+    // On Android, we don't need to register with CallKeep
+    if (Platform.OS !== 'ios') {
+      console.log('CallManager: Skipping startOutgoingCall on Android');
+      return '';
+    }
+
     await this.ensureInitialized();
 
     const uuid = uuidv4();
@@ -194,9 +222,11 @@ class CallManagerClass {
   }
 
   /**
-   * Report that the call is connected
+   * Report that the call is connected (iOS only)
    */
   reportConnectedCall(callId: string): void {
+    if (Platform.OS !== 'ios') return;
+
     const call = this.activeCalls.get(callId);
     if (call) {
       call.startTime = new Date();
@@ -206,9 +236,14 @@ class CallManagerClass {
   }
 
   /**
-   * End a call
+   * End a call (iOS only - Android uses native handling)
    */
   async endCall(callId: string): Promise<void> {
+    if (Platform.OS !== 'ios') {
+      console.log('CallManager: Skipping endCall on Android - native handling');
+      return;
+    }
+
     const call = this.activeCalls.get(callId);
     if (call) {
       RNCallKeep.endCall(call.uuid);
@@ -218,18 +253,25 @@ class CallManagerClass {
   }
 
   /**
-   * End all active calls
+   * End all active calls (iOS only)
    */
   async endAllCalls(): Promise<void> {
-    RNCallKeep.endAllCalls();
+    if (Platform.OS === 'ios') {
+      RNCallKeep.endAllCalls();
+    }
     this.activeCalls.clear();
     console.log('CallManager: Ended all calls');
   }
 
   /**
-   * Reject an incoming call
+   * Reject an incoming call (iOS only)
    */
   async rejectCall(callId: string): Promise<void> {
+    if (Platform.OS !== 'ios') {
+      this.activeCalls.delete(callId);
+      return;
+    }
+
     const call = this.activeCalls.get(callId);
     if (call) {
       RNCallKeep.rejectCall(call.uuid);
@@ -239,9 +281,11 @@ class CallManagerClass {
   }
 
   /**
-   * Set call muted state
+   * Set call muted state (iOS only)
    */
   setMuted(callId: string, muted: boolean): void {
+    if (Platform.OS !== 'ios') return;
+
     const call = this.activeCalls.get(callId);
     if (call) {
       RNCallKeep.setMutedCall(call.uuid, muted);
@@ -250,9 +294,11 @@ class CallManagerClass {
   }
 
   /**
-   * Set call on hold
+   * Set call on hold (iOS only)
    */
   setOnHold(callId: string, onHold: boolean): void {
+    if (Platform.OS !== 'ios') return;
+
     const call = this.activeCalls.get(callId);
     if (call) {
       RNCallKeep.setOnHold(call.uuid, onHold);
@@ -261,9 +307,11 @@ class CallManagerClass {
   }
 
   /**
-   * Update call info (e.g., caller name)
+   * Update call info (iOS only)
    */
   updateDisplay(callId: string, callerName: string, callerNumber?: string): void {
+    if (Platform.OS !== 'ios') return;
+
     const call = this.activeCalls.get(callId);
     if (call) {
       RNCallKeep.updateDisplay(call.uuid, callerName, callerNumber || callerName);
@@ -307,46 +355,40 @@ class CallManagerClass {
   }
 
   /**
-   * Configure audio session for VoIP
+   * Configure audio session for VoIP (iOS only)
    */
   async configureAudioSession(): Promise<void> {
     if (Platform.OS === 'ios') {
       // iOS audio session configuration is handled by CallKit
       RNCallKeep.setAvailable(true);
     }
+    // On Android, audio is handled by LiveKit/WebRTC directly
   }
 
   /**
    * Check if CallKeep is available on this device
    */
   async isAvailable(): Promise<boolean> {
-    try {
-      if (Platform.OS === 'android') {
-        return await RNCallKeep.hasPhoneAccount();
-      }
-      return true; // iOS always supports CallKit
-    } catch {
-      return false;
+    // On Android, we use native handling instead of CallKeep
+    if (Platform.OS === 'android') {
+      return true; // Native handling is always available
     }
+    return true; // iOS always supports CallKit
   }
 
   /**
-   * Request phone account permission (Android only)
+   * Request phone account permission (not used on Android with native handling)
    */
   async requestPhoneAccountPermission(): Promise<boolean> {
-    if (Platform.OS === 'android') {
-      return await RNCallKeep.hasPhoneAccount();
-    }
+    // Android uses native handling, no need for phone account
     return true;
   }
 
   /**
-   * Open phone account settings (Android only)
+   * Open phone account settings (not used on Android with native handling)
    */
   openPhoneAccountSettings(): void {
-    if (Platform.OS === 'android') {
-      RNCallKeep.hasDefaultPhoneAccount();
-    }
+    // Not needed with native handling on Android
   }
 
   /**
@@ -371,17 +413,19 @@ class CallManagerClass {
   }
 
   /**
-   * Remove all event listeners (cleanup)
+   * Remove all event listeners (cleanup) - iOS only
    */
   cleanup(): void {
-    RNCallKeep.removeEventListener('answerCall');
-    RNCallKeep.removeEventListener('endCall');
-    RNCallKeep.removeEventListener('didPerformSetMutedCallAction');
-    RNCallKeep.removeEventListener('didPerformDTMFAction');
-    RNCallKeep.removeEventListener('didChangeAudioRoute');
-    RNCallKeep.removeEventListener('didActivateAudioSession');
-    RNCallKeep.removeEventListener('didDeactivateAudioSession');
-    RNCallKeep.removeEventListener('didResetProvider');
+    if (Platform.OS === 'ios') {
+      RNCallKeep.removeEventListener('answerCall');
+      RNCallKeep.removeEventListener('endCall');
+      RNCallKeep.removeEventListener('didPerformSetMutedCallAction');
+      RNCallKeep.removeEventListener('didPerformDTMFAction');
+      RNCallKeep.removeEventListener('didChangeAudioRoute');
+      RNCallKeep.removeEventListener('didActivateAudioSession');
+      RNCallKeep.removeEventListener('didDeactivateAudioSession');
+      RNCallKeep.removeEventListener('didResetProvider');
+    }
     this.isInitialized = false;
     this.activeCalls.clear();
   }

@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -17,7 +17,8 @@ import Avatar from '../../components/Avatar';
 import { contactsApi, conversationsApi } from '../../services/api';
 import { useAuthStore } from '../../stores/authStore';
 import { RootStackParamList } from '../../navigation/RootNavigator';
-import { COLORS, FONTS, SPACING, BORDER_RADIUS } from '../../utils/theme';
+import { useTheme, ThemeColors } from '../../context/ThemeContext';
+import { FONTS, SPACING, BORDER_RADIUS } from '../../utils/theme';
 
 type ContactsScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -34,6 +35,8 @@ interface Contact {
 const ContactsScreen: React.FC = () => {
   const navigation = useNavigation<ContactsScreenNavigationProp>();
   const { userId } = useAuthStore();
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [searchQuery, setSearchQuery] = React.useState('');
 
   const { data: contacts, isLoading, refetch, isRefetching } = useQuery({
@@ -106,7 +109,7 @@ const ContactsScreen: React.FC = () => {
   const renderEmptyList = () => (
     <View style={styles.emptyContainer}>
       <View style={styles.emptyIconContainer}>
-        <Icon name="account-group-outline" size={64} color={COLORS.primary} />
+        <Icon name="account-group-outline" size={64} color={colors.primary} />
       </View>
       <Text style={styles.emptyTitle}>No contacts yet</Text>
       <Text style={styles.emptySubtitle}>
@@ -117,22 +120,22 @@ const ContactsScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.primary} />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.surface} />
 
       {/* Search Bar */}
       <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
-          <Icon name="magnify" size={20} color={COLORS.textMuted} />
+          <Icon name="magnify" size={20} color={colors.textMuted} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search contacts..."
-            placeholderTextColor={COLORS.textMuted}
+            placeholderTextColor={colors.textMuted}
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Icon name="close-circle" size={18} color={COLORS.textMuted} />
+              <Icon name="close-circle" size={18} color={colors.textMuted} />
             </TouchableOpacity>
           )}
         </View>
@@ -148,8 +151,8 @@ const ContactsScreen: React.FC = () => {
           <RefreshControl
             refreshing={isRefetching}
             onRefresh={refetch}
-            colors={[COLORS.primary]}
-            tintColor={COLORS.primary}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
           />
         }
         contentContainerStyle={!filteredContacts?.length ? styles.emptyListContent : styles.listContent}
@@ -159,20 +162,20 @@ const ContactsScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
   },
   searchContainer: {
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.inputBackground,
+    backgroundColor: colors.inputBackground,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderRadius: BORDER_RADIUS.lg,
@@ -181,7 +184,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: FONTS.sizes.md,
-    color: COLORS.text,
+    color: colors.text,
     padding: 0,
   },
   listContent: {
@@ -200,21 +203,21 @@ const styles = StyleSheet.create({
   contactName: {
     fontSize: FONTS.sizes.md,
     fontWeight: '600',
-    color: COLORS.text,
+    color: colors.text,
   },
   onlineStatus: {
     fontSize: FONTS.sizes.sm,
-    color: COLORS.online,
+    color: colors.online,
     marginTop: 2,
   },
   lastSeen: {
     fontSize: FONTS.sizes.sm,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     marginTop: 2,
   },
   separator: {
     height: 1,
-    backgroundColor: COLORS.divider,
+    backgroundColor: colors.divider,
     marginLeft: 82,
   },
   emptyContainer: {
@@ -230,7 +233,7 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: COLORS.primary + '15',
+    backgroundColor: colors.primary + '15',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: SPACING.xl,
@@ -238,12 +241,12 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: FONTS.sizes.xl,
     fontWeight: 'bold',
-    color: COLORS.text,
+    color: colors.text,
     marginBottom: SPACING.sm,
   },
   emptySubtitle: {
     fontSize: FONTS.sizes.md,
-    color: COLORS.textSecondary,
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
   },
