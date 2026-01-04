@@ -410,7 +410,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
           </View>
 
           <TouchableOpacity style={[styles.stopRecordingButton, { backgroundColor: colors.primary }]} onPress={stopRecording}>
-            <Icon name="send" size={24} color="#FFFFFF" />
+            <Icon name="send" size={24} color={colors.textInverse} />
           </TouchableOpacity>
         </View>
       </View>
@@ -507,7 +507,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
             onPress={handleSend}
             disabled={disabled}
           >
-            <Icon name="send" size={24} color="#FFFFFF" />
+            <Icon name="send" size={24} color={colors.textInverse} />
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
@@ -515,7 +515,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
             onPress={handleMicPress}
             disabled={disabled}
           >
-            <Icon name="microphone" size={24} color="#FFFFFF" />
+            <Icon name="microphone" size={24} color={colors.textInverse} />
           </TouchableOpacity>
         )}
       </View>

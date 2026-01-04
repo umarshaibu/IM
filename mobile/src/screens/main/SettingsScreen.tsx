@@ -987,7 +987,7 @@ const SettingsScreen: React.FC = () => {
                 disabled={isEnabling2FA}
               >
                 {isEnabling2FA ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <ActivityIndicator size="small" color={colors.textInverse} />
                 ) : (
                   <Text style={styles.modalButtonConfirmText}>Enable</Text>
                 )}
@@ -1235,7 +1235,7 @@ const createStyles = (colors: any) => StyleSheet.create({
   modalButtonConfirmText: {
     fontSize: FONTS.sizes.md,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: colors.textInverse,
   },
   // Loading overlay styles
   loadingOverlay: {

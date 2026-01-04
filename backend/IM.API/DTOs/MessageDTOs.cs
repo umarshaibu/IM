@@ -51,7 +51,10 @@ public class SendMessageRequest
     public MessageType Type { get; set; } = MessageType.Text;
     public string? Content { get; set; }
     public string? MediaUrl { get; set; }
+    public string? MediaMimeType { get; set; }
+    public long? MediaSize { get; set; }
     public int? MediaDuration { get; set; }
+    public string? FileName { get; set; }  // For documents: original filename
     public Guid? ReplyToMessageId { get; set; }
 }
 

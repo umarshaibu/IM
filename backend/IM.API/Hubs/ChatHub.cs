@@ -145,17 +145,41 @@ public class ChatHub : Hub
 
         try
         {
+            // For documents, store filename in Content field if no content is provided
+            var content = request.Content;
+            if (request.Type == MessageType.Document && string.IsNullOrEmpty(content) && !string.IsNullOrEmpty(request.FileName))
+            {
+                content = request.FileName;
+            }
+
             var message = await _messageService.SendMessageAsync(
                 conversationId,
                 userId,
                 request.Type,
-                request.Content,
-                request.MediaUrl);
+                content,
+                request.MediaUrl,
+                request.ReplyToMessageId);
 
-            // Set media duration if provided (for audio/video messages)
+            // Set media metadata if provided
+            bool needsUpdate = false;
             if (request.MediaDuration.HasValue)
             {
                 message.MediaDuration = request.MediaDuration.Value;
+                needsUpdate = true;
+            }
+            if (!string.IsNullOrEmpty(request.MediaMimeType))
+            {
+                message.MediaMimeType = request.MediaMimeType;
+                needsUpdate = true;
+            }
+            if (request.MediaSize.HasValue)
+            {
+                message.MediaSize = request.MediaSize.Value;
+                needsUpdate = true;
+            }
+
+            if (needsUpdate)
+            {
                 await _messageService.UpdateMessageAsync(message);
             }
 
@@ -370,6 +394,30 @@ public class ChatHub : Hub
     {
         var sender = await _userService.GetUserByIdAsync(message.SenderId);
 
+        // Build the reply message DTO if exists
+        MessageDto? replyToMessageDto = null;
+        if (message.ReplyToMessage != null)
+        {
+            var replySender = message.ReplyToMessage.Sender ?? await _userService.GetUserByIdAsync(message.ReplyToMessage.SenderId);
+            replyToMessageDto = new MessageDto
+            {
+                Id = message.ReplyToMessage.Id,
+                ConversationId = message.ReplyToMessage.ConversationId,
+                SenderId = message.ReplyToMessage.SenderId,
+                SenderName = replySender?.DisplayName ?? replySender?.NominalRoll?.FullName,
+                SenderProfilePicture = replySender?.ProfilePictureUrl,
+                Type = message.ReplyToMessage.Type,
+                Content = message.ReplyToMessage.Content,
+                MediaUrl = message.ReplyToMessage.MediaUrl,
+                MediaThumbnailUrl = message.ReplyToMessage.MediaThumbnailUrl,
+                MediaMimeType = message.ReplyToMessage.MediaMimeType,
+                MediaSize = message.ReplyToMessage.MediaSize,
+                MediaDuration = message.ReplyToMessage.MediaDuration,
+                IsDeleted = message.ReplyToMessage.IsDeleted,
+                CreatedAt = message.ReplyToMessage.CreatedAt
+            };
+        }
+
         return new MessageDto
         {
             Id = message.Id,
@@ -385,10 +433,12 @@ public class ChatHub : Hub
             MediaSize = message.MediaSize,
             MediaDuration = message.MediaDuration,
             ReplyToMessageId = message.ReplyToMessageId,
+            ReplyToMessage = replyToMessageDto,
             IsForwarded = message.IsForwarded,
             IsEdited = message.IsEdited,
             EditedAt = message.EditedAt,
             IsDeleted = message.IsDeleted,
+            Status = ComputeMessageStatus(message.Statuses),
             CreatedAt = message.CreatedAt,
             ExpiresAt = message.ExpiresAt,
             Statuses = message.Statuses.Select(s => new MessageStatusDto
@@ -415,6 +465,30 @@ public class ChatHub : Hub
                 CreatedAt = r.CreatedAt
             }).ToList() ?? new List<MessageReactionDto>()
         };
+    }
+
+    // Compute the overall message status from individual recipient statuses
+    private static MessageStatus ComputeMessageStatus(ICollection<MessageStatusEntity> statuses)
+    {
+        if (statuses == null || !statuses.Any())
+        {
+            return MessageStatus.Sent;
+        }
+
+        // If all recipients have read - status is Read
+        if (statuses.All(s => s.Status == MessageStatus.Read))
+        {
+            return MessageStatus.Read;
+        }
+
+        // If any recipient has delivered or read - status is Delivered
+        if (statuses.Any(s => s.Status == MessageStatus.Delivered || s.Status == MessageStatus.Read))
+        {
+            return MessageStatus.Delivered;
+        }
+
+        // Otherwise it's just Sent
+        return MessageStatus.Sent;
     }
 
     // Forward Message

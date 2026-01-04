@@ -103,7 +103,29 @@ public class AdminWebController : Controller
         ViewData["ActivePage"] = "Dashboard";
 
         var today = DateTime.UtcNow.Date;
-        var lastWeek = today.AddDays(-7);
+        var lastWeek = today.AddDays(-6); // Start from 6 days ago to include today (7 days total)
+
+        // Get message counts from database
+        var messageCounts = await _context.Messages
+            .Where(m => m.CreatedAt >= lastWeek)
+            .ToListAsync();
+
+        // Group by date in memory to avoid PostgreSQL compatibility issues
+        var messagesByDate = messageCounts
+            .GroupBy(m => m.CreatedAt.Date)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        // Create a list with all 7 days, filling in zeros for days with no messages
+        var messageStats = new List<DailyStatDto>();
+        for (int i = 6; i >= 0; i--)
+        {
+            var date = today.AddDays(-i);
+            messageStats.Add(new DailyStatDto
+            {
+                Date = date,
+                Count = messagesByDate.GetValueOrDefault(date, 0)
+            });
+        }
 
         var analytics = new DashboardViewModel
         {
@@ -122,13 +144,7 @@ public class AdminWebController : Controller
                 .OrderByDescending(u => u.CreatedAt)
                 .Take(5)
                 .ToListAsync(),
-            // Message stats for last 7 days
-            MessageStats = await _context.Messages
-                .Where(m => m.CreatedAt >= lastWeek)
-                .GroupBy(m => m.CreatedAt.Date)
-                .Select(g => new DailyStatDto { Date = g.Key, Count = g.Count() })
-                .OrderBy(s => s.Date)
-                .ToListAsync()
+            MessageStats = messageStats
         };
 
         return View(analytics);
@@ -292,6 +308,7 @@ public class AdminWebController : Controller
             ServiceNumber = model.ServiceNumber,
             FullName = model.FullName,
             PhoneNumber = model.PhoneNumber,
+            Email = model.Email,
             Department = model.Department,
             RankPosition = model.RankPosition,
             Status = UserStatus.Active
@@ -324,6 +341,7 @@ public class AdminWebController : Controller
             ServiceNumber = entry.ServiceNumber,
             FullName = entry.FullName,
             PhoneNumber = entry.PhoneNumber,
+            Email = entry.Email,
             Department = entry.Department,
             RankPosition = entry.RankPosition,
             Status = entry.Status
@@ -354,6 +372,7 @@ public class AdminWebController : Controller
 
         entry.FullName = model.FullName;
         entry.PhoneNumber = model.PhoneNumber;
+        entry.Email = model.Email;
         entry.Department = model.Department;
         entry.RankPosition = model.RankPosition;
         entry.Status = model.Status;
@@ -555,6 +574,7 @@ public class CreateNominalRollViewModel
     public string ServiceNumber { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
     public string? PhoneNumber { get; set; }
+    public string? Email { get; set; }
     public string? Department { get; set; }
     public string? RankPosition { get; set; }
 }
@@ -565,6 +585,7 @@ public class EditNominalRollViewModel
     public string ServiceNumber { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
     public string? PhoneNumber { get; set; }
+    public string? Email { get; set; }
     public string? Department { get; set; }
     public string? RankPosition { get; set; }
     public UserStatus Status { get; set; }

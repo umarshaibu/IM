@@ -8,6 +8,7 @@ public class NominalRollDto
     public string ServiceNumber { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
     public string? PhoneNumber { get; set; }
+    public string? Email { get; set; }
     public string? Department { get; set; }
     public string? RankPosition { get; set; }
     public UserStatus Status { get; set; }
@@ -21,6 +22,7 @@ public class CreateNominalRollRequest
     public string ServiceNumber { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
     public string? PhoneNumber { get; set; }
+    public string? Email { get; set; }
     public string? Department { get; set; }
     public string? RankPosition { get; set; }
 }
@@ -29,6 +31,7 @@ public class UpdateNominalRollRequest
 {
     public string? FullName { get; set; }
     public string? PhoneNumber { get; set; }
+    public string? Email { get; set; }
     public string? Department { get; set; }
     public string? RankPosition { get; set; }
     public UserStatus? Status { get; set; }
@@ -48,6 +51,7 @@ public class AdminUserDto
     public string ServiceNumber { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
     public string PhoneNumber { get; set; } = string.Empty;
+    public string? Email { get; set; }
     public string? DisplayName { get; set; }
     public string? Department { get; set; }
     public string? RankPosition { get; set; }

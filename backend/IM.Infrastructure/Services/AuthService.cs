@@ -18,14 +18,23 @@ public class AuthService : IAuthService
     private readonly ApplicationDbContext _context;
     private readonly IConfiguration _configuration;
     private readonly ILogger<AuthService> _logger;
+    private readonly IEmailService _emailService;
+    private readonly ISmsService _smsService;
     private const int TOKEN_EXPIRY_MINUTES = 10;
     private const int MAX_ATTEMPTS = 5;
 
-    public AuthService(ApplicationDbContext context, IConfiguration configuration, ILogger<AuthService> logger)
+    public AuthService(
+        ApplicationDbContext context,
+        IConfiguration configuration,
+        ILogger<AuthService> logger,
+        IEmailService emailService,
+        ISmsService smsService)
     {
         _context = context;
         _configuration = configuration;
         _logger = logger;
+        _emailService = emailService;
+        _smsService = smsService;
     }
 
     public async Task<(bool Success, string? FullName, string? MaskedEmail, string? MaskedPhone, string? Message)> RequestLoginTokenAsync(string serviceNumber)
@@ -78,16 +87,40 @@ public class AuthService : IAuthService
             maskedPhone = MaskPhoneNumber(nominalRoll.PhoneNumber);
         }
 
-        // For now, we'll use a placeholder email based on service number
-        // In production, you'd have actual email in NominalRoll
-        maskedEmail = MaskEmail($"{serviceNumber.ToLower().Replace("/", ".")}@org.gov");
+        // Get email from User or NominalRoll
+        var email = user?.Email ?? nominalRoll.Email;
+        if (!string.IsNullOrEmpty(email))
+        {
+            maskedEmail = MaskEmail(email);
+        }
 
-        // Log the token (in production, send via SMS/Email)
+        // Log the token (for debugging)
         _logger.LogInformation("Login token for {ServiceNumber}: {Token}", serviceNumber, tokenCode);
 
-        // TODO: In production, send token via SMS and Email services
-        // await _smsService.SendAsync(phone, $"Your IM verification code is: {tokenCode}");
-        // await _emailService.SendAsync(email, "IM Verification Code", $"Your code is: {tokenCode}");
+        // Send token via SMS if phone number is available
+        string? phoneToSend = user?.PhoneNumber ?? nominalRoll.PhoneNumber;
+        if (!string.IsNullOrEmpty(phoneToSend))
+        {
+            var smsSent = await _smsService.SendVerificationCodeAsync(phoneToSend, tokenCode);
+            if (smsSent)
+            {
+                _logger.LogInformation("Verification code sent via SMS to {Phone}", maskedPhone);
+            }
+        }
+
+        // Send token via Email if email is available
+        if (!string.IsNullOrEmpty(email))
+        {
+            var emailSent = await _emailService.SendVerificationCodeAsync(email, tokenCode, nominalRoll.FullName);
+            if (emailSent)
+            {
+                _logger.LogInformation("Verification code sent via email to {Email}", maskedEmail);
+            }
+        }
+        else
+        {
+            _logger.LogWarning("No email address found for service number {ServiceNumber}", serviceNumber);
+        }
 
         return (true, nominalRoll.FullName, maskedEmail, maskedPhone, null);
     }

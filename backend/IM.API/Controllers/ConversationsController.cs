@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using IM.API.DTOs;
+using IM.Core.Entities;
 using IM.Core.Enums;
 using IM.Core.Interfaces;
 using System.Security.Claims;
@@ -262,10 +263,33 @@ public class ConversationsController : ControllerBase
             MediaSize = m.MediaSize,
             MediaDuration = m.MediaDuration,
             ReplyToMessageId = m.ReplyToMessageId,
+            ReplyToMessage = m.ReplyToMessage != null ? new MessageDto
+            {
+                Id = m.ReplyToMessage.Id,
+                ConversationId = m.ReplyToMessage.ConversationId,
+                SenderId = m.ReplyToMessage.SenderId,
+                SenderName = m.ReplyToMessage.Sender?.DisplayName ?? m.ReplyToMessage.Sender?.NominalRoll?.FullName,
+                SenderProfilePicture = m.ReplyToMessage.Sender?.ProfilePictureUrl,
+                Type = m.ReplyToMessage.Type,
+                Content = m.ReplyToMessage.Content,
+                MediaUrl = m.ReplyToMessage.MediaUrl,
+                MediaThumbnailUrl = m.ReplyToMessage.MediaThumbnailUrl,
+                MediaMimeType = m.ReplyToMessage.MediaMimeType,
+                MediaSize = m.ReplyToMessage.MediaSize,
+                MediaDuration = m.ReplyToMessage.MediaDuration,
+                IsDeleted = m.ReplyToMessage.IsDeleted,
+                CreatedAt = m.ReplyToMessage.CreatedAt
+            } : null,
             IsForwarded = m.IsForwarded,
+            SenderServiceNumber = m.SenderServiceNumber,
+            OriginalSenderServiceNumber = m.OriginalSenderServiceNumber,
+            MediaOriginatorServiceNumber = m.MediaOriginatorServiceNumber,
+            ForwardCount = m.ForwardCount,
+            OriginalCreatedAt = m.OriginalCreatedAt,
             IsEdited = m.IsEdited,
             EditedAt = m.EditedAt,
             IsDeleted = m.IsDeleted,
+            Status = ComputeMessageStatus(m.Statuses),
             CreatedAt = m.CreatedAt,
             ExpiresAt = m.ExpiresAt,
             Statuses = m.Statuses.Select(s => new MessageStatusDto
@@ -276,6 +300,30 @@ public class ConversationsController : ControllerBase
                 ReadAt = s.ReadAt
             }).ToList()
         }));
+    }
+
+    // Compute the overall message status from individual recipient statuses
+    private static MessageStatus ComputeMessageStatus(ICollection<MessageStatusEntity> statuses)
+    {
+        if (statuses == null || !statuses.Any())
+        {
+            return MessageStatus.Sent;
+        }
+
+        // If all recipients have read - status is Read
+        if (statuses.All(s => s.Status == MessageStatus.Read))
+        {
+            return MessageStatus.Read;
+        }
+
+        // If any recipient has delivered or read - status is Delivered
+        if (statuses.Any(s => s.Status == MessageStatus.Delivered || s.Status == MessageStatus.Read))
+        {
+            return MessageStatus.Delivered;
+        }
+
+        // Otherwise it's just Sent
+        return MessageStatus.Sent;
     }
 
     [HttpGet("{id}/participants")]

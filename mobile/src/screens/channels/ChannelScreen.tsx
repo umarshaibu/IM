@@ -562,7 +562,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     flex: 1,
     fontSize: FONTS.sizes.lg,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: colors.textInverse,
     textAlign: 'center',
     marginHorizontal: SPACING.md,
   },
@@ -638,7 +638,7 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
   followButtonText: {
     fontSize: FONTS.sizes.md,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: colors.textInverse,
   },
   followingButtonText: {
     color: colors.textSecondary,

@@ -85,6 +85,9 @@
                         <div class="fw-bold mt-5">Phone</div>
                         <div class="text-gray-600">@Model.PhoneNumber</div>
 
+                        <div class="fw-bold mt-5">Email</div>
+                        <div class="text-gray-600">@(Model.Email ?? Model.NominalRoll.Email ?? "-")</div>
+
                         <div class="fw-bold mt-5">Department</div>
                         <div class="text-gray-600">@(Model.NominalRoll.Department ?? "-")</div>
 
@@ -112,18 +115,18 @@
                 </div>
             </div>
             <div class="card-body py-3">
-                <form asp-action="UpdateUserStatus" method="post" class="d-grid gap-3">
-                    <input type="hidden" name="id" value="@Model.Id" />
+                <form action="/admin/users/@Model.Id/status" method="post" class="d-grid gap-3">
+                    @Html.AntiForgeryToken()
                     @if (Model.NominalRoll.Status == IM.Core.Enums.UserStatus.Active)
                     {
-                        <button type="submit" name="status" value="@IM.Core.Enums.UserStatus.Suspended"
+                        <button type="submit" name="status" value="@((int)IM.Core.Enums.UserStatus.Suspended)"
                                 class="btn btn-light-danger">
                             <i class="bi bi-slash-circle me-2"></i>Suspend User
                         </button>
                     }
                     else
                     {
-                        <button type="submit" name="status" value="@IM.Core.Enums.UserStatus.Active"
+                        <button type="submit" name="status" value="@((int)IM.Core.Enums.UserStatus.Active)"
                                 class="btn btn-light-success">
                             <i class="bi bi-check-circle me-2"></i>Activate User
                         </button>

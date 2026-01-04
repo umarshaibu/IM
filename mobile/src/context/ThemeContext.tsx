@@ -116,7 +116,7 @@ const darkColors = {
   textSecondary: '#8696A0',
   textTertiary: '#667781',
   textMuted: '#667781',
-  textInverse: '#111B21',
+  textInverse: '#FFFFFF',
 
   // Chat
   chatBackground: '#0B141A',

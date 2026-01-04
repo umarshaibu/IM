@@ -13,4 +13,5 @@ public interface INotificationService
     Task UnregisterDeviceTokenAsync(Guid userId, string token);
     Task SendBroadcastNotificationAsync(string title, string body);
     Task SendPTTNotificationAsync(Guid conversationId, Guid senderId, string senderName, IEnumerable<Guid> recipientIds);
+    Task SendChannelPostNotificationAsync(Guid channelId, string channelName, Guid postId, string authorName, string? postPreview, IEnumerable<Guid> followerIds);
 }

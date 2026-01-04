@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using IM.API.DTOs;
 using IM.Core.Entities;
+using IM.Core.Interfaces;
 using IM.Infrastructure.Data;
 using System.Security.Claims;
 
@@ -14,10 +15,14 @@ namespace IM.API.Controllers;
 public class ChannelsController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
+    private readonly INotificationService _notificationService;
+    private readonly IEncryptionService _encryptionService;
 
-    public ChannelsController(ApplicationDbContext context)
+    public ChannelsController(ApplicationDbContext context, INotificationService notificationService, IEncryptionService encryptionService)
     {
         _context = context;
+        _notificationService = notificationService;
+        _encryptionService = encryptionService;
     }
 
     private Guid GetUserId() => Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
@@ -431,36 +436,35 @@ public class ChannelsController : ControllerBase
             .ThenByDescending(p => p.CreatedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(p => new ChannelPostDto
-            {
-                Id = p.Id,
-                ChannelId = p.ChannelId,
-                ChannelName = p.Channel.Name,
-                AuthorId = p.AuthorId,
-                AuthorName = p.Author.DisplayName ?? p.Author.NominalRoll.FullName,
-                AuthorProfilePicture = p.Author.ProfilePictureUrl,
-                Content = p.Content,
-                Type = p.Type,
-                MediaUrl = p.MediaUrl,
-                MediaMimeType = p.MediaMimeType,
-                MediaSize = p.MediaSize,
-                MediaDuration = p.MediaDuration,
-                ThumbnailUrl = p.ThumbnailUrl,
-                ViewCount = p.ViewCount,
-                ReactionCount = p.ReactionCount,
-                IsPinned = p.IsPinned,
-                Reactions = p.Reactions
-                    .GroupBy(r => r.Emoji)
-                    .Select(g => new ReactionSummaryDto { Emoji = g.Key, Count = g.Count() })
-                    .ToList(),
-                MyReaction = p.Reactions.FirstOrDefault(r => r.UserId == userId) != null
-                    ? p.Reactions.First(r => r.UserId == userId).Emoji
-                    : null,
-                CreatedAt = p.CreatedAt
-            })
             .ToListAsync();
 
-        return Ok(posts);
+        var postDtos = posts.Select(p => new ChannelPostDto
+        {
+            Id = p.Id,
+            ChannelId = p.ChannelId,
+            ChannelName = p.Channel.Name,
+            AuthorId = p.AuthorId,
+            AuthorName = p.Author.DisplayName ?? p.Author.NominalRoll.FullName,
+            AuthorProfilePicture = p.Author.ProfilePictureUrl,
+            Content = !string.IsNullOrEmpty(p.Content) ? _encryptionService.Decrypt(p.Content) : p.Content,
+            Type = p.Type,
+            MediaUrl = p.MediaUrl,
+            MediaMimeType = p.MediaMimeType,
+            MediaSize = p.MediaSize,
+            MediaDuration = p.MediaDuration,
+            ThumbnailUrl = p.ThumbnailUrl,
+            ViewCount = p.ViewCount,
+            ReactionCount = p.ReactionCount,
+            IsPinned = p.IsPinned,
+            Reactions = p.Reactions
+                .GroupBy(r => r.Emoji)
+                .Select(g => new ReactionSummaryDto { Emoji = g.Key, Count = g.Count() })
+                .ToList(),
+            MyReaction = p.Reactions.FirstOrDefault(r => r.UserId == userId)?.Emoji,
+            CreatedAt = p.CreatedAt
+        }).ToList();
+
+        return Ok(postDtos);
     }
 
     // POST: api/channels/{id}/posts
@@ -489,11 +493,16 @@ public class ChannelsController : ControllerBase
             .Include(u => u.NominalRoll)
             .FirstAsync(u => u.Id == userId);
 
+        // Encrypt content before saving
+        var encryptedContent = !string.IsNullOrEmpty(request.Content)
+            ? _encryptionService.Encrypt(request.Content)
+            : request.Content;
+
         var post = new ChannelPost
         {
             ChannelId = id,
             AuthorId = userId,
-            Content = request.Content,
+            Content = encryptedContent,
             Type = request.Type,
             MediaUrl = request.MediaUrl,
             MediaMimeType = request.MediaMimeType,
@@ -506,6 +515,30 @@ public class ChannelsController : ControllerBase
         channel.LastPostAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
 
+        // Send push notifications to all followers (except muted and the author)
+        var followerIds = await _context.ChannelFollowers
+            .Where(f => f.ChannelId == id && !f.IsMuted && f.UserId != userId)
+            .Select(f => f.UserId)
+            .ToListAsync();
+
+        if (followerIds.Any())
+        {
+            var authorName = user.DisplayName ?? user.NominalRoll.FullName;
+            var postPreview = request.Type == IM.Core.Enums.MessageType.Text
+                ? request.Content  // Use original (unencrypted) content for notification preview
+                : GetPostTypePreview(request.Type);
+
+            // Fire and forget - don't block the response
+            _ = _notificationService.SendChannelPostNotificationAsync(
+                id,
+                channel.Name,
+                post.Id,
+                authorName,
+                postPreview,
+                followerIds
+            );
+        }
+
         return Ok(new ChannelPostDto
         {
             Id = post.Id,
@@ -514,7 +547,7 @@ public class ChannelsController : ControllerBase
             AuthorId = post.AuthorId,
             AuthorName = user.DisplayName ?? user.NominalRoll.FullName,
             AuthorProfilePicture = user.ProfilePictureUrl,
-            Content = post.Content,
+            Content = request.Content,  // Return original (unencrypted) content to client
             Type = post.Type,
             MediaUrl = post.MediaUrl,
             MediaMimeType = post.MediaMimeType,
@@ -528,6 +561,18 @@ public class ChannelsController : ControllerBase
             MyReaction = null,
             CreatedAt = post.CreatedAt
         });
+    }
+
+    private static string GetPostTypePreview(IM.Core.Enums.MessageType type)
+    {
+        return type switch
+        {
+            IM.Core.Enums.MessageType.Image => "📷 Photo",
+            IM.Core.Enums.MessageType.Video => "🎥 Video",
+            IM.Core.Enums.MessageType.Audio => "🎵 Audio",
+            IM.Core.Enums.MessageType.Document => "📄 Document",
+            _ => "New post"
+        };
     }
 
     // DELETE: api/channels/posts/{postId}

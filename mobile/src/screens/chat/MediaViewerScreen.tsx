@@ -18,6 +18,17 @@ import Video, { ResizeMode, OnProgressData, OnLoadData } from 'react-native-vide
 import { RootStackParamList } from '../../navigation/RootNavigator';
 import { FONTS, SPACING } from '../../utils/theme';
 import { useTheme, ThemeColors } from '../../context/ThemeContext';
+import { AppConfig } from '../../config';
+
+// Helper to convert relative media URLs to full URLs
+const getFullMediaUrl = (url: string | undefined): string => {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+  const baseUrl = AppConfig.apiUrl;
+  return `${baseUrl}${url}`;
+};
 
 type MediaViewerRouteProp = RouteProp<RootStackParamList, 'MediaViewer'>;
 
@@ -83,9 +94,10 @@ const MediaViewerScreen: React.FC = () => {
 
   const handleShare = async () => {
     try {
+      const shareUrl = getFullMediaUrl(mediaUrl);
       await Share.share({
-        url: mediaUrl,
-        message: Platform.OS === 'android' ? mediaUrl : undefined,
+        url: shareUrl,
+        message: Platform.OS === 'android' ? shareUrl : undefined,
       });
     } catch (error) {
       console.error('Share error:', error);
@@ -98,8 +110,10 @@ const MediaViewerScreen: React.FC = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const fullMediaUrl = getFullMediaUrl(mediaUrl);
+
   const renderMedia = () => {
-    if (mediaType === 'Video') {
+    if (mediaType === 'video') {
       return (
         <TouchableOpacity
           activeOpacity={1}
@@ -107,7 +121,7 @@ const MediaViewerScreen: React.FC = () => {
           style={styles.mediaContainer}
         >
           <Video
-            source={{ uri: mediaUrl }}
+            source={{ uri: fullMediaUrl }}
             style={styles.video}
             resizeMode={ResizeMode.CONTAIN}
             paused={isPaused}
@@ -151,7 +165,7 @@ const MediaViewerScreen: React.FC = () => {
         style={styles.mediaContainer}
       >
         <Image
-          source={{ uri: mediaUrl }}
+          source={{ uri: fullMediaUrl }}
           style={styles.image}
           resizeMode="contain"
         />

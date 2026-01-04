@@ -65,6 +65,7 @@
                         <th class="min-w-125px">Service Number</th>
                         <th class="min-w-200px">Full Name</th>
                         <th class="min-w-125px">Phone</th>
+                        <th class="min-w-150px">Email</th>
                         <th class="min-w-125px">Department</th>
                         <th class="min-w-125px">Rank/Position</th>
                         <th class="min-w-100px">Status</th>
@@ -76,7 +77,7 @@
                     @if (!Model.Entries.Any())
                     {
                         <tr>
-                            <td colspan="8" class="text-center py-10">
+                            <td colspan="9" class="text-center py-10">
                                 <div class="d-flex flex-column align-items-center">
                                     <i class="bi bi-inbox fs-2tx text-gray-300 mb-3"></i>
                                     <span class="text-gray-500 fs-5">No entries found</span>
@@ -104,6 +105,9 @@
                             </td>
                             <td>
                                 <span class="text-gray-600">@(entry.PhoneNumber ?? "-")</span>
+                            </td>
+                            <td>
+                                <span class="text-gray-600">@(entry.Email ?? "-")</span>
                             </td>
                             <td>@(entry.Department ?? "-")</td>
                             <td>@(entry.RankPosition ?? "-")</td>

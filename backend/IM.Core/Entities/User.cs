@@ -6,6 +6,7 @@ public class User : BaseEntity
 {
     public Guid NominalRollId { get; set; }
     public string PhoneNumber { get; set; } = string.Empty;
+    public string? Email { get; set; }
     public string? DisplayName { get; set; }
     public string? ProfilePictureUrl { get; set; }
     public string? About { get; set; } = "Hey there! I am using IM";

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   FlatList,
@@ -12,13 +12,14 @@ import {
   Animated,
   Modal,
   Pressable,
+  Linking,
 } from 'react-native';
+import RNFS from 'react-native-fs';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { useQuery } from '@tanstack/react-query';
 import MessageBubble from '../../components/MessageBubble';
 import ChatInput from '../../components/ChatInput';
 import Avatar from '../../components/Avatar';
@@ -27,6 +28,7 @@ import SwipeableMessage from '../../components/SwipeableMessage';
 import MessageSelectionBar from '../../components/MessageSelectionBar';
 import ReactionsPopup from '../../components/ReactionsPopup';
 import TypingIndicator from '../../components/TypingIndicator';
+import { useMessages } from '../../hooks/useMessages';
 import { conversationsApi, filesApi } from '../../services/api';
 import {
   sendMessage,
@@ -47,6 +49,7 @@ import { RootStackParamList } from '../../navigation/RootNavigator';
 import { Message, Conversation } from '../../types';
 import { useTheme } from '../../context';
 import { FONTS, SPACING } from '../../utils/theme';
+import { AppConfig } from '../../config';
 // TODO: Re-enable when proper E2E encryption is implemented
 // import { encryptForConversation, decryptFromConversation } from '../../services/encryption';
 
@@ -61,11 +64,19 @@ const ChatScreen: React.FC = () => {
 
   const { userId } = useAuthStore();
   const {
-    messages,
-    setMessages,
     prependMessages,
     getConversation,
   } = useChatStore();
+
+  // Use the useMessages hook for offline-first message loading
+  const {
+    messages: conversationMessages,
+    isLoading,
+    isOffline,
+    loadedFromCache,
+    refetch,
+    loadMoreMessages: loadMore,
+  } = useMessages(conversationId);
 
   // Subscribe specifically to typing users for this conversation to ensure re-renders
   // Using JSON.stringify for deep comparison since arrays don't compare by value
@@ -91,35 +102,6 @@ const ChatScreen: React.FC = () => {
   const flatListRef = useRef<FlatList>(null);
 
   const conversation = getConversation(conversationId);
-  const conversationMessages = messages[conversationId] || [];
-
-  console.log('Chat render - conversationMessages count:', conversationMessages.length);
-  console.log('Chat render - typingUserIds:', typingUserIds);
-
-  const { data: messagesData, isLoading, refetch } = useQuery({
-    queryKey: ['messages', conversationId],
-    queryFn: async () => {
-      console.log('Fetching messages for conversation:', conversationId);
-      const response = await conversationsApi.getMessages(conversationId, 1, 50);
-      const msgs = response.data as Message[];
-      console.log('Received messages from API:', msgs.length);
-
-      // TODO: Decrypt message contents when proper E2E encryption is implemented
-      // For now, messages are sent in plain text
-
-      return msgs;
-    },
-    staleTime: 0, // Always fetch fresh data
-    refetchOnMount: 'always', // Always refetch when component mounts
-  });
-
-  useEffect(() => {
-    if (messagesData) {
-      console.log('Setting messages in store:', messagesData.length, 'for conversation:', conversationId);
-      setMessages(conversationId, messagesData);
-      setHasMore(messagesData.length === 50);
-    }
-  }, [messagesData, conversationId, setMessages]);
 
   useEffect(() => {
     joinConversation(conversationId);
@@ -179,15 +161,15 @@ const ChatScreen: React.FC = () => {
               size={36}
             />
             <View style={styles.headerTitleText}>
-              <Text style={styles.headerName} numberOfLines={1}>
+              <Text style={[styles.headerName, { color: colors.headerText }]} numberOfLines={1}>
                 {conversation?.type === 'Group'
                   ? conversation.name
                   : otherParticipant?.displayName || otherParticipant?.fullName}
               </Text>
               {typingUserIds.length > 0 ? (
-                <Text style={styles.headerStatus}>typing...</Text>
+                <Text style={[styles.headerStatus, { color: colors.headerText }]}>typing...</Text>
               ) : conversation?.type === 'Private' && otherParticipant?.isOnline ? (
-                <Text style={styles.headerStatus}>online</Text>
+                <Text style={[styles.headerStatus, { color: colors.headerText }]}>online</Text>
               ) : null}
             </View>
           </TouchableOpacity>
@@ -229,7 +211,6 @@ const ChatScreen: React.FC = () => {
     setReplyingTo(null);
 
     try {
-      console.log('Sending message:', content);
       // TODO: Implement proper end-to-end encryption with key exchange
       // For now, sending in plain text to fix cross-device messaging
 
@@ -238,7 +219,6 @@ const ChatScreen: React.FC = () => {
         content: content,
         replyToMessageId: replyingTo?.id,
       });
-      console.log('Message sent successfully');
       // Server will broadcast the message back via SignalR with proper ID
       // The ReceiveMessage handler will replace the optimistic message
     } catch (error) {
@@ -250,12 +230,10 @@ const ChatScreen: React.FC = () => {
   };
 
   const handleTypingStart = () => {
-    console.log('handleTypingStart called for conversation:', conversationId);
     sendTyping(conversationId);
   };
 
   const handleTypingEnd = () => {
-    console.log('handleTypingEnd called for conversation:', conversationId);
     sendStopTyping(conversationId);
   };
 
@@ -289,6 +267,9 @@ const ChatScreen: React.FC = () => {
       await sendMessage(conversationId, {
         type: messageType,
         mediaUrl: fileUrl,
+        mediaMimeType: media.mimeType,
+        mediaSize: media.fileSize,
+        fileName: media.fileName,
         replyToMessageId: replyingTo?.id,
       });
 
@@ -303,7 +284,6 @@ const ChatScreen: React.FC = () => {
 
   const handleSendVoiceNote = async (uri: string, duration: number) => {
     setIsUploading(true);
-    console.log('handleSendVoiceNote called with uri:', uri, 'duration:', duration);
 
     try {
       // Create form data for file upload
@@ -384,22 +364,13 @@ const ChatScreen: React.FC = () => {
   };
 
   const loadMoreMessages = async () => {
-    if (isLoadingMore || !hasMore) return;
+    if (isLoadingMore || !hasMore || isOffline) return;
 
     setIsLoadingMore(true);
     try {
-      const response = await conversationsApi.getMessages(conversationId, page + 1, 50);
-      const newMessages = response.data as Message[];
-
-      // TODO: Decrypt message contents when proper E2E encryption is implemented
-
-      if (newMessages.length > 0) {
-        prependMessages(conversationId, newMessages);
-        setPage((p) => p + 1);
-        setHasMore(newMessages.length === 50);
-      } else {
-        setHasMore(false);
-      }
+      const moreAvailable = await loadMore(page + 1);
+      setPage((p) => p + 1);
+      setHasMore(moreAvailable);
     } catch (error) {
       console.error('Error loading more messages:', error);
     } finally {
@@ -653,6 +624,62 @@ const ChatScreen: React.FC = () => {
             isMine={isMine}
             showSenderName={showSenderName}
             onLongPress={() => handleMessageLongPress(item)}
+            onMediaPress={async () => {
+              if (item.mediaUrl) {
+                if (item.type === 'Image' || item.type === 'Video') {
+                  navigation.navigate('MediaViewer', {
+                    mediaUrl: item.mediaUrl,
+                    mediaType: item.type.toLowerCase(),
+                    senderName: item.senderName,
+                    timestamp: item.createdAt,
+                  });
+                } else if (item.type === 'Document') {
+                  // Download and open document
+                  try {
+                    const fullUrl = item.mediaUrl.startsWith('http')
+                      ? item.mediaUrl
+                      : `${AppConfig.apiUrl}${item.mediaUrl}`;
+                    const fileName = item.content || 'document';
+                    const downloadPath = `${RNFS.DocumentDirectoryPath}/${fileName}`;
+
+                    Alert.alert(
+                      'Download Document',
+                      `Do you want to download "${fileName}"?`,
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Download',
+                          onPress: async () => {
+                            try {
+                              const result = await RNFS.downloadFile({
+                                fromUrl: fullUrl,
+                                toFile: downloadPath,
+                              }).promise;
+
+                              if (result.statusCode === 200) {
+                                Alert.alert('Success', `Document saved to ${downloadPath}`);
+                                // Try to open the file
+                                if (Platform.OS === 'ios') {
+                                  Linking.openURL(`file://${downloadPath}`);
+                                }
+                              } else {
+                                Alert.alert('Error', 'Failed to download document');
+                              }
+                            } catch (error) {
+                              console.error('Download error:', error);
+                              Alert.alert('Error', 'Failed to download document');
+                            }
+                          },
+                        },
+                      ]
+                    );
+                  } catch (error) {
+                    console.error('Document open error:', error);
+                    Alert.alert('Error', 'Failed to open document');
+                  }
+                }
+              }
+            }}
             onReplyPress={() => {
               if (item.replyToMessageId) {
                 scrollToAndHighlightMessage(item.replyToMessageId);
@@ -706,12 +733,13 @@ const ChatScreen: React.FC = () => {
     });
   }, [otherTypingUserIds, conversation?.participants]);
 
-  console.log('ChatScreen typing state - typingUserIds:', typingUserIds, 'otherTypingUserIds:', otherTypingUserIds, 'typingNames:', typingNames);
-
   if (isLoading) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+          Loading messages...
+        </Text>
       </View>
     );
   }
@@ -727,6 +755,16 @@ const ChatScreen: React.FC = () => {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={90}
       >
+        {/* Offline Banner */}
+        {isOffline && (
+          <View style={[styles.offlineBanner, { backgroundColor: colors.warning }]}>
+            <Icon name="wifi-off" size={16} color={colors.textInverse} />
+            <Text style={[styles.offlineBannerText, { color: colors.textInverse }]}>
+              You're offline. Showing cached messages.
+            </Text>
+          </View>
+        )}
+
         {/* Selection Mode Top Action Bar */}
         {isSelectionMode && (
           <MessageSelectionBar
@@ -751,7 +789,7 @@ const ChatScreen: React.FC = () => {
             renderItem={renderMessage}
             keyExtractor={(item) => item.id}
             inverted
-            extraData={{ typingUsersKey, otherTypingUserIds, typingNames }}
+            extraData={{ typingUsersKey, otherTypingUserIds, typingNames, selectedMessages, isSelectionMode }}
             onEndReached={loadMoreMessages}
             onEndReachedThreshold={0.5}
             ListHeaderComponent={
@@ -761,6 +799,12 @@ const ChatScreen: React.FC = () => {
             }
             ListFooterComponent={renderFooter}
             contentContainerStyle={styles.messagesList}
+            // Performance optimizations
+            removeClippedSubviews={true}
+            maxToRenderPerBatch={10}
+            windowSize={10}
+            initialNumToRender={15}
+            updateCellsBatchingPeriod={50}
             onScrollToIndexFailed={(info) => {
               // If scroll fails, wait and try again
               setTimeout(() => {
@@ -913,13 +957,11 @@ const styles = StyleSheet.create({
     marginLeft: SPACING.sm,
   },
   headerName: {
-    color: '#FFFFFF',
     fontSize: FONTS.sizes.lg,
     fontWeight: 'bold',
     maxWidth: 150,
   },
   headerStatus: {
-    color: '#FFFFFF',
     fontSize: FONTS.sizes.xs,
     opacity: 0.8,
   },
@@ -972,6 +1014,22 @@ const styles = StyleSheet.create({
   callMenuDivider: {
     height: 1,
     marginHorizontal: SPACING.md,
+  },
+  loadingText: {
+    marginTop: SPACING.sm,
+    fontSize: FONTS.sizes.sm,
+  },
+  offlineBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.md,
+  },
+  offlineBannerText: {
+    marginLeft: SPACING.xs,
+    fontSize: FONTS.sizes.sm,
+    fontWeight: '500',
   },
 });
 

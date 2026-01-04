@@ -43,6 +43,7 @@ public class AdminController : ControllerBase
             ServiceNumber = n.ServiceNumber,
             FullName = n.FullName,
             PhoneNumber = n.PhoneNumber,
+            Email = n.Email,
             Department = n.Department,
             RankPosition = n.RankPosition,
             Status = n.Status,
@@ -70,6 +71,7 @@ public class AdminController : ControllerBase
             ServiceNumber = entry.ServiceNumber,
             FullName = entry.FullName,
             PhoneNumber = entry.PhoneNumber,
+            Email = entry.Email,
             Department = entry.Department,
             RankPosition = entry.RankPosition,
             Status = entry.Status,
@@ -94,6 +96,7 @@ public class AdminController : ControllerBase
             ServiceNumber = request.ServiceNumber,
             FullName = request.FullName,
             PhoneNumber = request.PhoneNumber,
+            Email = request.Email,
             Department = request.Department,
             RankPosition = request.RankPosition,
             Status = UserStatus.Active
@@ -108,6 +111,7 @@ public class AdminController : ControllerBase
             ServiceNumber = entry.ServiceNumber,
             FullName = entry.FullName,
             PhoneNumber = entry.PhoneNumber,
+            Email = entry.Email,
             Department = entry.Department,
             RankPosition = entry.RankPosition,
             Status = entry.Status,
@@ -130,6 +134,8 @@ public class AdminController : ControllerBase
             entry.FullName = request.FullName;
         if (request.PhoneNumber != null)
             entry.PhoneNumber = request.PhoneNumber;
+        if (request.Email != null)
+            entry.Email = request.Email;
         if (request.Department != null)
             entry.Department = request.Department;
         if (request.RankPosition != null)
@@ -218,6 +224,7 @@ public class AdminController : ControllerBase
                         ServiceNumber = serviceNumber,
                         FullName = fullName,
                         PhoneNumber = dict.ContainsKey("PhoneNumber") ? dict["PhoneNumber"]?.ToString() : null,
+                        Email = dict.ContainsKey("Email") ? dict["Email"]?.ToString() : null,
                         Department = dict.ContainsKey("Department") ? dict["Department"]?.ToString() : null,
                         RankPosition = dict.ContainsKey("RankPosition") ? dict["RankPosition"]?.ToString() : null,
                         Status = UserStatus.Active
@@ -264,6 +271,7 @@ public class AdminController : ControllerBase
             ServiceNumber = u.NominalRoll.ServiceNumber,
             FullName = u.NominalRoll.FullName,
             PhoneNumber = u.PhoneNumber,
+            Email = u.Email ?? u.NominalRoll.Email,
             DisplayName = u.DisplayName,
             Department = u.NominalRoll.Department,
             RankPosition = u.NominalRoll.RankPosition,

@@ -17,7 +17,7 @@ public class MessageService : IMessageService
         _encryptionService = encryptionService;
     }
 
-    public async Task<Message> SendMessageAsync(Guid conversationId, Guid senderId, MessageType type, string? content, string? mediaUrl = null)
+    public async Task<Message> SendMessageAsync(Guid conversationId, Guid senderId, MessageType type, string? content, string? mediaUrl = null, Guid? replyToMessageId = null)
     {
         var conversation = await _context.Conversations
             .Include(c => c.Participants)
@@ -54,6 +54,7 @@ public class MessageService : IMessageService
             Type = type,
             Content = encryptedContent,
             MediaUrl = mediaUrl,
+            ReplyToMessageId = replyToMessageId,
             ExpiryDuration = conversation.DefaultMessageExpiry,
             ExpiresAt = expiresAt,
             // Service Number watermarks
@@ -82,6 +83,20 @@ public class MessageService : IMessageService
         conversation.LastMessageAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
+
+        // Load the reply message if exists
+        if (replyToMessageId.HasValue)
+        {
+            message.ReplyToMessage = await _context.Messages
+                .Include(m => m.Sender)
+                    .ThenInclude(s => s.NominalRoll)
+                .FirstOrDefaultAsync(m => m.Id == replyToMessageId.Value);
+
+            if (message.ReplyToMessage != null)
+            {
+                DecryptMessage(message.ReplyToMessage);
+            }
+        }
 
         // Decrypt content before returning
         if (!string.IsNullOrEmpty(message.Content))
@@ -124,16 +139,22 @@ public class MessageService : IMessageService
                 .ThenInclude(s => s.NominalRoll)
             .Include(m => m.Statuses)
             .Include(m => m.ReplyToMessage)
+                .ThenInclude(r => r!.Sender)
+                    .ThenInclude(s => s.NominalRoll)
             .Where(m => m.ConversationId == conversationId && !m.IsDeleted)
             .OrderByDescending(m => m.CreatedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync();
 
-        // Decrypt all messages
+        // Decrypt all messages and their reply messages
         foreach (var message in messages)
         {
             DecryptMessage(message);
+            if (message.ReplyToMessage != null)
+            {
+                DecryptMessage(message.ReplyToMessage);
+            }
         }
 
         return messages;

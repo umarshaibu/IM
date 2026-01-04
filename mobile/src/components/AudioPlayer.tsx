@@ -169,7 +169,7 @@ const AudioPlayer: React.FC<AudioPlayerProps> = ({ uri, duration = 0, isMine = f
         <Icon
           name={isPlaying ? 'pause' : 'play'}
           size={24}
-          color="#FFFFFF"
+          color={colors.textInverse}
           style={isPlaying ? undefined : { marginLeft: 2 }}
         />
       </TouchableOpacity>

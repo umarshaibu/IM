@@ -81,33 +81,15 @@ messaging().setBackgroundMessageHandler(async (remoteMessage) => {
   if (!data) return;
 
   // Handle incoming call notifications
-  // ANDROID: Delegate to native CallEventModule which triggers CallForegroundService
-  // The native service shows IncomingCallActivity which is more reliable for BAL exemption
+  // ANDROID: Skip here - let native CallNotificationService handle it directly
+  // The native service is more reliable for showing incoming call UI when app is killed
   // iOS: Use CallKeep for CallKit integration
   if (data.type === 'call') {
     if (Platform.OS === 'android') {
-      console.log('Android: Delegating call to native handler');
-      // React Native Firebase intercepts FCM messages before native CallNotificationService
-      // So we need to explicitly call native code to trigger the incoming call UI
-      try {
-        const { CallEventModule } = NativeModules;
-        if (CallEventModule && CallEventModule.handleIncomingCallNatively) {
-          await CallEventModule.handleIncomingCallNatively(
-            data.callId || '',
-            data.callerId || '',
-            data.callerName || 'Unknown Caller',
-            data.callType || 'Voice',
-            data.conversationId || ''
-          );
-          console.log('Android: Native call handler triggered successfully');
-        } else {
-          console.log('Android: CallEventModule not available, using fallback');
-          await displayCallNotificationFallback(data);
-        }
-      } catch (error) {
-        console.error('Android: Error calling native handler:', error);
-        await displayCallNotificationFallback(data);
-      }
+      // On Android, native CallNotificationService handles FCM call messages directly
+      // via onMessageReceived(). We don't need to do anything here.
+      // This JS handler runs in a headless context where NativeModules may not work reliably.
+      console.log('Android: Call notification - native service handles this');
       return;
     }
 
@@ -143,20 +125,12 @@ messaging().setBackgroundMessageHandler(async (remoteMessage) => {
   }
 
   // Handle call ended notification
-  // ANDROID: Delegate to native CallEventModule to close IncomingCallActivity
+  // ANDROID: Skip here - let native CallNotificationService handle it
   // iOS: Use CallKeep
   if (data.type === 'call_ended') {
     if (Platform.OS === 'android') {
-      console.log('Android: Delegating call_ended to native handler');
-      try {
-        const { CallEventModule } = NativeModules;
-        if (CallEventModule && CallEventModule.handleCallEndedNatively) {
-          await CallEventModule.handleCallEndedNatively(data.callId || '');
-          console.log('Android: Native call_ended handler triggered');
-        }
-      } catch (error) {
-        console.error('Android: Error calling native call_ended handler:', error);
-      }
+      // On Android, native CallNotificationService handles call_ended messages directly
+      console.log('Android: Call ended notification - native service handles this');
       return;
     }
 

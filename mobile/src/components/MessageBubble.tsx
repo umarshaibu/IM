@@ -105,24 +105,48 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   const getStatusIcon = (): string => {
     if (!isMine) return '';
 
-    // Check all statuses
-    const allRead = message.statuses.every((s) => s.status === 'Read');
-    const allDelivered = message.statuses.every(
-      (s) => s.status === 'Delivered' || s.status === 'Read'
-    );
+    // Failed status - show error icon
+    if (message.status === 'Failed') return 'alert-circle-outline';
 
-    if (allRead) return 'check-all';
-    if (allDelivered) return 'check-all';
-    if (message.status === 'Sent') return 'check';
+    // Sending status - show clock/waiting icon
     if (message.status === 'Sending') return 'clock-outline';
-    return 'alert-circle-outline';
+
+    // Check recipient statuses for delivered/read
+    const hasStatuses = message.statuses && message.statuses.length > 0;
+
+    if (hasStatuses) {
+      const allRead = message.statuses.every((s) => s.status === 'Read');
+      const anyDelivered = message.statuses.some(
+        (s) => s.status === 'Delivered' || s.status === 'Read'
+      );
+
+      // All recipients have read - double blue tick
+      if (allRead) return 'check-all';
+      // At least one delivered - double grey tick
+      if (anyDelivered) return 'check-all';
+    }
+
+    // Sent but not delivered - single grey tick
+    if (message.status === 'Sent') return 'check';
+
+    // Default to sending state
+    return 'clock-outline';
   };
 
   const getStatusColor = (): string => {
     if (!isMine) return colors.tick;
 
-    const allRead = message.statuses.every((s) => s.status === 'Read');
-    if (allRead) return colors.tickBlue;
+    // Failed status - show error color
+    if (message.status === 'Failed') return colors.error;
+
+    // Check if all recipients have read
+    const hasStatuses = message.statuses && message.statuses.length > 0;
+    if (hasStatuses) {
+      const allRead = message.statuses.every((s) => s.status === 'Read');
+      if (allRead) return colors.tickBlue;
+    }
+
+    // Default grey tick for sending/sent/delivered
     return colors.tick;
   };
 
@@ -134,7 +158,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         return (
           <TouchableOpacity onPress={onMediaPress} style={styles.mediaContainer}>
             <Image
-              source={{ uri: message.mediaThumbnailUrl || message.mediaUrl }}
+              source={{ uri: getFullMediaUrl(message.mediaThumbnailUrl || message.mediaUrl) }}
               style={styles.imageMedia}
             />
           </TouchableOpacity>
@@ -143,7 +167,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         return (
           <TouchableOpacity onPress={onMediaPress} style={styles.mediaContainer}>
             <Image
-              source={{ uri: message.mediaThumbnailUrl || message.mediaUrl }}
+              source={{ uri: getFullMediaUrl(message.mediaThumbnailUrl || message.mediaUrl) }}
               style={styles.imageMedia}
             />
             <View style={styles.videoOverlay}>
@@ -306,17 +330,29 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 
         {/* Enhanced forwarded indicator with original sender info */}
         {message.isForwarded && (
-          <View style={styles.forwardedContainer}>
-            <Icon name="share" size={12} color={colors.textMuted} />
+          <View style={[styles.forwardedContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }]}>
+            <Icon name="share-variant" size={14} color={colors.primary} style={styles.forwardIcon} />
             <View style={styles.forwardedInfo}>
-              <Text style={[styles.forwardedText, { color: colors.textMuted }]}>
-                Forwarded {message.forwardCount && message.forwardCount > 1 ? `(${message.forwardCount}x)` : ''}
+              <Text style={[styles.forwardedLabel, { color: colors.primary }]}>
+                Forwarded
               </Text>
-              {message.originalSenderServiceNumber && (
-                <Text style={[styles.originalSenderText, { color: colors.textMuted }]}>
-                  Original: SN {message.originalSenderServiceNumber}
+              {message.originalSenderServiceNumber && message.senderServiceNumber &&
+               message.originalSenderServiceNumber !== message.senderServiceNumber ? (
+                // Show chain: Original sender → Current forwarder
+                <Text style={[styles.forwardedChain, { color: colors.textSecondary }]}>
+                  <Text style={styles.forwardedServiceNumber}>{message.originalSenderServiceNumber}</Text>
+                  <Text style={styles.forwardedArrow}> → </Text>
+                  <Text style={styles.forwardedServiceNumber}>{message.senderServiceNumber}</Text>
+                  {message.forwardCount && message.forwardCount > 1 && (
+                    <Text style={styles.forwardedCount}> ({message.forwardCount}x)</Text>
+                  )}
                 </Text>
-              )}
+              ) : message.senderServiceNumber ? (
+                // First forward - just show forwarder
+                <Text style={[styles.forwardedChain, { color: colors.textSecondary }]}>
+                  From: <Text style={styles.forwardedServiceNumber}>{message.senderServiceNumber}</Text>
+                </Text>
+              ) : null}
             </View>
           </View>
         )}
@@ -546,21 +582,36 @@ const styles = StyleSheet.create({
   },
   forwardedContainer: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: SPACING.xs,
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: BORDER_RADIUS.sm,
+    marginHorizontal: -SPACING.xs,
+  },
+  forwardIcon: {
+    marginRight: SPACING.xs,
   },
   forwardedInfo: {
-    marginLeft: SPACING.xs,
     flex: 1,
   },
-  forwardedText: {
+  forwardedLabel: {
     fontSize: FONTS.sizes.xs,
-    fontStyle: 'italic',
+    fontWeight: '600',
   },
-  originalSenderText: {
+  forwardedChain: {
     fontSize: FONTS.sizes.xs - 1,
+    marginTop: 1,
+  },
+  forwardedServiceNumber: {
+    fontWeight: '500',
+  },
+  forwardedArrow: {
+    opacity: 0.6,
+  },
+  forwardedCount: {
     fontStyle: 'italic',
-    marginTop: 2,
+    opacity: 0.8,
   },
   mediaOriginatorWatermark: {
     fontSize: FONTS.sizes.xs - 1,

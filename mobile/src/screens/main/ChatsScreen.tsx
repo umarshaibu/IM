@@ -15,6 +15,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import NetInfo from '@react-native-community/netinfo';
 import ConversationItem from '../../components/ConversationItem';
 import MediaPicker, { SelectedMedia } from '../../components/MediaPicker';
 import Avatar from '../../components/Avatar';
@@ -22,6 +23,7 @@ import { conversationsApi, filesApi } from '../../services/api';
 import { sendMessage } from '../../services/signalr';
 import { useChatStore } from '../../stores/chatStore';
 import { useAuthStore } from '../../stores/authStore';
+import { conversationDBService } from '../../database/services';
 import { RootStackParamList } from '../../navigation/RootNavigator';
 import { Conversation } from '../../types';
 import { useTheme } from '../../context/ThemeContext';
@@ -42,6 +44,8 @@ const ChatsScreen: React.FC = () => {
   const [selectedMedia, setSelectedMedia] = useState<SelectedMedia | null>(null);
   const [showConversationPicker, setShowConversationPicker] = useState(false);
   const [isSendingMedia, setIsSendingMedia] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
+  const [loadedFromCache, setLoadedFromCache] = useState(false);
   const queryClient = useQueryClient();
 
   // Subscribe to all typing users to show in chat list
@@ -49,6 +53,58 @@ const ChatsScreen: React.FC = () => {
   const typingUsersRaw = useChatStore((state) => state.typingUsers);
   const typingUsersKey = JSON.stringify(typingUsersRaw);
   const typingUsers = React.useMemo(() => typingUsersRaw, [typingUsersKey]);
+
+  // Check network status
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener(state => {
+      setIsOffline(!state.isConnected);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Load conversations from local database first (for offline support)
+  useEffect(() => {
+    const loadFromLocalDB = async () => {
+      try {
+        const localConversations = await conversationDBService.getActiveConversations();
+        if (localConversations.length > 0 && conversations.length === 0) {
+          // Convert WatermelonDB conversations to app format
+          const formattedConversations: Conversation[] = localConversations.map(conv => ({
+            id: conv.serverId,
+            type: conv.type === 'direct' ? 'Private' : 'Group',
+            name: conv.name || undefined,
+            iconUrl: conv.avatarUrl || undefined,
+            defaultMessageExpiry: 0 as const,
+            lastMessage: conv.lastMessageContent ? {
+              id: '',
+              conversationId: conv.serverId,
+              senderId: conv.lastMessageSenderId || '',
+              content: conv.lastMessageContent,
+              type: 'Text' as const,
+              isForwarded: false,
+              isEdited: false,
+              isDeleted: false,
+              status: 'Sent' as const,
+              createdAt: conv.lastMessageAt ? new Date(conv.lastMessageAt).toISOString() : '',
+              statuses: [],
+            } : undefined,
+            unreadCount: conv.unreadCount || 0,
+            isMuted: conv.isMuted || false,
+            isArchived: false,
+            isDeleted: conv.isDeleted || false,
+            participants: [],
+            createdAt: new Date(conv.createdAt).toISOString(),
+          }));
+          setConversations(formattedConversations);
+          setLoadedFromCache(true);
+        }
+      } catch (error) {
+        console.error('Error loading conversations from local DB:', error);
+      }
+    };
+
+    loadFromLocalDB();
+  }, []);
 
   // Debug: Log typing users changes
   useEffect(() => {
@@ -59,13 +115,80 @@ const ChatsScreen: React.FC = () => {
     queryKey: ['conversations'],
     queryFn: async () => {
       const response = await conversationsApi.getAll();
-      return response.data as Conversation[];
+      const fetchedConversations = response.data as Conversation[];
+
+      // Sync to local database for offline access
+      try {
+        await conversationDBService.syncConversations(fetchedConversations.map(conv => ({
+          id: conv.id,
+          type: conv.type === 'Private' ? 'Direct' : 'Group',
+          name: conv.name || null,
+          avatarUrl: conv.iconUrl || null,
+          lastMessage: conv.lastMessage ? {
+            content: conv.lastMessage.content || '',
+            createdAt: conv.lastMessage.createdAt,
+            senderId: conv.lastMessage.senderId,
+          } : undefined,
+          unreadCount: conv.unreadCount || 0,
+          isMuted: conv.isMuted || false,
+          isPinned: false,
+          participants: conv.participants?.map(p => ({
+            userId: p.userId,
+            role: p.role || 'member',
+            joinedAt: p.joinedAt || new Date().toISOString(),
+          })) || [],
+          createdAt: conv.createdAt,
+          updatedAt: conv.createdAt,
+        })));
+      } catch (syncError) {
+        console.error('Error syncing conversations to local DB:', syncError);
+      }
+
+      return fetchedConversations;
     },
+    retry: isOffline ? 0 : 3,
+    retryDelay: 1000,
+    staleTime: isOffline ? Infinity : 0,
   });
 
   useEffect(() => {
     if (data) {
-      setConversations(data);
+      // Merge server data with local state to preserve real-time updates
+      // Keep local unreadCount and lastMessage if they're more recent
+      const currentConversations = useChatStore.getState().conversations;
+      const mergedConversations = data.map(serverConv => {
+        const localConv = currentConversations.find(c => c.id === serverConv.id);
+        if (localConv) {
+          // Keep local unreadCount if it's higher (real-time messages arrived)
+          const unreadCount = Math.max(localConv.unreadCount || 0, serverConv.unreadCount || 0);
+
+          // Keep local lastMessage if it's more recent
+          const serverLastMessageTime = serverConv.lastMessage?.createdAt
+            ? new Date(serverConv.lastMessage.createdAt).getTime()
+            : 0;
+          const localLastMessageTime = localConv.lastMessage?.createdAt
+            ? new Date(localConv.lastMessage.createdAt).getTime()
+            : 0;
+
+          const lastMessage = localLastMessageTime > serverLastMessageTime
+            ? localConv.lastMessage
+            : serverConv.lastMessage;
+          const lastMessageAt = localLastMessageTime > serverLastMessageTime
+            ? localConv.lastMessageAt
+            : serverConv.lastMessageAt;
+
+          return {
+            ...serverConv,
+            unreadCount,
+            lastMessage,
+            lastMessageAt,
+          };
+        }
+        return serverConv;
+      });
+
+      setConversations(mergedConversations);
+      setLoadedFromCache(false);
     }
   }, [data, setConversations]);
 
@@ -326,6 +449,16 @@ const ChatsScreen: React.FC = () => {
     <View style={styles.container}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.surface} />
 
+      {/* Offline Banner */}
+      {isOffline && (
+        <View style={styles.offlineBanner}>
+          <Icon name="wifi-off" size={16} color={colors.textInverse} />
+          <Text style={styles.offlineBannerText}>
+            You're offline. Showing cached chats.
+          </Text>
+        </View>
+      )}
+
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Chats</Text>
@@ -466,6 +599,20 @@ const createStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.surface,
+  },
+  offlineBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.md,
+    backgroundColor: colors.warning,
+  },
+  offlineBannerText: {
+    marginLeft: SPACING.xs,
+    fontSize: FONTS.sizes.sm,
+    fontWeight: '500',
+    color: colors.textInverse,
   },
   header: {
     flexDirection: 'row',

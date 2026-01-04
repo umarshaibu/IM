@@ -23,15 +23,44 @@ let presenceConnection: HubConnection | null = null;
 // Track typing timeouts per user to properly reset them
 const typingTimeouts: Map<string, NodeJS.Timeout> = new Map();
 
+// Check if a connection is in a connected or connecting state
+const isConnectionActive = (connection: HubConnection | null): boolean => {
+  if (!connection) return false;
+  return connection.state === HubConnectionState.Connected ||
+         connection.state === HubConnectionState.Connecting ||
+         connection.state === HubConnectionState.Reconnecting;
+};
+
 export const initializeSignalR = async (accessToken: string): Promise<void> => {
+  // Skip if all connections are already active
+  if (isConnectionActive(chatConnection) &&
+      isConnectionActive(callConnection) &&
+      isConnectionActive(presenceConnection)) {
+    console.log('SignalR connections already active, skipping reinitialization');
+    return;
+  }
+
   // Clean up existing connections before reinitializing
   await disconnectSignalR();
 
-  await Promise.all([
-    initializeChatHub(accessToken),
-    initializeCallHub(accessToken),
-    initializePresenceHub(accessToken),
-  ]);
+  // Initialize connections sequentially to avoid race conditions
+  try {
+    await initializeChatHub(accessToken);
+  } catch (error) {
+    console.error('Failed to initialize chat hub:', error);
+  }
+
+  try {
+    await initializeCallHub(accessToken);
+  } catch (error) {
+    console.error('Failed to initialize call hub:', error);
+  }
+
+  try {
+    await initializePresenceHub(accessToken);
+  } catch (error) {
+    console.error('Failed to initialize presence hub:', error);
+  }
 };
 
 export const disconnectSignalR = async (): Promise<void> => {
@@ -623,7 +652,10 @@ export const sendMessage = async (
     type: string;
     content?: string;
     mediaUrl?: string;
+    mediaMimeType?: string;
+    mediaSize?: number;
     mediaDuration?: number;
+    fileName?: string;
     metadata?: string;
     replyToMessageId?: string;
   }
@@ -639,8 +671,17 @@ export const sendMessage = async (
   if (message.mediaUrl !== undefined) {
     cleanMessage.mediaUrl = message.mediaUrl;
   }
+  if (message.mediaMimeType !== undefined) {
+    cleanMessage.mediaMimeType = message.mediaMimeType;
+  }
+  if (message.mediaSize !== undefined) {
+    cleanMessage.mediaSize = message.mediaSize;
+  }
   if (message.mediaDuration !== undefined) {
     cleanMessage.mediaDuration = message.mediaDuration;
+  }
+  if (message.fileName !== undefined) {
+    cleanMessage.fileName = message.fileName;
   }
   if (message.metadata !== undefined) {
     cleanMessage.metadata = message.metadata;

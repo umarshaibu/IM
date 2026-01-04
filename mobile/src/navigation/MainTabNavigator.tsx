@@ -2,14 +2,24 @@ import React, { useMemo } from 'react';
 import { View, StyleSheet, Text } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { useQuery } from '@tanstack/react-query';
 import { useTheme } from '../context/ThemeContext';
 import { FONTS, SPACING, BORDER_RADIUS } from '../utils/theme';
 import { useChatStore } from '../stores/chatStore';
+import { useAuthStore } from '../stores/authStore';
+import { callsApi, channelsApi } from '../services/api';
+import { Call } from '../types';
 
 import ChatsScreen from '../screens/main/ChatsScreen';
 import CallsScreen from '../screens/main/CallsScreen';
 import ChannelsScreen from '../screens/main/ChannelsScreen';
 import SettingsScreen from '../screens/main/SettingsScreen';
+
+interface Channel {
+  id: string;
+  unreadCount?: number;
+  isFollowing: boolean;
+}
 
 export type MainTabParamList = {
   Chats: undefined;
@@ -44,6 +54,43 @@ const TabIcon: React.FC<TabIconProps> = ({ name, focused, color, size, badge, ba
 const MainTabNavigator: React.FC = () => {
   const { colors, isDark } = useTheme();
   const unreadCount = useChatStore((state) => state.getUnreadCount());
+  const { userId } = useAuthStore();
+
+  // Fetch missed calls count
+  const { data: calls } = useQuery({
+    queryKey: ['callHistory'],
+    queryFn: async () => {
+      const response = await callsApi.getHistory();
+      return response.data as Call[];
+    },
+    staleTime: 30000, // Cache for 30 seconds
+  });
+
+  const missedCallsCount = useMemo(() => {
+    if (!calls || !userId) return 0;
+    return calls.filter((call) => {
+      const isMissed = call.status === 'Missed' || call.status === 'Declined';
+      const isIncoming = call.initiatorId !== userId;
+      return isMissed && isIncoming;
+    }).length;
+  }, [calls, userId]);
+
+  // Fetch channels unread count
+  const { data: channels } = useQuery({
+    queryKey: ['channels'],
+    queryFn: async () => {
+      const response = await channelsApi.getAll();
+      return response.data as Channel[];
+    },
+    staleTime: 30000, // Cache for 30 seconds
+  });
+
+  const channelsUnreadCount = useMemo(() => {
+    if (!channels) return 0;
+    return channels
+      .filter((channel) => channel.isFollowing)
+      .reduce((total, channel) => total + (channel.unreadCount || 0), 0);
+  }, [channels]);
 
   const tabBarStyle = useMemo(() => ({
     backgroundColor: colors.tabBar,
@@ -102,6 +149,34 @@ const MainTabNavigator: React.FC = () => {
                 size={24}
                 badge={unreadCount}
                 badgeColor={colors.secondary}
+                badgeTextColor={colors.textInverse}
+              />
+            );
+          }
+
+          if (route.name === 'Calls') {
+            return (
+              <TabIcon
+                name={iconName}
+                focused={focused}
+                color={color}
+                size={24}
+                badge={missedCallsCount}
+                badgeColor={colors.error}
+                badgeTextColor={colors.textInverse}
+              />
+            );
+          }
+
+          if (route.name === 'Channels') {
+            return (
+              <TabIcon
+                name={iconName}
+                focused={focused}
+                color={color}
+                size={24}
+                badge={channelsUnreadCount}
+                badgeColor={colors.primary}
                 badgeTextColor={colors.textInverse}
               />
             );

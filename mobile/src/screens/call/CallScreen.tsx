@@ -427,13 +427,15 @@ const CallScreen: React.FC = () => {
       const newRoom = new Room(roomOptions);
 
       newRoom.on('participantConnected', (participant: any) => {
-        console.log('Participant connected:', participant.identity);
+        console.log('[CallScreen] === PARTICIPANT CONNECTED ===');
+        console.log('[CallScreen] Participant identity:', participant.identity);
         hasOtherParticipantRef.current = true;
         setHasOtherParticipant(true);
         setCallStatus('connected');
         // Add to remote participants map for group calls
         addRemoteParticipant(participant);
-        // Stop the ringing tone when participant joins
+        // Stop the ringing/dial tone when participant joins (call answered)
+        console.log('[CallScreen] Stopping dial tone - call answered');
         callSoundService.stopAllSounds();
         // Clear the ringing timeout when participant joins
         if (ringingTimeoutRef.current) {
@@ -705,8 +707,9 @@ const CallScreen: React.FC = () => {
       // If this is an outgoing call and no participants yet, set status to ringing and start 30s timeout
       // Skip if we already found existing participants (handled above)
       if (!isIncoming && newRoom.remoteParticipants.size === 0) {
+        console.log('[CallScreen] Outgoing call - setting status to ringing and playing dial tone');
         setCallStatus('ringing');
-        // Play the outgoing call tone (ringback tone)
+        // Play the outgoing call tone (ringback tone / dial tone)
         callSoundService.playOutgoingTone();
         ringingTimeoutRef.current = setTimeout(() => {
           // Check if call was already terminated (e.g., declined)

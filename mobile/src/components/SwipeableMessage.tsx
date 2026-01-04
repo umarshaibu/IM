@@ -70,7 +70,7 @@ const SwipeableMessage: React.FC<SwipeableMessageProps> = ({
       {/* Reply icon that appears on swipe */}
       <Animated.View style={[styles.replyIconContainer, replyIconStyle]}>
         <View style={[styles.replyIconCircle, { backgroundColor: colors.primary }]}>
-          <Icon name="reply" size={18} color="#FFFFFF" />
+          <Icon name="reply" size={18} color={colors.textInverse} />
         </View>
       </Animated.View>
 

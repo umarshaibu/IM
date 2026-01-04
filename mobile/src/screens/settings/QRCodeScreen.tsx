@@ -357,8 +357,8 @@ const QRCodeScreen: React.FC = () => {
             style={[styles.enableCameraButton, { backgroundColor: colors.primary }]}
             onPress={() => Alert.alert('Camera', 'Camera permission required to scan QR codes.')}
           >
-            <Icon name="camera" size={20} color="#FFFFFF" />
-            <Text style={styles.enableCameraText}>Enable Camera</Text>
+            <Icon name="camera" size={20} color={colors.textInverse} />
+            <Text style={[styles.enableCameraText, { color: colors.textInverse }]}>Enable Camera</Text>
           </TouchableOpacity>
 
           {/* Demo button to simulate scan */}

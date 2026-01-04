@@ -6,6 +6,7 @@ public class UserDto
     public string ServiceNumber { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
     public string PhoneNumber { get; set; } = string.Empty;
+    public string? Email { get; set; }
     public string? DisplayName { get; set; }
     public string? ProfilePictureUrl { get; set; }
     public string? About { get; set; }
@@ -21,6 +22,7 @@ public class UserProfileDto
     public string ServiceNumber { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
     public string PhoneNumber { get; set; } = string.Empty;
+    public string? Email { get; set; }
     public string? DisplayName { get; set; }
     public string? ProfilePictureUrl { get; set; }
     public string? About { get; set; }

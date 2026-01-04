@@ -111,24 +111,31 @@ class CallSoundService {
    */
   async playOutgoingTone(): Promise<void> {
     if (this.isPlaying && this.currentSound === 'outgoing') {
+      console.log('[CallSound] Outgoing tone already playing, skipping');
       return; // Already playing
     }
+
+    console.log('[CallSound] === PLAYING OUTGOING TONE (DIAL TONE) ===');
+    console.log('[CallSound] Platform:', Platform.OS);
 
     await this.stopAllSounds();
     this.currentSound = 'outgoing';
     this.isPlaying = true;
 
     try {
-      console.log('Playing outgoing tone');
       if (Platform.OS === 'android') {
         // Use native module for Android - plays ringtone_outgoing from raw resources
-        await NativeCallSound.playSound('ringtone_outgoing', true);
+        console.log('[CallSound] Calling NativeCallSound.playSound(ringtone_outgoing, true)');
+        const result = await NativeCallSound.playSound('ringtone_outgoing', true);
+        console.log('[CallSound] NativeCallSound.playSound result:', result);
       } else if (Platform.OS === 'ios') {
         // iOS: Use react-native-audio-recorder-player
+        console.log('[CallSound] Playing iOS sound: ringtone_outgoing');
         await this.playIOSSound('ringtone_outgoing', true);
       }
+      console.log('[CallSound] Outgoing tone started successfully');
     } catch (error) {
-      console.error('Error playing outgoing tone:', error);
+      console.error('[CallSound] Error playing outgoing tone:', error);
       this.isPlaying = false;
       this.currentSound = null;
     }
@@ -140,22 +147,28 @@ class CallSoundService {
    */
   async playIncomingRingtone(): Promise<void> {
     if (this.isPlaying && this.currentSound === 'incoming') {
+      console.log('[CallSound] Incoming ringtone already playing, skipping');
       return; // Already playing
     }
+
+    console.log('[CallSound] === PLAYING INCOMING RINGTONE ===');
 
     await this.stopAllSounds();
     this.currentSound = 'incoming';
     this.isPlaying = true;
 
     try {
-      console.log('Playing incoming ringtone');
       if (Platform.OS === 'android') {
-        await NativeCallSound.playSound('ringtone_incoming', true);
+        console.log('[CallSound] Calling NativeCallSound.playSound(ringtone_incoming, true)');
+        const result = await NativeCallSound.playSound('ringtone_incoming', true);
+        console.log('[CallSound] NativeCallSound.playSound result:', result);
       } else if (Platform.OS === 'ios') {
+        console.log('[CallSound] Playing iOS sound: ringtone_incoming');
         await this.playIOSSound('ringtone_incoming', true);
       }
+      console.log('[CallSound] Incoming ringtone started successfully');
     } catch (error) {
-      console.error('Error playing incoming ringtone:', error);
+      console.error('[CallSound] Error playing incoming ringtone:', error);
       this.isPlaying = false;
       this.currentSound = null;
     }
@@ -166,18 +179,23 @@ class CallSoundService {
    * This is played when the call cannot be connected
    */
   async playBusyTone(): Promise<void> {
+    console.log('[CallSound] === PLAYING BUSY TONE ===');
+
     await this.stopAllSounds();
     this.currentSound = 'busy';
     this.isPlaying = true;
 
     try {
-      console.log('Playing busy tone');
       if (Platform.OS === 'android') {
         // Play once, not looping
-        await NativeCallSound.playSound('tone_busy', false);
+        console.log('[CallSound] Calling NativeCallSound.playSound(tone_busy, false)');
+        const result = await NativeCallSound.playSound('tone_busy', false);
+        console.log('[CallSound] NativeCallSound.playSound result:', result);
       } else if (Platform.OS === 'ios') {
+        console.log('[CallSound] Playing iOS sound: tone_busy');
         await this.playIOSSound('tone_busy', false);
       }
+      console.log('[CallSound] Busy tone started successfully');
 
       // Auto-clear state after a short delay for non-looping sounds
       setTimeout(() => {
@@ -187,7 +205,7 @@ class CallSoundService {
         }
       }, 3000);
     } catch (error) {
-      console.error('Error playing busy tone:', error);
+      console.error('[CallSound] Error playing busy tone:', error);
       this.isPlaying = false;
       this.currentSound = null;
     }
@@ -198,17 +216,22 @@ class CallSoundService {
    * Note: This is a short beep sound to indicate call has ended
    */
   async playEndedTone(): Promise<void> {
+    console.log('[CallSound] === PLAYING ENDED TONE ===');
+
     await this.stopAllSounds();
     this.currentSound = 'ended';
     this.isPlaying = true;
 
     try {
-      console.log('Playing ended tone');
       if (Platform.OS === 'android') {
-        await NativeCallSound.playSound('tone_ended', false);
+        console.log('[CallSound] Calling NativeCallSound.playSound(tone_ended, false)');
+        const result = await NativeCallSound.playSound('tone_ended', false);
+        console.log('[CallSound] NativeCallSound.playSound result:', result);
       } else if (Platform.OS === 'ios') {
+        console.log('[CallSound] Playing iOS sound: tone_ended');
         await this.playIOSSound('tone_ended', false);
       }
+      console.log('[CallSound] Ended tone started successfully');
 
       // Auto-clear state after a short delay
       setTimeout(() => {
@@ -218,7 +241,7 @@ class CallSoundService {
         }
       }, 2000);
     } catch (error) {
-      console.log('Note: Could not play ended tone:', error);
+      console.log('[CallSound] Note: Could not play ended tone:', error);
       this.isPlaying = false;
       this.currentSound = null;
     }
@@ -228,22 +251,31 @@ class CallSoundService {
    * Stop all sounds
    */
   async stopAllSounds(): Promise<void> {
+    console.log('[CallSound] === STOPPING ALL SOUNDS ===');
+    console.log('[CallSound] Current sound:', this.currentSound, 'isPlaying:', this.isPlaying);
+
     try {
       if (Platform.OS === 'android') {
         // Stop the native sound player
+        console.log('[CallSound] Stopping Android native sound player...');
         await NativeCallSound.stopSound();
         // Also stop the ringtone (in case it was started by native notification service)
+        console.log('[CallSound] Stopping Android native ringtone...');
         await NativeCallSound.stopRingtone();
+        console.log('[CallSound] Android sounds stopped');
       } else if (Platform.OS === 'ios') {
         // Stop iOS sound playback
+        console.log('[CallSound] Stopping iOS sound playback...');
         await this.stopIOSSound();
+        console.log('[CallSound] iOS sounds stopped');
       }
     } catch (error) {
-      console.log('Error stopping sounds:', error);
+      console.log('[CallSound] Error stopping sounds:', error);
     }
 
     this.isPlaying = false;
     this.currentSound = null;
+    console.log('[CallSound] All sounds stopped, state cleared');
   }
 
   /**

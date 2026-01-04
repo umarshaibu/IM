@@ -44,12 +44,22 @@
                         </div>
                     </div>
 
-                    <div class="mb-7">
-                        <label asp-for="PhoneNumber" class="form-label fs-6 fw-semibold mb-3">
-                            Phone Number
-                        </label>
-                        <input asp-for="PhoneNumber" class="form-control form-control-solid"
-                               placeholder="+234..." />
+                    <div class="row">
+                        <div class="col-md-6 mb-7">
+                            <label asp-for="PhoneNumber" class="form-label fs-6 fw-semibold mb-3">
+                                Phone Number
+                            </label>
+                            <input asp-for="PhoneNumber" class="form-control form-control-solid"
+                                   placeholder="+234..." />
+                        </div>
+
+                        <div class="col-md-6 mb-7">
+                            <label asp-for="Email" class="form-label fs-6 fw-semibold mb-3">
+                                Email Address
+                            </label>
+                            <input asp-for="Email" type="email" class="form-control form-control-solid"
+                                   placeholder="email@example.com" />
+                        </div>
                     </div>
 
                     <div class="row">

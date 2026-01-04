@@ -326,15 +326,33 @@ public class NotificationService : INotificationService
                 var firebaseNotification = new FirebaseMessage
                 {
                     Token = device.DeviceToken,
-                    Notification = new Notification
-                    {
-                        Title = conversation.Name ?? "Group",
-                        Body = message
-                    },
+                    // Data-only message for better background handling
                     Data = new Dictionary<string, string>
                     {
                         { "type", "group" },
-                        { "conversationId", conversation.Id.ToString() }
+                        { "conversationId", conversation.Id.ToString() },
+                        { "groupName", conversation.Name ?? "Group" },
+                        { "message", message }
+                    },
+                    Android = new AndroidConfig
+                    {
+                        // High priority ensures immediate delivery and device wake-up
+                        Priority = Priority.High,
+                        TimeToLive = TimeSpan.FromHours(1)
+                    },
+                    Apns = new ApnsConfig
+                    {
+                        Headers = new Dictionary<string, string>
+                        {
+                            { "apns-priority", "10" }, // High priority to wake device
+                            { "apns-push-type", "background" }
+                        },
+                        Aps = new Aps
+                        {
+                            ContentAvailable = true,
+                            MutableContent = true,
+                            Sound = "default"
+                        }
                     }
                 };
 
@@ -438,14 +456,32 @@ public class NotificationService : INotificationService
                 var firebaseMessage = new FirebaseMessage
                 {
                     Token = device.DeviceToken,
-                    Notification = new Notification
-                    {
-                        Title = title,
-                        Body = body
-                    },
+                    // Data-only message for better background handling
                     Data = new Dictionary<string, string>
                     {
-                        { "type", "broadcast" }
+                        { "type", "broadcast" },
+                        { "title", title },
+                        { "body", body }
+                    },
+                    Android = new AndroidConfig
+                    {
+                        // High priority ensures immediate delivery and device wake-up
+                        Priority = Priority.High,
+                        TimeToLive = TimeSpan.FromHours(24) // Longer TTL for broadcasts
+                    },
+                    Apns = new ApnsConfig
+                    {
+                        Headers = new Dictionary<string, string>
+                        {
+                            { "apns-priority", "10" }, // High priority to wake device
+                            { "apns-push-type", "background" }
+                        },
+                        Aps = new Aps
+                        {
+                            ContentAvailable = true,
+                            MutableContent = true,
+                            Sound = "default"
+                        }
                     }
                 };
 
@@ -534,6 +570,93 @@ public class NotificationService : INotificationService
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to send PTT notification to device");
+            }
+        }
+    }
+
+    public async Task SendChannelPostNotificationAsync(Guid channelId, string channelName, Guid postId, string authorName, string? postPreview, IEnumerable<Guid> followerIds)
+    {
+        if (_firebaseMessaging == null)
+        {
+            _logger.LogWarning("Firebase messaging not initialized, cannot send channel post notification");
+            return;
+        }
+
+        var devices = await _context.UserDevices
+            .Where(d => followerIds.Contains(d.UserId) && d.IsActive)
+            .ToListAsync();
+
+        if (!devices.Any())
+        {
+            _logger.LogWarning("No active devices found for channel post notification recipients");
+            return;
+        }
+
+        _logger.LogInformation("Sending channel post notification to {DeviceCount} devices for channel {ChannelId}", devices.Count, channelId);
+
+        var preview = string.IsNullOrWhiteSpace(postPreview)
+            ? "New post"
+            : (postPreview.Length > 100 ? postPreview[..100] + "..." : postPreview);
+
+        foreach (var device in devices)
+        {
+            try
+            {
+                // Data-only message with high priority to wake the device
+                var firebaseMessage = new FirebaseMessage
+                {
+                    Token = device.DeviceToken,
+                    Data = new Dictionary<string, string>
+                    {
+                        { "type", "channel_post" },
+                        { "channelId", channelId.ToString() },
+                        { "channelName", channelName },
+                        { "postId", postId.ToString() },
+                        { "authorName", authorName },
+                        { "postPreview", preview }
+                    },
+                    Android = new AndroidConfig
+                    {
+                        // High priority ensures the message is delivered immediately and wakes the device
+                        Priority = Priority.High,
+                        // Reasonable TTL for channel posts
+                        TimeToLive = TimeSpan.FromHours(4)
+                    },
+                    Apns = new ApnsConfig
+                    {
+                        Headers = new Dictionary<string, string>
+                        {
+                            { "apns-priority", "10" }, // High priority to wake device
+                            { "apns-push-type", "background" }
+                        },
+                        Aps = new Aps
+                        {
+                            ContentAvailable = true, // Enables background processing
+                            MutableContent = true, // Allows notification modification
+                            Sound = "default"
+                        }
+                    }
+                };
+
+                var messageId = await _firebaseMessaging.SendAsync(firebaseMessage);
+                _logger.LogInformation("Channel post notification sent successfully. MessageId: {MessageId}, Channel: {ChannelName}",
+                    messageId, channelName);
+            }
+            catch (FirebaseMessagingException fex)
+            {
+                _logger.LogError(fex, "Firebase error sending channel post notification. Code: {Code}, Message: {Message}",
+                    fex.ErrorCode, fex.Message);
+
+                if (fex.ErrorCode == ErrorCode.NotFound || fex.ErrorCode == ErrorCode.InvalidArgument)
+                {
+                    device.IsActive = false;
+                    await _context.SaveChangesAsync();
+                    _logger.LogWarning("Marked device as inactive due to invalid token");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send channel post notification to device");
             }
         }
     }

@@ -1,8 +1,10 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import NetInfo from '@react-native-community/netinfo';
 import { conversationsApi, messagesApi } from '../services/api';
 import { sendMessage as sendSignalRMessage } from '../services/signalr';
 import { useChatStore } from '../stores/chatStore';
+import { messageDBService } from '../database/services';
 import { Message, MessageType } from '../types';
 
 interface SendMessageParams {
@@ -17,10 +19,68 @@ interface SendMessageParams {
 export const useMessages = (conversationId: string) => {
   const queryClient = useQueryClient();
   const { messages, setMessages, prependMessages, addMessage } = useChatStore();
+  const [isOffline, setIsOffline] = useState(false);
+  const [loadedFromCache, setLoadedFromCache] = useState(false);
 
   const conversationMessages = messages[conversationId] || [];
 
-  // Fetch initial messages
+  // Load messages from local database first (for offline support)
+  // Use useRef to track if we've already loaded from cache to prevent re-loading
+  const hasLoadedFromCache = useRef(false);
+
+  useEffect(() => {
+    // Skip if we've already loaded from cache or already have messages
+    if (hasLoadedFromCache.current || conversationMessages.length > 0) {
+      return;
+    }
+
+    const loadFromLocalDB = async () => {
+      try {
+        const localMessages = await messageDBService.getMessages(conversationId, 50, 0);
+        if (localMessages.length > 0) {
+          // Convert WatermelonDB messages to app Message format
+          const formattedMessages: Message[] = localMessages.map(msg => ({
+            id: msg.serverId,
+            conversationId: msg.conversationId,
+            senderId: msg.senderId,
+            senderName: '',
+            type: msg.type.charAt(0).toUpperCase() + msg.type.slice(1) as any,
+            content: msg.content || undefined,
+            mediaUrl: msg.mediaUrl || undefined,
+            mediaThumbnailUrl: msg.mediaThumbnailUrl || undefined,
+            mediaDuration: msg.mediaDuration || undefined,
+            status: msg.status === 'sending' ? 'Sending' : msg.status === 'sent' ? 'Sent' : 'Delivered',
+            isEdited: msg.isEdited,
+            isForwarded: !!msg.forwardedFromId,
+            isDeleted: msg.isDeleted,
+            replyToMessageId: msg.replyToId || undefined,
+            createdAt: new Date(msg.createdAt).toISOString(),
+            statuses: [],
+            reactions: [],
+          }));
+
+          setMessages(conversationId, formattedMessages);
+          setLoadedFromCache(true);
+        }
+        hasLoadedFromCache.current = true;
+      } catch (error) {
+        console.error('Error loading messages from local DB:', error);
+        hasLoadedFromCache.current = true;
+      }
+    };
+
+    loadFromLocalDB();
+  }, [conversationId, conversationMessages.length, setMessages]);
+
+  // Check network status
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener(state => {
+      setIsOffline(!state.isConnected);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Fetch initial messages from API
   const {
     data,
     isLoading,
@@ -45,14 +105,45 @@ export const useMessages = (conversationId: string) => {
         }
       });
 
+      // Sync to local database for offline access
+      try {
+        await messageDBService.syncMessages(conversationId, fetchedMessages.map(msg => ({
+          id: msg.id,
+          conversationId: msg.conversationId,
+          senderId: msg.senderId,
+          type: msg.type,
+          content: msg.content || null,
+          mediaUrl: msg.mediaUrl || null,
+          thumbnailUrl: msg.mediaThumbnailUrl || null,
+          mimeType: msg.mediaMimeType || null,
+          fileSize: msg.mediaSize || null,
+          duration: msg.mediaDuration || null,
+          replyToId: msg.replyToMessageId || null,
+          forwardedFromId: msg.isForwarded ? 'forwarded' : null,
+          isEdited: msg.isEdited || false,
+          isDeleted: msg.isDeleted || false,
+          expiresAt: msg.expiresAt || null,
+          createdAt: msg.createdAt,
+          updatedAt: msg.createdAt,
+        })));
+      } catch (syncError) {
+        console.error('Error syncing messages to local DB:', syncError);
+      }
+
       return fetchedMessages;
     },
+    // Don't fail immediately if offline - we have cached data
+    retry: isOffline ? 0 : 3,
+    retryDelay: 1000,
+    // Consider cached data as still valid when offline
+    staleTime: isOffline ? Infinity : 0,
   });
 
   // Update store when data changes
   useEffect(() => {
     if (data) {
       setMessages(conversationId, data);
+      setLoadedFromCache(false);
     }
   }, [data, conversationId, setMessages]);
 
@@ -138,9 +229,11 @@ export const useMessages = (conversationId: string) => {
 
   return {
     messages: conversationMessages,
-    isLoading,
+    isLoading: isLoading && !loadedFromCache && conversationMessages.length === 0,
     isError,
     error,
+    isOffline,
+    loadedFromCache,
     refetch,
     loadMoreMessages,
     sendMessage: sendMessageMutation.mutate,

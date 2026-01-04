@@ -5,7 +5,7 @@ namespace IM.Core.Interfaces;
 
 public interface IMessageService
 {
-    Task<Message> SendMessageAsync(Guid conversationId, Guid senderId, MessageType type, string? content, string? mediaUrl = null);
+    Task<Message> SendMessageAsync(Guid conversationId, Guid senderId, MessageType type, string? content, string? mediaUrl = null, Guid? replyToMessageId = null);
     Task<Message?> GetMessageByIdAsync(Guid messageId);
     Task<IEnumerable<Message>> GetConversationMessagesAsync(Guid conversationId, int page = 1, int pageSize = 50);
     Task<bool> UpdateMessageStatusAsync(Guid messageId, Guid userId, MessageStatus status);

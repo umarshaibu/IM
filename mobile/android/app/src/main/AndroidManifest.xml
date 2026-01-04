@@ -37,7 +37,8 @@
       android:usesCleartextTraffic="true"
       android:theme="@style/AppTheme">
 
-      <!-- Custom Firebase Messaging Service for call handling -->
+      <!-- Custom Firebase Messaging Service for call handling
+           This replaces React Native Firebase's default messaging service -->
       <service
         android:name=".CallNotificationService"
         android:exported="false">
@@ -45,6 +46,18 @@
           <action android:name="com.google.firebase.MESSAGING_EVENT" />
         </intent-filter>
       </service>
+
+      <!-- Disable React Native Firebase's messaging service - we use our own -->
+      <service
+        android:name="io.invertase.firebase.messaging.ReactNativeFirebaseMessagingService"
+        android:exported="false"
+        tools:node="remove" />
+
+      <!-- Also disable Firebase SDK's default messaging service -->
+      <service
+        android:name="com.google.firebase.messaging.FirebaseMessagingService"
+        android:exported="false"
+        tools:node="remove" />
 
       <!-- Call Action Receiver for answer/decline buttons from notification -->
       <receiver
