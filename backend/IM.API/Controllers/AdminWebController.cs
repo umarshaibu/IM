@@ -364,7 +364,9 @@ public class AdminWebController : Controller
             return View(model);
         }
 
-        var entry = await _context.NominalRolls.FindAsync(id);
+        var entry = await _context.NominalRolls
+            .Include(n => n.User)
+            .FirstOrDefaultAsync(n => n.Id == id);
         if (entry == null)
         {
             return NotFound();
@@ -376,6 +378,21 @@ public class AdminWebController : Controller
         entry.Department = model.Department;
         entry.RankPosition = model.RankPosition;
         entry.Status = model.Status;
+
+        // Also update the associated User account if it exists
+        if (entry.User != null)
+        {
+            entry.User.Email = model.Email;
+            if (!string.IsNullOrEmpty(model.PhoneNumber))
+            {
+                entry.User.PhoneNumber = model.PhoneNumber;
+            }
+            // Update DisplayName if it matches the old FullName or is empty
+            if (string.IsNullOrEmpty(entry.User.DisplayName) || entry.User.DisplayName == entry.FullName)
+            {
+                entry.User.DisplayName = model.FullName;
+            }
+        }
 
         await _context.SaveChangesAsync();
 
