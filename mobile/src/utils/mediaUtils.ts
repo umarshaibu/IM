@@ -297,3 +297,31 @@ export const compressImage = async (uri: string, quality: number = 0.8): Promise
   // For now, return the original URI
   return uri;
 };
+
+/**
+ * Convert relative URL to absolute URL
+ * This is needed because the backend returns relative URLs like /api/files/...
+ * but React Native Image component needs absolute URLs
+ *
+ * Note: We use lazy import of AppConfig to avoid circular dependency issues
+ * during module loading
+ */
+export const getAbsoluteUrl = (url: string | undefined | null): string | null => {
+  if (!url) return null;
+
+  // If it's already an absolute URL, use it as is
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+
+  // Lazy import to avoid circular dependency/module loading issues
+  const { AppConfig } = require('../config');
+
+  // If it's a relative URL starting with /, prepend the API base URL
+  if (url.startsWith('/')) {
+    return `${AppConfig.apiUrl}${url}`;
+  }
+
+  // Otherwise, assume it needs the full path
+  return `${AppConfig.apiUrl}/${url}`;
+};

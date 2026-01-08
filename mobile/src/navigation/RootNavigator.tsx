@@ -38,6 +38,7 @@ import CreateChannelScreen from '../screens/channels/CreateChannelScreen';
 import ChannelScreen from '../screens/channels/ChannelScreen';
 import AddParticipantsScreen from '../screens/chat/AddParticipantsScreen';
 import NewContactScreen from '../screens/chat/NewContactScreen';
+import DocumentViewerScreen from '../screens/chat/DocumentViewerScreen';
 
 export type RootStackParamList = {
   // Auth
@@ -60,6 +61,13 @@ export type RootStackParamList = {
   MediaViewer: {
     mediaUrl: string;
     mediaType: string;
+    senderName?: string;
+    timestamp?: string;
+  };
+  DocumentViewer: {
+    mediaUrl: string;
+    fileName: string;
+    fileSize?: number;
     senderName?: string;
     timestamp?: string;
   };
@@ -241,6 +249,7 @@ const RootNavigator: React.FC = () => {
           <Stack.Screen name="NewChat" component={NewChatScreen} options={{ title: 'New Chat' }} />
           <Stack.Screen name="NewGroup" component={NewGroupScreen} options={{ title: 'New Group' }} />
           <Stack.Screen name="MediaViewer" component={MediaViewerScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="DocumentViewer" component={DocumentViewerScreen} options={{ headerShown: false }} />
           <Stack.Screen name="MediaGallery" component={MediaGalleryScreen} options={{ title: 'Media' }} />
           <Stack.Screen name="Search" component={SearchScreen} options={{ title: 'Search' }} />
           <Stack.Screen name="ForwardMessage" component={ForwardMessageScreen} options={{ title: 'Forward to...' }} />

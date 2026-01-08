@@ -88,12 +88,19 @@ public class NotificationService : INotificationService
             ? (message.Content?.Length > 100 ? message.Content[..100] + "..." : message.Content)
             : GetMessageTypePreview(message.Type);
 
-        // Use data-only messages with high priority to ensure device wake-up
-        // The mobile app will handle displaying the notification locally
+        // Include both Notification and Data payloads
+        // Notification payload ensures system displays notification even when app is killed
+        // Data payload provides additional info for app to handle when opened
         var notifications = devices.Select(device => new FirebaseMessage
         {
             Token = device.DeviceToken,
-            // Data-only message ensures the app's background handler is invoked
+            // Notification payload - displayed by system when app is in background/killed
+            Notification = new Notification
+            {
+                Title = senderName,
+                Body = messagePreview ?? "New message"
+            },
+            // Data payload - for app to process when notification is tapped
             Data = new Dictionary<string, string>
             {
                 { "type", "message" },
@@ -109,19 +116,38 @@ public class NotificationService : INotificationService
                 // High priority ensures immediate delivery even when device is in Doze mode
                 Priority = Priority.High,
                 // Short TTL for messages - they should be delivered promptly
-                TimeToLive = TimeSpan.FromHours(1)
+                TimeToLive = TimeSpan.FromHours(1),
+                // Android-specific notification settings
+                Notification = new AndroidNotification
+                {
+                    ChannelId = "messages",
+                    Icon = "ic_notification",
+                    Color = "#128C7E",
+                    Sound = "default",
+                    Priority = NotificationPriority.HIGH,
+                    Visibility = NotificationVisibility.PUBLIC,
+                    DefaultSound = true,
+                    DefaultVibrateTimings = true,
+                    DefaultLightSettings = true
+                }
             },
             Apns = new ApnsConfig
             {
                 Headers = new Dictionary<string, string>
                 {
                     { "apns-priority", "10" }, // High priority
-                    { "apns-push-type", "background" }
+                    { "apns-push-type", "alert" } // Alert type shows visible notification
                 },
                 Aps = new Aps
                 {
-                    ContentAvailable = true, // Enables background processing
-                    MutableContent = true // Allows notification modification
+                    Alert = new ApsAlert
+                    {
+                        Title = senderName,
+                        Body = messagePreview ?? "New message"
+                    },
+                    Sound = "default",
+                    ContentAvailable = true,
+                    MutableContent = true
                 }
             }
         }).ToList();
@@ -319,6 +345,8 @@ public class NotificationService : INotificationService
         if (!devices.Any())
             return;
 
+        var groupName = conversation.Name ?? "Group";
+
         foreach (var device in devices)
         {
             try
@@ -326,32 +354,51 @@ public class NotificationService : INotificationService
                 var firebaseNotification = new FirebaseMessage
                 {
                     Token = device.DeviceToken,
-                    // Data-only message for better background handling
+                    // Notification payload for system display
+                    Notification = new Notification
+                    {
+                        Title = groupName,
+                        Body = message
+                    },
+                    // Data payload for app handling
                     Data = new Dictionary<string, string>
                     {
                         { "type", "group" },
                         { "conversationId", conversation.Id.ToString() },
-                        { "groupName", conversation.Name ?? "Group" },
+                        { "groupName", groupName },
                         { "message", message }
                     },
                     Android = new AndroidConfig
                     {
-                        // High priority ensures immediate delivery and device wake-up
                         Priority = Priority.High,
-                        TimeToLive = TimeSpan.FromHours(1)
+                        TimeToLive = TimeSpan.FromHours(1),
+                        Notification = new AndroidNotification
+                        {
+                            ChannelId = "groups",
+                            Icon = "ic_notification",
+                            Color = "#128C7E",
+                            Sound = "default",
+                            Priority = NotificationPriority.HIGH,
+                            Visibility = NotificationVisibility.PUBLIC
+                        }
                     },
                     Apns = new ApnsConfig
                     {
                         Headers = new Dictionary<string, string>
                         {
-                            { "apns-priority", "10" }, // High priority to wake device
-                            { "apns-push-type", "background" }
+                            { "apns-priority", "10" },
+                            { "apns-push-type", "alert" }
                         },
                         Aps = new Aps
                         {
+                            Alert = new ApsAlert
+                            {
+                                Title = groupName,
+                                Body = message
+                            },
+                            Sound = "default",
                             ContentAvailable = true,
-                            MutableContent = true,
-                            Sound = "default"
+                            MutableContent = true
                         }
                     }
                 };
@@ -456,7 +503,13 @@ public class NotificationService : INotificationService
                 var firebaseMessage = new FirebaseMessage
                 {
                     Token = device.DeviceToken,
-                    // Data-only message for better background handling
+                    // Notification payload for system display
+                    Notification = new Notification
+                    {
+                        Title = title,
+                        Body = body
+                    },
+                    // Data payload for app handling
                     Data = new Dictionary<string, string>
                     {
                         { "type", "broadcast" },
@@ -465,22 +518,35 @@ public class NotificationService : INotificationService
                     },
                     Android = new AndroidConfig
                     {
-                        // High priority ensures immediate delivery and device wake-up
                         Priority = Priority.High,
-                        TimeToLive = TimeSpan.FromHours(24) // Longer TTL for broadcasts
+                        TimeToLive = TimeSpan.FromHours(24),
+                        Notification = new AndroidNotification
+                        {
+                            ChannelId = "general",
+                            Icon = "ic_notification",
+                            Color = "#128C7E",
+                            Sound = "default",
+                            Priority = NotificationPriority.HIGH,
+                            Visibility = NotificationVisibility.PUBLIC
+                        }
                     },
                     Apns = new ApnsConfig
                     {
                         Headers = new Dictionary<string, string>
                         {
-                            { "apns-priority", "10" }, // High priority to wake device
-                            { "apns-push-type", "background" }
+                            { "apns-priority", "10" },
+                            { "apns-push-type", "alert" }
                         },
                         Aps = new Aps
                         {
+                            Alert = new ApsAlert
+                            {
+                                Title = title,
+                                Body = body
+                            },
+                            Sound = "default",
                             ContentAvailable = true,
-                            MutableContent = true,
-                            Sound = "default"
+                            MutableContent = true
                         }
                     }
                 };
@@ -602,10 +668,16 @@ public class NotificationService : INotificationService
         {
             try
             {
-                // Data-only message with high priority to wake the device
                 var firebaseMessage = new FirebaseMessage
                 {
                     Token = device.DeviceToken,
+                    // Notification payload for system display
+                    Notification = new Notification
+                    {
+                        Title = channelName,
+                        Body = $"{authorName}: {preview}"
+                    },
+                    // Data payload for app handling
                     Data = new Dictionary<string, string>
                     {
                         { "type", "channel_post" },
@@ -617,23 +689,35 @@ public class NotificationService : INotificationService
                     },
                     Android = new AndroidConfig
                     {
-                        // High priority ensures the message is delivered immediately and wakes the device
                         Priority = Priority.High,
-                        // Reasonable TTL for channel posts
-                        TimeToLive = TimeSpan.FromHours(4)
+                        TimeToLive = TimeSpan.FromHours(4),
+                        Notification = new AndroidNotification
+                        {
+                            ChannelId = "general",
+                            Icon = "ic_notification",
+                            Color = "#128C7E",
+                            Sound = "default",
+                            Priority = NotificationPriority.HIGH,
+                            Visibility = NotificationVisibility.PUBLIC
+                        }
                     },
                     Apns = new ApnsConfig
                     {
                         Headers = new Dictionary<string, string>
                         {
-                            { "apns-priority", "10" }, // High priority to wake device
-                            { "apns-push-type", "background" }
+                            { "apns-priority", "10" },
+                            { "apns-push-type", "alert" }
                         },
                         Aps = new Aps
                         {
-                            ContentAvailable = true, // Enables background processing
-                            MutableContent = true, // Allows notification modification
-                            Sound = "default"
+                            Alert = new ApsAlert
+                            {
+                                Title = channelName,
+                                Body = $"{authorName}: {preview}"
+                            },
+                            Sound = "default",
+                            ContentAvailable = true,
+                            MutableContent = true
                         }
                     }
                 };

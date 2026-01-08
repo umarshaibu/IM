@@ -149,7 +149,33 @@ public class UsersController : ControllerBase
             return BadRequest(new { message = "Failed to update profile" });
         }
 
-        return Ok(new { message = "Profile updated successfully" });
+        // Return the updated user data so the mobile app can update its state
+        var user = await _userService.GetUserByIdAsync(userId);
+        if (user == null)
+        {
+            return BadRequest(new { message = "Failed to retrieve updated profile" });
+        }
+
+        return Ok(new UserProfileDto
+        {
+            Id = user.Id,
+            ServiceNumber = user.NominalRoll.ServiceNumber,
+            FullName = user.NominalRoll.FullName,
+            PhoneNumber = user.PhoneNumber,
+            Email = user.Email ?? user.NominalRoll.Email,
+            DisplayName = user.DisplayName,
+            ProfilePictureUrl = user.ProfilePictureUrl,
+            About = user.About,
+            LastSeen = user.LastSeen,
+            IsOnline = user.IsOnline,
+            Department = user.NominalRoll.Department,
+            RankPosition = user.NominalRoll.RankPosition,
+            ShowLastSeen = user.ShowLastSeen,
+            ShowProfilePhoto = user.ShowProfilePhoto,
+            ShowAbout = user.ShowAbout,
+            ReadReceipts = user.ReadReceipts,
+            PublicKey = user.PublicKey
+        });
     }
 
     [HttpPut("privacy")]

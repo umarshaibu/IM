@@ -1,15 +1,29 @@
-# Resolve react_native_pods.rb with node to allow for hoisting
-require Pod::Executable.execute_command('node', ['-p',
-  'require.resolve(
-    "react-native/scripts/react_native_pods.rb",
-    {paths: [process.argv[1]]},
-  )', __dir__]).strip
+# Resolve scripts with node to allow for hoisting
+def node_require(script)
+  require Pod::Executable.execute_command('node', ['-p',
+    "require.resolve(
+      '#{script}',
+      {paths: [process.argv[1]]},
+    )", __dir__]).strip
+end
+
+node_require('react-native/scripts/react_native_pods.rb')
+node_require('react-native-permissions/scripts/setup.rb')
 
 # Add CDN source for simdjson (required by WatermelonDB)
 source 'https://cdn.cocoapods.org/'
 
 platform :ios, min_ios_version_supported
 prepare_react_native_project!
+
+# Setup permissions that the app needs
+setup_permissions([
+  'Camera',
+  'Microphone',
+  'Contacts',
+  'PhotoLibrary',
+  'LocationWhenInUse',
+])
 
 # Enable modular headers for Firebase dependencies
 use_modular_headers!

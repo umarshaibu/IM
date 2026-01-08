@@ -137,29 +137,47 @@ const initializeChatHub = async (accessToken: string): Promise<void> => {
   });
 
   chatConnection.on('MessageDelivered', (messageId: string, userId: string, timestamp: string) => {
-    const { messages } = useChatStore.getState();
+    const { messages, conversations } = useChatStore.getState();
     Object.keys(messages).forEach((convId) => {
       const msg = messages[convId].find((m) => m.id === messageId);
       if (msg) {
+        const updatedStatuses = msg.statuses.map((s) =>
+          s.userId === userId ? { ...s, status: 'Delivered' as const, deliveredAt: timestamp } : s
+        );
         useChatStore.getState().updateMessage(convId, messageId, {
-          statuses: msg.statuses.map((s) =>
-            s.userId === userId ? { ...s, status: 'Delivered', deliveredAt: timestamp } : s
-          ),
+          statuses: updatedStatuses,
         });
+
+        // Also update the conversation's lastMessage if this is the last message
+        const conversation = conversations.find((c) => c.id === convId);
+        if (conversation?.lastMessage?.id === messageId) {
+          useChatStore.getState().updateConversation(convId, {
+            lastMessage: { ...conversation.lastMessage, statuses: updatedStatuses },
+          });
+        }
       }
     });
   });
 
   chatConnection.on('MessageRead', (messageId: string, userId: string, timestamp: string) => {
-    const { messages } = useChatStore.getState();
+    const { messages, conversations } = useChatStore.getState();
     Object.keys(messages).forEach((convId) => {
       const msg = messages[convId].find((m) => m.id === messageId);
       if (msg) {
+        const updatedStatuses = msg.statuses.map((s) =>
+          s.userId === userId ? { ...s, status: 'Read' as const, readAt: timestamp } : s
+        );
         useChatStore.getState().updateMessage(convId, messageId, {
-          statuses: msg.statuses.map((s) =>
-            s.userId === userId ? { ...s, status: 'Read', readAt: timestamp } : s
-          ),
+          statuses: updatedStatuses,
         });
+
+        // Also update the conversation's lastMessage if this is the last message
+        const conversation = conversations.find((c) => c.id === convId);
+        if (conversation?.lastMessage?.id === messageId) {
+          useChatStore.getState().updateConversation(convId, {
+            lastMessage: { ...conversation.lastMessage, statuses: updatedStatuses },
+          });
+        }
       }
     });
   });
@@ -254,15 +272,25 @@ const initializeChatHub = async (accessToken: string): Promise<void> => {
     useChatStore.getState().updateConversation(conversationId, { unreadCount: 0 });
 
     // Mark all messages in this conversation as read by this user
-    const { messages } = useChatStore.getState();
+    const { messages, conversations } = useChatStore.getState();
     const conversationMessages = messages[conversationId] || [];
+    const conversation = conversations.find((c) => c.id === conversationId);
+
     conversationMessages.forEach((msg) => {
       if (msg.statuses) {
+        const updatedStatuses = msg.statuses.map((s) =>
+          s.userId === userId ? { ...s, status: 'Read' as const, readAt: timestamp } : s
+        );
         useChatStore.getState().updateMessage(conversationId, msg.id, {
-          statuses: msg.statuses.map((s) =>
-            s.userId === userId ? { ...s, status: 'Read', readAt: timestamp } : s
-          ),
+          statuses: updatedStatuses,
         });
+
+        // Also update the conversation's lastMessage if this is the last message
+        if (conversation?.lastMessage?.id === msg.id) {
+          useChatStore.getState().updateConversation(conversationId, {
+            lastMessage: { ...conversation.lastMessage, statuses: updatedStatuses },
+          });
+        }
       }
     });
   });

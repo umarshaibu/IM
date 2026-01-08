@@ -41,34 +41,63 @@ const queryClient = new QueryClient({
 });
 
 /**
- * Request camera and microphone permissions on app launch
- * This ensures permissions are granted before a call comes in
+ * Request all required permissions on app launch
+ * For iOS: Forces permission dialogs for camera, microphone, contacts, photos, and location
+ * For Android: Requests essential permissions
  */
-const requestMediaPermissions = async (): Promise<void> => {
+const requestAllPermissions = async (): Promise<void> => {
   try {
-    const permissions: Permission[] = Platform.select({
-      android: [
-        PERMISSIONS.ANDROID.CAMERA,
-        PERMISSIONS.ANDROID.RECORD_AUDIO,
-      ],
-      ios: [
+    if (Platform.OS === 'ios') {
+      // iOS: Request all permissions sequentially to ensure each dialog is shown
+      const iosPermissions: Permission[] = [
         PERMISSIONS.IOS.CAMERA,
         PERMISSIONS.IOS.MICROPHONE,
-      ],
-      default: [],
-    }) as Permission[];
+        PERMISSIONS.IOS.CONTACTS,
+        PERMISSIONS.IOS.PHOTO_LIBRARY,
+        PERMISSIONS.IOS.LOCATION_WHEN_IN_USE,
+      ];
 
-    for (const permission of permissions) {
-      const status = await check(permission);
-      if (status === RESULTS.DENIED) {
-        const result = await request(permission);
-        console.log(`Permission ${permission}: ${result}`);
-      } else if (status === RESULTS.BLOCKED) {
-        console.log(`Permission ${permission} is blocked, user needs to enable in settings`);
+      console.log('Requesting all iOS permissions on app launch...');
+
+      for (const permission of iosPermissions) {
+        const status = await check(permission);
+        if (status === RESULTS.DENIED) {
+          console.log(`Requesting permission: ${permission}`);
+          const result = await request(permission);
+          console.log(`Permission ${permission}: ${result}`);
+          // Small delay between permission requests to ensure UI is responsive
+          await new Promise(resolve => setTimeout(resolve, 300));
+        } else if (status === RESULTS.BLOCKED) {
+          console.log(`Permission ${permission} is blocked, user needs to enable in settings`);
+        } else {
+          console.log(`Permission ${permission} already: ${status}`);
+        }
+      }
+
+      console.log('All iOS permissions requested');
+    } else if (Platform.OS === 'android') {
+      // Android: Request essential permissions
+      const androidPermissions: Permission[] = [
+        PERMISSIONS.ANDROID.CAMERA,
+        PERMISSIONS.ANDROID.RECORD_AUDIO,
+        PERMISSIONS.ANDROID.READ_CONTACTS,
+        PERMISSIONS.ANDROID.ACCESS_FINE_LOCATION,
+      ];
+
+      console.log('Requesting all Android permissions on app launch...');
+
+      for (const permission of androidPermissions) {
+        const status = await check(permission);
+        if (status === RESULTS.DENIED) {
+          const result = await request(permission);
+          console.log(`Permission ${permission}: ${result}`);
+        } else if (status === RESULTS.BLOCKED) {
+          console.log(`Permission ${permission} is blocked, user needs to enable in settings`);
+        }
       }
     }
   } catch (error) {
-    console.error('Error requesting media permissions:', error);
+    console.error('Error requesting permissions:', error);
   }
 };
 
@@ -133,17 +162,19 @@ const AppContent: React.FC = () => {
   const navigationRef = useRef<NavigationContainerRef<RootStackParamList>>(null);
   const appState = useRef(AppState.currentState);
 
-  // Request permissions on app launch (even before authentication)
+  // Request all permissions on app launch (even before authentication)
   useEffect(() => {
     const initializePermissions = async () => {
-      // Request camera and microphone permissions early
-      await requestMediaPermissions();
+      // Request all permissions on app launch
+      await requestAllPermissions();
 
       // Request battery optimization exemption (Android only)
       // Slight delay to not overwhelm user with dialogs
-      setTimeout(() => {
-        requestBatteryOptimizationExemption();
-      }, 1500);
+      if (Platform.OS === 'android') {
+        setTimeout(() => {
+          requestBatteryOptimizationExemption();
+        }, 1500);
+      }
     };
 
     initializePermissions();

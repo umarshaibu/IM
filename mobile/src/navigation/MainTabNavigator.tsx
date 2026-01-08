@@ -11,6 +11,7 @@ import { callsApi, channelsApi } from '../services/api';
 import { Call } from '../types';
 
 import ChatsScreen from '../screens/main/ChatsScreen';
+import GroupsScreen from '../screens/main/GroupsScreen';
 import CallsScreen from '../screens/main/CallsScreen';
 import ChannelsScreen from '../screens/main/ChannelsScreen';
 import SettingsScreen from '../screens/main/SettingsScreen';
@@ -23,6 +24,7 @@ interface Channel {
 
 export type MainTabParamList = {
   Chats: undefined;
+  Groups: undefined;
   Calls: undefined;
   Channels: undefined;
   Settings: undefined;
@@ -53,8 +55,24 @@ const TabIcon: React.FC<TabIconProps> = ({ name, focused, color, size, badge, ba
 
 const MainTabNavigator: React.FC = () => {
   const { colors, isDark } = useTheme();
-  const unreadCount = useChatStore((state) => state.getUnreadCount());
+  const conversations = useChatStore((state) => state.conversations);
   const { userId } = useAuthStore();
+
+  // Calculate unread counts for chats (private only) and groups separately
+  const { chatsUnreadCount, groupsUnreadCount } = useMemo(() => {
+    let chats = 0;
+    let groups = 0;
+    conversations.forEach((conv) => {
+      if (!conv.isArchived && !conv.isDeleted && conv.unreadCount > 0) {
+        if (conv.type === 'Private') {
+          chats += conv.unreadCount;
+        } else if (conv.type === 'Group') {
+          groups += conv.unreadCount;
+        }
+      }
+    });
+    return { chatsUnreadCount: chats, groupsUnreadCount: groups };
+  }, [conversations]);
 
   // Fetch missed calls count
   const { data: calls } = useQuery({
@@ -127,6 +145,9 @@ const MainTabNavigator: React.FC = () => {
             case 'Chats':
               iconName = focused ? 'chat' : 'chat-outline';
               break;
+            case 'Groups':
+              iconName = focused ? 'account-group' : 'account-group-outline';
+              break;
             case 'Calls':
               iconName = focused ? 'phone' : 'phone-outline';
               break;
@@ -147,8 +168,22 @@ const MainTabNavigator: React.FC = () => {
                 focused={focused}
                 color={color}
                 size={24}
-                badge={unreadCount}
+                badge={chatsUnreadCount}
                 badgeColor={colors.secondary}
+                badgeTextColor={colors.textInverse}
+              />
+            );
+          }
+
+          if (route.name === 'Groups') {
+            return (
+              <TabIcon
+                name={iconName}
+                focused={focused}
+                color={color}
+                size={24}
+                badge={groupsUnreadCount}
+                badgeColor={colors.primary}
                 badgeTextColor={colors.textInverse}
               />
             );
@@ -191,6 +226,14 @@ const MainTabNavigator: React.FC = () => {
         component={ChatsScreen}
         options={{
           title: 'Chats',
+          headerShown: false,
+        }}
+      />
+      <Tab.Screen
+        name="Groups"
+        component={GroupsScreen}
+        options={{
+          title: 'Groups',
           headerShown: false,
         }}
       />

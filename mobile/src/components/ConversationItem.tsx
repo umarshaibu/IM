@@ -104,6 +104,54 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
     }
   };
 
+  // Get the aggregated message status for display
+  const getMessageStatus = (): 'Sent' | 'Delivered' | 'Read' => {
+    const msg = conversation.lastMessage;
+    if (!msg || !msg.statuses || msg.statuses.length === 0) {
+      return 'Sent';
+    }
+
+    // Filter out the sender's own status (if present)
+    const recipientStatuses = msg.statuses.filter(s => s.userId !== currentUserId);
+
+    if (recipientStatuses.length === 0) {
+      return 'Sent';
+    }
+
+    // For private chats (1 recipient): show the recipient's status
+    // For group chats: show 'Read' only if ALL recipients have read
+    const allRead = recipientStatuses.every(s => s.status === 'Read');
+    if (allRead) {
+      return 'Read';
+    }
+
+    // Show 'Delivered' if at least one recipient has received it
+    const anyDelivered = recipientStatuses.some(s => s.status === 'Delivered' || s.status === 'Read');
+    if (anyDelivered) {
+      return 'Delivered';
+    }
+
+    return 'Sent';
+  };
+
+  const getMessageStatusIcon = (): string => {
+    const status = getMessageStatus();
+    switch (status) {
+      case 'Read':
+        return 'check-all';
+      case 'Delivered':
+        return 'check-all';
+      case 'Sent':
+      default:
+        return 'check';
+    }
+  };
+
+  const getMessageStatusColor = (): string => {
+    const status = getMessageStatus();
+    return status === 'Read' ? colors.tickBlue : colors.tick;
+  };
+
   // Update preview when last message changes
   useEffect(() => {
     const msg = conversation.lastMessage;
@@ -150,21 +198,9 @@ const ConversationItem: React.FC<ConversationItemProps> = ({
               <>
                 {conversation.lastMessage?.senderId === currentUserId && (
                   <Icon
-                    name={
-                      conversation.lastMessage?.statuses?.every((s) => s.status === 'Read')
-                        ? 'check-all'
-                        : conversation.lastMessage?.statuses?.every(
-                            (s) => s.status === 'Delivered' || s.status === 'Read'
-                          )
-                        ? 'check-all'
-                        : 'check'
-                    }
+                    name={getMessageStatusIcon()}
                     size={16}
-                    color={
-                      conversation.lastMessage?.statuses?.every((s) => s.status === 'Read')
-                        ? colors.tickBlue
-                        : colors.tick
-                    }
+                    color={getMessageStatusColor()}
                     style={styles.statusIcon}
                   />
                 )}

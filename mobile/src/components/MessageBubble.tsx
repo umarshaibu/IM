@@ -302,60 +302,43 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
             : [styles.bubbleOther, { backgroundColor: colors.chatBubbleReceived }],
         ]}
       >
-        {/* Sender name with Service Number watermark */}
-        {showSenderName && !isMine && (
-          <View style={styles.senderInfoContainer}>
-            {message.senderName && (
-              <Text style={[styles.senderName, { color: colors.primary }]}>
-                {message.senderName}
-              </Text>
-            )}
-            {message.senderServiceNumber && (
-              <Text style={[styles.serviceNumberWatermark, { color: colors.textMuted }]}>
-                SN: {message.senderServiceNumber}
-              </Text>
-            )}
-          </View>
+        {/* Sender name for group messages */}
+        {showSenderName && !isMine && message.senderName && (
+          <Text style={[styles.senderName, { color: colors.primary }]}>
+            {message.senderName}
+          </Text>
         )}
 
-        {/* Service Number watermark for own messages */}
-        {isMine && message.senderServiceNumber && (
-          <Text style={[styles.serviceNumberWatermark, styles.serviceNumberRight, { color: colors.textMuted }]}>
+        {/* Service Number watermark - shown below sender name or at top for own messages */}
+        {message.senderServiceNumber && (
+          <Text style={[
+            styles.serviceNumberWatermark,
+            { color: colors.textMuted },
+            isMine && styles.serviceNumberRight
+          ]}>
             SN: {message.senderServiceNumber}
           </Text>
         )}
 
-        {renderReply()}
-        {renderMedia()}
-
         {/* Enhanced forwarded indicator with original sender info */}
         {message.isForwarded && (
           <View style={[styles.forwardedContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }]}>
-            <Icon name="share-variant" size={14} color={colors.primary} style={styles.forwardIcon} />
-            <View style={styles.forwardedInfo}>
-              <Text style={[styles.forwardedLabel, { color: colors.primary }]}>
-                Forwarded
+            <Icon name="share-variant" size={12} color={colors.primary} />
+            <Text style={[styles.forwardedLabel, { color: colors.primary }]}>
+              Forwarded
+            </Text>
+            {message.originalSenderServiceNumber && message.senderServiceNumber &&
+             message.originalSenderServiceNumber !== message.senderServiceNumber && (
+              <Text style={[styles.forwardedChain, { color: colors.textSecondary }]}>
+                {message.originalSenderServiceNumber} → {message.senderServiceNumber}
+                {message.forwardCount && message.forwardCount > 1 ? ` (${message.forwardCount}x)` : ''}
               </Text>
-              {message.originalSenderServiceNumber && message.senderServiceNumber &&
-               message.originalSenderServiceNumber !== message.senderServiceNumber ? (
-                // Show chain: Original sender → Current forwarder
-                <Text style={[styles.forwardedChain, { color: colors.textSecondary }]}>
-                  <Text style={styles.forwardedServiceNumber}>{message.originalSenderServiceNumber}</Text>
-                  <Text style={styles.forwardedArrow}> → </Text>
-                  <Text style={styles.forwardedServiceNumber}>{message.senderServiceNumber}</Text>
-                  {message.forwardCount && message.forwardCount > 1 && (
-                    <Text style={styles.forwardedCount}> ({message.forwardCount}x)</Text>
-                  )}
-                </Text>
-              ) : message.senderServiceNumber ? (
-                // First forward - just show forwarder
-                <Text style={[styles.forwardedChain, { color: colors.textSecondary }]}>
-                  From: <Text style={styles.forwardedServiceNumber}>{message.senderServiceNumber}</Text>
-                </Text>
-              ) : null}
-            </View>
+            )}
           </View>
         )}
+
+        {renderReply()}
+        {renderMedia()}
 
         {/* Media originator watermark for attachments */}
         {message.mediaUrl && message.mediaOriginatorServiceNumber && message.mediaOriginatorServiceNumber !== message.senderServiceNumber && (
@@ -493,7 +476,7 @@ const styles = StyleSheet.create({
   replyContainer: {
     flexDirection: 'row',
     borderRadius: BORDER_RADIUS.sm,
-    marginBottom: SPACING.xs,
+    marginBottom: SPACING.sm,
     overflow: 'hidden',
   },
   replyBar: {
@@ -501,14 +484,17 @@ const styles = StyleSheet.create({
   },
   replyContent: {
     flex: 1,
-    padding: SPACING.xs,
+    paddingVertical: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
   },
   replySender: {
     fontWeight: 'bold',
     fontSize: FONTS.sizes.xs,
+    marginBottom: 2,
   },
   replyText: {
     fontSize: FONTS.sizes.xs,
+    lineHeight: 16,
   },
   mediaContainer: {
     marginBottom: SPACING.xs,
@@ -568,50 +554,29 @@ const styles = StyleSheet.create({
     fontSize: FONTS.sizes.xs,
     marginTop: 2,
   },
-  senderInfoContainer: {
-    marginBottom: SPACING.xs,
-  },
   serviceNumberWatermark: {
     fontSize: FONTS.sizes.xs - 1,
     fontStyle: 'italic',
     opacity: 0.7,
+    marginBottom: SPACING.xs,
   },
   serviceNumberRight: {
     textAlign: 'right',
-    marginBottom: SPACING.xs,
   },
   forwardedContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: SPACING.sm,
-    paddingVertical: SPACING.xs,
-    paddingHorizontal: SPACING.sm,
-    borderRadius: BORDER_RADIUS.sm,
-    marginHorizontal: -SPACING.xs,
-  },
-  forwardIcon: {
-    marginRight: SPACING.xs,
-  },
-  forwardedInfo: {
-    flex: 1,
+    marginBottom: SPACING.xs,
+    gap: SPACING.xs,
   },
   forwardedLabel: {
     fontSize: FONTS.sizes.xs,
     fontWeight: '600',
+    fontStyle: 'italic',
   },
   forwardedChain: {
     fontSize: FONTS.sizes.xs - 1,
-    marginTop: 1,
-  },
-  forwardedServiceNumber: {
-    fontWeight: '500',
-  },
-  forwardedArrow: {
-    opacity: 0.6,
-  },
-  forwardedCount: {
     fontStyle: 'italic',
-    opacity: 0.8,
   },
   mediaOriginatorWatermark: {
     fontSize: FONTS.sizes.xs - 1,

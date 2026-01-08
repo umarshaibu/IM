@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Image } from 'react-native';
 import { COLORS } from '../utils/theme';
+import { getAbsoluteUrl } from '../utils/mediaUtils';
 
 interface Participant {
   profilePictureUrl?: string;
@@ -46,7 +47,7 @@ const GroupAvatar: React.FC<GroupAvatarProps> = ({
 
   const renderMiniAvatar = (participant: Participant, index: number) => {
     const name = participant.displayName || 'U';
-    const uri = participant.profilePictureUrl;
+    const uri = getAbsoluteUrl(participant.profilePictureUrl);
 
     // Position based on count and index
     let position: { top?: number; bottom?: number; left?: number; right?: number } = {};

@@ -749,14 +749,6 @@ const SettingsScreen: React.FC = () => {
             />
             <View style={styles.divider} />
             <SettingItem
-              icon="shield-check-outline"
-              iconColor="#34C759"
-              label="Security"
-              subtitle="Two-step verification, encryption"
-              onPress={handleSecurityPress}
-            />
-            <View style={styles.divider} />
-            <SettingItem
               icon="cancel"
               iconColor={colors.error}
               label="Blocked Users"
@@ -798,22 +790,6 @@ const SettingsScreen: React.FC = () => {
               label="Chat Settings"
               subtitle="Font size, enter key sends"
               onPress={handleChatSettingsPress}
-            />
-            <View style={styles.divider} />
-            <SettingItem
-              icon="cloud-upload-outline"
-              iconColor="#5856D6"
-              label="Chat Backup"
-              subtitle="Backup and restore chats"
-              onPress={() => navigation.navigate('ChatBackup')}
-            />
-            <View style={styles.divider} />
-            <SettingItem
-              icon="history"
-              iconColor="#FF9500"
-              label="Chat History"
-              subtitle="Export, clear chats"
-              onPress={handleChatHistoryPress}
             />
           </View>
         </View>
@@ -872,13 +848,6 @@ const SettingsScreen: React.FC = () => {
               label="Help Center"
               subtitle="FAQ, contact support"
               onPress={handleHelpCenterPress}
-            />
-            <View style={styles.divider} />
-            <SettingItem
-              icon="file-document-outline"
-              iconColor="#8E8E93"
-              label="Terms & Privacy Policy"
-              onPress={handleTermsPrivacyPress}
             />
             <View style={styles.divider} />
             <SettingItem

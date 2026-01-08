@@ -12,9 +12,7 @@ import {
   Animated,
   Modal,
   Pressable,
-  Linking,
 } from 'react-native';
-import RNFS from 'react-native-fs';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Clipboard from '@react-native-clipboard/clipboard';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -634,49 +632,14 @@ const ChatScreen: React.FC = () => {
                     timestamp: item.createdAt,
                   });
                 } else if (item.type === 'Document') {
-                  // Download and open document
-                  try {
-                    const fullUrl = item.mediaUrl.startsWith('http')
-                      ? item.mediaUrl
-                      : `${AppConfig.apiUrl}${item.mediaUrl}`;
-                    const fileName = item.content || 'document';
-                    const downloadPath = `${RNFS.DocumentDirectoryPath}/${fileName}`;
-
-                    Alert.alert(
-                      'Download Document',
-                      `Do you want to download "${fileName}"?`,
-                      [
-                        { text: 'Cancel', style: 'cancel' },
-                        {
-                          text: 'Download',
-                          onPress: async () => {
-                            try {
-                              const result = await RNFS.downloadFile({
-                                fromUrl: fullUrl,
-                                toFile: downloadPath,
-                              }).promise;
-
-                              if (result.statusCode === 200) {
-                                Alert.alert('Success', `Document saved to ${downloadPath}`);
-                                // Try to open the file
-                                if (Platform.OS === 'ios') {
-                                  Linking.openURL(`file://${downloadPath}`);
-                                }
-                              } else {
-                                Alert.alert('Error', 'Failed to download document');
-                              }
-                            } catch (error) {
-                              console.error('Download error:', error);
-                              Alert.alert('Error', 'Failed to download document');
-                            }
-                          },
-                        },
-                      ]
-                    );
-                  } catch (error) {
-                    console.error('Document open error:', error);
-                    Alert.alert('Error', 'Failed to open document');
-                  }
+                  // Navigate to document viewer
+                  navigation.navigate('DocumentViewer', {
+                    mediaUrl: item.mediaUrl,
+                    fileName: item.content || 'document',
+                    fileSize: item.mediaSize,
+                    senderName: item.senderName,
+                    timestamp: item.createdAt,
+                  });
                 }
               }
             }}
@@ -910,18 +873,6 @@ const ChatScreen: React.FC = () => {
                 <Text style={[styles.callMenuText, { color: colors.text }]}>Video Call</Text>
               </TouchableOpacity>
 
-              <View style={[styles.callMenuDivider, { backgroundColor: colors.divider }]} />
-
-              <TouchableOpacity
-                style={styles.callMenuItem}
-                onPress={() => {
-                  setShowCallMenu(false);
-                  navigation.navigate('PTT', { conversationId });
-                }}
-              >
-                <Icon name="radio-handheld" size={24} color={colors.primary} />
-                <Text style={[styles.callMenuText, { color: colors.text }]}>Push to Talk</Text>
-              </TouchableOpacity>
             </View>
           </Pressable>
         </Modal>

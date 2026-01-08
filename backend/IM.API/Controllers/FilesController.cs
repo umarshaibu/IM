@@ -42,12 +42,13 @@ public class FilesController : ControllerBase
 
         return Ok(new
         {
-            Id = mediaFile.Id,
-            FileName = mediaFile.FileName,
-            FileUrl = mediaFile.FileUrl,
-            ThumbnailUrl = mediaFile.ThumbnailUrl,
-            MimeType = mediaFile.MimeType,
-            FileSize = mediaFile.FileSize
+            id = mediaFile.Id,
+            fileName = mediaFile.FileName,
+            url = mediaFile.FileUrl,  // Mobile app expects 'url' for profile picture uploads
+            fileUrl = mediaFile.FileUrl,
+            thumbnailUrl = mediaFile.ThumbnailUrl,
+            mimeType = mediaFile.MimeType,
+            fileSize = mediaFile.FileSize
         });
     }
 

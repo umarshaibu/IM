@@ -31,15 +31,12 @@ import { FONTS, SPACING, BORDER_RADIUS } from '../../utils/theme';
 
 type ChatsScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-type FilterType = 'all' | 'personal' | 'groups';
-
 const ChatsScreen: React.FC = () => {
   const navigation = useNavigation<ChatsScreenNavigationProp>();
   const { colors, isDark } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const { userId } = useAuthStore();
   const { conversations, setConversations } = useChatStore();
-  const [activeFilter, setActiveFilter] = useState<FilterType>('all');
   const [showMediaPicker, setShowMediaPicker] = useState(false);
   const [selectedMedia, setSelectedMedia] = useState<SelectedMedia | null>(null);
   const [showConversationPicker, setShowConversationPicker] = useState(false);
@@ -212,35 +209,20 @@ const ChatsScreen: React.FC = () => {
     },
   });
 
-  // Filter out archived and deleted conversations
+  // Filter only private (single) chats - non-archived and non-deleted
+  const privateConversations = React.useMemo(() => {
+    return conversations.filter((c) => c.type === 'Private' && !c.isArchived && !c.isDeleted);
+  }, [conversations]);
+
+  // Count archived conversations (only private ones)
+  const archivedCount = React.useMemo(() => {
+    return conversations.filter((c) => c.type === 'Private' && c.isArchived).length;
+  }, [conversations]);
+
+  // Non-archived private conversations for the media picker
   const nonArchivedConversations = React.useMemo(() => {
     return conversations.filter((c) => !c.isArchived && !c.isDeleted);
   }, [conversations]);
-
-  // Count archived conversations
-  const archivedCount = React.useMemo(() => {
-    return conversations.filter((c) => c.isArchived).length;
-  }, [conversations]);
-
-  // Filter counts (only non-archived)
-  const filterCounts = React.useMemo(() => {
-    const all = nonArchivedConversations.length;
-    const personal = nonArchivedConversations.filter((c) => c.type === 'Private').length;
-    const groups = nonArchivedConversations.filter((c) => c.type === 'Group').length;
-    return { all, personal, groups };
-  }, [nonArchivedConversations]);
-
-  // Filtered conversations (only non-archived)
-  const filteredConversations = React.useMemo(() => {
-    switch (activeFilter) {
-      case 'personal':
-        return nonArchivedConversations.filter((c) => c.type === 'Private');
-      case 'groups':
-        return nonArchivedConversations.filter((c) => c.type === 'Group');
-      default:
-        return nonArchivedConversations;
-    }
-  }, [nonArchivedConversations, activeFilter]);
 
   const handleConversationPress = (conversation: Conversation) => {
     const title = conversation.type === 'Private'
@@ -355,30 +337,6 @@ const ChatsScreen: React.FC = () => {
     return conversation.groupPictureUrl;
   };
 
-  const renderFilterTab = (
-    filter: FilterType,
-    label: string,
-    count: number
-  ) => {
-    const isActive = activeFilter === filter;
-    return (
-      <TouchableOpacity
-        style={[styles.filterTab, isActive && styles.filterTabActive]}
-        onPress={() => setActiveFilter(filter)}
-        activeOpacity={0.7}
-      >
-        <Text style={[styles.filterTabText, isActive && styles.filterTabTextActive]}>
-          {label}
-        </Text>
-        <View style={[styles.filterBadge, isActive && styles.filterBadgeActive]}>
-          <Text style={[styles.filterBadgeText, isActive && styles.filterBadgeTextActive]}>
-            {count}
-          </Text>
-        </View>
-      </TouchableOpacity>
-    );
-  };
-
   const renderArchivedButton = () => {
     if (archivedCount === 0) return null;
 
@@ -481,15 +439,8 @@ const ChatsScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* Filter Tabs */}
-      <View style={styles.filterContainer}>
-        {renderFilterTab('all', 'All', filterCounts.all)}
-        {renderFilterTab('personal', 'Personal', filterCounts.personal)}
-        {renderFilterTab('groups', 'Groups', filterCounts.groups)}
-      </View>
-
       <FlatList
-        data={filteredConversations}
+        data={privateConversations}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
         extraData={typingUsers}
@@ -504,7 +455,7 @@ const ChatsScreen: React.FC = () => {
             tintColor={colors.primary}
           />
         }
-        contentContainerStyle={filteredConversations.length === 0 && archivedCount === 0 ? styles.emptyListContent : styles.listContent}
+        contentContainerStyle={privateConversations.length === 0 && archivedCount === 0 ? styles.emptyListContent : styles.listContent}
         showsVerticalScrollIndicator={false}
       />
 
@@ -635,50 +586,6 @@ const createStyles = (colors: any) => StyleSheet.create({
   headerButton: {
     padding: SPACING.sm,
     marginLeft: SPACING.xs,
-  },
-  filterContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: SPACING.lg,
-    paddingBottom: SPACING.md,
-    gap: SPACING.sm,
-  },
-  filterTab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-    borderRadius: BORDER_RADIUS.lg,
-    backgroundColor: 'transparent',
-  },
-  filterTabActive: {
-    backgroundColor: colors.primary + '15',
-  },
-  filterTabText: {
-    fontSize: FONTS.sizes.sm,
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-  filterTabTextActive: {
-    color: colors.primary,
-    fontWeight: '600',
-  },
-  filterBadge: {
-    marginLeft: SPACING.xs,
-    backgroundColor: colors.textSecondary + '30',
-    borderRadius: BORDER_RADIUS.sm,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  filterBadgeActive: {
-    backgroundColor: colors.primary + '20',
-  },
-  filterBadgeText: {
-    fontSize: FONTS.sizes.xs,
-    color: colors.textSecondary,
-    fontWeight: '600',
-  },
-  filterBadgeTextActive: {
-    color: colors.primary,
   },
   archivedButton: {
     flexDirection: 'row',

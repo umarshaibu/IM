@@ -78,7 +78,7 @@ const lightColors = {
   tabBarActive: '#075E54',
   tabBarInactive: '#8696A0',
 
-  // Header
+  // Header (primary green)
   header: '#075E54',
   headerText: '#FFFFFF',
 
@@ -169,7 +169,7 @@ const darkColors = {
   tabBarActive: '#00A884',
   tabBarInactive: '#8696A0',
 
-  // Header
+  // Header (dark surface)
   header: '#1F2C34',
   headerText: '#E9EDEF',
 

@@ -145,13 +145,6 @@ const PrivacyScreen: React.FC = () => {
           />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.settingItem}>
-          <View style={styles.settingContent}>
-            <Text style={styles.settingLabel}>Disappearing messages</Text>
-            <Text style={styles.settingValue}>Off</Text>
-          </View>
-          <Icon name="chevron-right" size={24} color={colors.textMuted} />
-        </TouchableOpacity>
       </View>
 
       <View style={styles.section}>
@@ -171,32 +164,6 @@ const PrivacyScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Security</Text>
-
-        <TouchableOpacity style={styles.settingItem}>
-          <View style={styles.settingContent}>
-            <Text style={styles.settingLabel}>App lock</Text>
-            <Text style={styles.settingValue}>Off</Text>
-          </View>
-          <Icon name="chevron-right" size={24} color={colors.textMuted} />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.settingItem}>
-          <View style={styles.settingContent}>
-            <Text style={styles.settingLabel}>Two-step verification</Text>
-            <Text style={styles.settingValue}>Off</Text>
-          </View>
-          <Icon name="chevron-right" size={24} color={colors.textMuted} />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.settingItem}>
-          <View style={styles.settingContent}>
-            <Text style={styles.settingLabel}>Change password</Text>
-          </View>
-          <Icon name="chevron-right" size={24} color={colors.textMuted} />
-        </TouchableOpacity>
-      </View>
     </ScrollView>
   );
 };

@@ -61,6 +61,7 @@
     "react-native-vector-icons": "^10.0.3",
     "react-native-video": "^5.2.1",
     "react-native-voip-push-notification": "^3.3.3",
+    "react-native-webview": "^13.16.0",
     "tweetnacl": "^1.0.3",
     "tweetnacl-util": "^0.15.1",
     "uuid": "^9.0.1",

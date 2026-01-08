@@ -219,11 +219,19 @@ const CallScreen: React.FC = () => {
 
   // Add a remote participant
   const addRemoteParticipant = useCallback((participant: RemoteParticipant) => {
-    const info = getParticipantInfo(participant.identity);
+    // Look up participant info directly from conversation to avoid stale closure issues
+    const conversationParticipant = conversation?.participants?.find(
+      (p: any) => p.userId === participant.identity
+    );
+    const name = conversationParticipant?.displayName || conversationParticipant?.fullName || participant.name || 'Unknown';
+    const profilePictureUrl = conversationParticipant?.profilePictureUrl;
+
+    console.log('[CallScreen] Adding remote participant:', participant.identity, 'name:', name);
+
     const participantInfo: RemoteParticipantInfo = {
       id: participant.identity,
-      name: info.name,
-      profilePictureUrl: info.profilePictureUrl,
+      name,
+      profilePictureUrl,
       videoTrack: null,
       audioTrack: null,
       isMuted: !participant.isMicrophoneEnabled,
@@ -237,7 +245,7 @@ const CallScreen: React.FC = () => {
       newMap.set(participant.identity, participantInfo);
       return newMap;
     });
-  }, [getParticipantInfo]);
+  }, [conversation]);
 
   // Remove a remote participant
   const removeRemoteParticipant = useCallback((participantId: string) => {
@@ -247,6 +255,38 @@ const CallScreen: React.FC = () => {
       return newMap;
     });
   }, []);
+
+  // Update participant names when conversation data loads
+  // This handles the case where participants were added before conversation data was available
+  useEffect(() => {
+    if (conversation?.participants && remoteParticipants.size > 0) {
+      setRemoteParticipants(prev => {
+        const newMap = new Map(prev);
+        let updated = false;
+
+        newMap.forEach((participantInfo, participantId) => {
+          // If participant name is Unknown, try to look it up from conversation
+          if (participantInfo.name === 'Unknown') {
+            const conversationParticipant = conversation.participants.find(
+              (p: any) => p.userId === participantId
+            );
+            if (conversationParticipant) {
+              const name = conversationParticipant.displayName || conversationParticipant.fullName || 'Unknown';
+              newMap.set(participantId, {
+                ...participantInfo,
+                name,
+                profilePictureUrl: conversationParticipant.profilePictureUrl,
+              });
+              console.log('[CallScreen] Updated participant name:', participantId, 'to:', name);
+              updated = true;
+            }
+          }
+        });
+
+        return updated ? newMap : prev;
+      });
+    }
+  }, [conversation]);
 
   useEffect(() => {
     // Start InCallManager for proper audio routing
@@ -669,12 +709,32 @@ const CallScreen: React.FC = () => {
           ringingTimeoutRef.current = null;
         }
 
-        // Check for existing remote video tracks
-        newRoom.remoteParticipants.forEach((participant: any) => {
+        // Add all existing participants to the remoteParticipants map and check for video tracks
+        newRoom.remoteParticipants.forEach((participant: RemoteParticipant) => {
+          console.log('Adding existing participant:', participant.identity);
+          // Add participant to map
+          addRemoteParticipant(participant);
+
+          // Check for existing video tracks
           participant.videoTrackPublications.forEach((publication: any) => {
             if (publication.track) {
               console.log('Found existing remote video track from', participant.identity);
               setRemoteVideoTrack(publication.track);
+              // Update the participant's video track in the map
+              updateRemoteParticipant(participant.identity, {
+                videoTrack: publication.track,
+                isVideoEnabled: true
+              });
+            }
+          });
+
+          // Check for existing audio tracks
+          participant.audioTrackPublications.forEach((publication: any) => {
+            if (publication.track) {
+              console.log('Found existing remote audio track from', participant.identity);
+              updateRemoteParticipant(participant.identity, {
+                audioTrack: publication.track
+              });
             }
           });
         });

@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using IM.Core.Interfaces;
 
 namespace IM.Infrastructure.Services;
@@ -9,9 +10,12 @@ public class EncryptionService : IEncryptionService
 {
     private readonly byte[] _key;
     private readonly byte[] _iv;
+    private readonly ILogger<EncryptionService> _logger;
 
-    public EncryptionService(IConfiguration configuration)
+    public EncryptionService(IConfiguration configuration, ILogger<EncryptionService> logger)
     {
+        _logger = logger;
+
         // Get encryption key from configuration
         var encryptionKey = configuration["Encryption:Key"]
             ?? throw new InvalidOperationException("Encryption key not configured");
@@ -27,29 +31,45 @@ public class EncryptionService : IEncryptionService
 
         if (_iv.Length != 16)
             throw new InvalidOperationException("Encryption IV must be 128 bits (16 bytes)");
+
+        _logger.LogInformation("EncryptionService initialized successfully with key length: {KeyLength}, IV length: {IVLength}", _key.Length, _iv.Length);
     }
 
     public string Encrypt(string plainText)
     {
         if (string.IsNullOrEmpty(plainText))
+        {
+            _logger.LogDebug("Encrypt called with empty text, returning as-is");
             return plainText;
+        }
 
-        using var aes = Aes.Create();
-        aes.Key = _key;
-        aes.IV = _iv;
-        aes.Mode = CipherMode.CBC;
-        aes.Padding = PaddingMode.PKCS7;
+        try
+        {
+            using var aes = Aes.Create();
+            aes.Key = _key;
+            aes.IV = _iv;
+            aes.Mode = CipherMode.CBC;
+            aes.Padding = PaddingMode.PKCS7;
 
-        using var encryptor = aes.CreateEncryptor();
-        using var ms = new MemoryStream();
-        using var cs = new CryptoStream(ms, encryptor, CryptoStreamMode.Write);
-        using var sw = new StreamWriter(cs);
+            using var encryptor = aes.CreateEncryptor();
+            using var ms = new MemoryStream();
+            using var cs = new CryptoStream(ms, encryptor, CryptoStreamMode.Write);
+            using var sw = new StreamWriter(cs);
 
-        sw.Write(plainText);
-        sw.Flush();
-        cs.FlushFinalBlock();
+            sw.Write(plainText);
+            sw.Flush();
+            cs.FlushFinalBlock();
 
-        return Convert.ToBase64String(ms.ToArray());
+            var encrypted = Convert.ToBase64String(ms.ToArray());
+            _logger.LogDebug("Successfully encrypted text. Original length: {OriginalLength}, Encrypted length: {EncryptedLength}",
+                plainText.Length, encrypted.Length);
+            return encrypted;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error encrypting text");
+            throw;
+        }
     }
 
     public string Decrypt(string cipherText)

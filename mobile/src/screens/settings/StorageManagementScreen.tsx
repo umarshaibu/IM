@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,12 +8,51 @@ import {
   Alert,
   ActivityIndicator,
   StatusBar,
+  Modal,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import RNFS from 'react-native-fs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Storage keys for settings
+const STORAGE_KEYS = {
+  WIFI_AUTO_DOWNLOAD: '@media_auto_download_wifi',
+  MOBILE_AUTO_DOWNLOAD: '@media_auto_download_mobile',
+  UPLOAD_QUALITY: '@media_upload_quality',
+};
+
+// Auto-download options
+type AutoDownloadOption = 'all' | 'photos' | 'none';
+
+// Upload quality options
+type UploadQualityOption = 'original' | 'high' | 'standard' | 'low';
+
+interface AutoDownloadSettings {
+  wifi: AutoDownloadOption;
+  mobile: AutoDownloadOption;
+}
+
+const AUTO_DOWNLOAD_LABELS: Record<AutoDownloadOption, string> = {
+  all: 'All media',
+  photos: 'Photos only',
+  none: 'No media',
+};
+
+const UPLOAD_QUALITY_LABELS: Record<UploadQualityOption, string> = {
+  original: 'Original quality',
+  high: 'High quality',
+  standard: 'Standard quality',
+  low: 'Data saver',
+};
+
+const UPLOAD_QUALITY_DESCRIPTIONS: Record<UploadQualityOption, string> = {
+  original: 'Send media at full resolution. Uses more data.',
+  high: 'High quality compression. Good balance of quality and size.',
+  standard: 'Recommended. Good quality with reduced file size.',
+  low: 'Maximum compression. Saves the most data.',
+};
 import { useTheme, ThemeColors } from '../../context/ThemeContext';
 import { FONTS, SPACING, BORDER_RADIUS } from '../../utils/theme';
 
@@ -43,9 +82,70 @@ const StorageManagementScreen: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isClearing, setIsClearing] = useState<string | null>(null);
 
+  // Media settings state
+  const [autoDownloadSettings, setAutoDownloadSettings] = useState<AutoDownloadSettings>({
+    wifi: 'all',
+    mobile: 'photos',
+  });
+  const [uploadQuality, setUploadQuality] = useState<UploadQualityOption>('standard');
+
+  // Modal states
+  const [showAutoDownloadModal, setShowAutoDownloadModal] = useState(false);
+  const [showUploadQualityModal, setShowUploadQualityModal] = useState(false);
+
   useEffect(() => {
     calculateStorageUsage();
+    loadMediaSettings();
   }, []);
+
+  const loadMediaSettings = async () => {
+    try {
+      const [wifiSetting, mobileSetting, qualitySetting] = await Promise.all([
+        AsyncStorage.getItem(STORAGE_KEYS.WIFI_AUTO_DOWNLOAD),
+        AsyncStorage.getItem(STORAGE_KEYS.MOBILE_AUTO_DOWNLOAD),
+        AsyncStorage.getItem(STORAGE_KEYS.UPLOAD_QUALITY),
+      ]);
+
+      setAutoDownloadSettings({
+        wifi: (wifiSetting as AutoDownloadOption) || 'all',
+        mobile: (mobileSetting as AutoDownloadOption) || 'photos',
+      });
+      setUploadQuality((qualitySetting as UploadQualityOption) || 'standard');
+    } catch (error) {
+      console.error('Error loading media settings:', error);
+    }
+  };
+
+  const saveAutoDownloadSetting = async (
+    network: 'wifi' | 'mobile',
+    value: AutoDownloadOption
+  ) => {
+    try {
+      const key = network === 'wifi'
+        ? STORAGE_KEYS.WIFI_AUTO_DOWNLOAD
+        : STORAGE_KEYS.MOBILE_AUTO_DOWNLOAD;
+      await AsyncStorage.setItem(key, value);
+      setAutoDownloadSettings((prev) => ({ ...prev, [network]: value }));
+    } catch (error) {
+      console.error('Error saving auto-download setting:', error);
+      Alert.alert('Error', 'Failed to save setting');
+    }
+  };
+
+  const saveUploadQuality = async (quality: UploadQualityOption) => {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.UPLOAD_QUALITY, quality);
+      setUploadQuality(quality);
+      setShowUploadQualityModal(false);
+    } catch (error) {
+      console.error('Error saving upload quality:', error);
+      Alert.alert('Error', 'Failed to save setting');
+    }
+  };
+
+  const getAutoDownloadSummary = useCallback(() => {
+    return `Wi-Fi: ${AUTO_DOWNLOAD_LABELS[autoDownloadSettings.wifi]}, Mobile: ${AUTO_DOWNLOAD_LABELS[autoDownloadSettings.mobile]}`;
+  }, [autoDownloadSettings]);
 
   const calculateStorageUsage = async () => {
     setIsLoading(true);
@@ -394,22 +494,30 @@ const StorageManagementScreen: React.FC = () => {
         {/* Network Usage Settings */}
         <Text style={styles.sectionTitle}>NETWORK USAGE</Text>
         <View style={styles.section}>
-          <TouchableOpacity style={styles.settingItem}>
+          <TouchableOpacity
+            style={styles.settingItem}
+            onPress={() => setShowAutoDownloadModal(true)}
+          >
             <Icon name="download" size={24} color={colors.text} />
             <View style={styles.settingItemText}>
               <Text style={styles.settingItemTitle}>Media auto-download</Text>
               <Text style={styles.settingItemSubtitle}>
-                Wi-Fi: All media, Mobile: Photos only
+                {getAutoDownloadSummary()}
               </Text>
             </View>
             <Icon name="chevron-right" size={24} color={colors.textSecondary} />
           </TouchableOpacity>
           <View style={styles.itemDivider} />
-          <TouchableOpacity style={styles.settingItem}>
+          <TouchableOpacity
+            style={styles.settingItem}
+            onPress={() => setShowUploadQualityModal(true)}
+          >
             <Icon name="quality-high" size={24} color={colors.text} />
             <View style={styles.settingItemText}>
               <Text style={styles.settingItemTitle}>Media upload quality</Text>
-              <Text style={styles.settingItemSubtitle}>Standard quality</Text>
+              <Text style={styles.settingItemSubtitle}>
+                {UPLOAD_QUALITY_LABELS[uploadQuality]}
+              </Text>
             </View>
             <Icon name="chevron-right" size={24} color={colors.textSecondary} />
           </TouchableOpacity>
@@ -417,6 +525,106 @@ const StorageManagementScreen: React.FC = () => {
 
         <View style={{ height: insets.bottom + 20 }} />
       </ScrollView>
+
+      {/* Auto-Download Settings Modal */}
+      <Modal
+        visible={showAutoDownloadModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowAutoDownloadModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Media auto-download</Text>
+              <TouchableOpacity
+                onPress={() => setShowAutoDownloadModal(false)}
+                style={styles.modalCloseButton}
+              >
+                <Icon name="close" size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.modalSectionTitle}>When using Wi-Fi</Text>
+            {(['all', 'photos', 'none'] as AutoDownloadOption[]).map((option) => (
+              <TouchableOpacity
+                key={`wifi-${option}`}
+                style={styles.modalOption}
+                onPress={() => saveAutoDownloadSetting('wifi', option)}
+              >
+                <Text style={styles.modalOptionText}>
+                  {AUTO_DOWNLOAD_LABELS[option]}
+                </Text>
+                {autoDownloadSettings.wifi === option && (
+                  <Icon name="check" size={24} color={colors.primary} />
+                )}
+              </TouchableOpacity>
+            ))}
+
+            <Text style={[styles.modalSectionTitle, { marginTop: SPACING.lg }]}>
+              When using mobile data
+            </Text>
+            {(['all', 'photos', 'none'] as AutoDownloadOption[]).map((option) => (
+              <TouchableOpacity
+                key={`mobile-${option}`}
+                style={styles.modalOption}
+                onPress={() => saveAutoDownloadSetting('mobile', option)}
+              >
+                <Text style={styles.modalOptionText}>
+                  {AUTO_DOWNLOAD_LABELS[option]}
+                </Text>
+                {autoDownloadSettings.mobile === option && (
+                  <Icon name="check" size={24} color={colors.primary} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Upload Quality Modal */}
+      <Modal
+        visible={showUploadQualityModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowUploadQualityModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Media upload quality</Text>
+              <TouchableOpacity
+                onPress={() => setShowUploadQualityModal(false)}
+                style={styles.modalCloseButton}
+              >
+                <Icon name="close" size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            {(['original', 'high', 'standard', 'low'] as UploadQualityOption[]).map(
+              (option) => (
+                <TouchableOpacity
+                  key={option}
+                  style={styles.modalOption}
+                  onPress={() => saveUploadQuality(option)}
+                >
+                  <View style={styles.modalOptionContent}>
+                    <Text style={styles.modalOptionText}>
+                      {UPLOAD_QUALITY_LABELS[option]}
+                    </Text>
+                    <Text style={styles.modalOptionDescription}>
+                      {UPLOAD_QUALITY_DESCRIPTIONS[option]}
+                    </Text>
+                  </View>
+                  {uploadQuality === option && (
+                    <Icon name="check" size={24} color={colors.primary} />
+                  )}
+                </TouchableOpacity>
+              )
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -593,6 +801,66 @@ const createStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: FONTS.sizes.sm,
     marginTop: 2,
     color: colors.textSecondary,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: BORDER_RADIUS.xl,
+    borderTopRightRadius: BORDER_RADIUS.xl,
+    paddingBottom: SPACING.xxl,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: SPACING.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
+  },
+  modalTitle: {
+    fontSize: FONTS.sizes.lg,
+    fontWeight: 'bold',
+    color: colors.text,
+  },
+  modalCloseButton: {
+    padding: SPACING.xs,
+  },
+  modalSectionTitle: {
+    fontSize: FONTS.sizes.sm,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.lg,
+    paddingBottom: SPACING.sm,
+    textTransform: 'uppercase',
+  },
+  modalOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
+  },
+  modalOptionContent: {
+    flex: 1,
+    marginRight: SPACING.md,
+  },
+  modalOptionText: {
+    fontSize: FONTS.sizes.md,
+    color: colors.text,
+  },
+  modalOptionDescription: {
+    fontSize: FONTS.sizes.sm,
+    color: colors.textSecondary,
+    marginTop: SPACING.xs,
   },
 });
 

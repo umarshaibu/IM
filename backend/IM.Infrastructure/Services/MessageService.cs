@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using IM.Core.Entities;
 using IM.Core.Enums;
 using IM.Core.Interfaces;
@@ -10,11 +11,13 @@ public class MessageService : IMessageService
 {
     private readonly ApplicationDbContext _context;
     private readonly IEncryptionService _encryptionService;
+    private readonly ILogger<MessageService> _logger;
 
-    public MessageService(ApplicationDbContext context, IEncryptionService encryptionService)
+    public MessageService(ApplicationDbContext context, IEncryptionService encryptionService, ILogger<MessageService> logger)
     {
         _context = context;
         _encryptionService = encryptionService;
+        _logger = logger;
     }
 
     public async Task<Message> SendMessageAsync(Guid conversationId, Guid senderId, MessageType type, string? content, string? mediaUrl = null, Guid? replyToMessageId = null)
@@ -43,9 +46,14 @@ public class MessageService : IMessageService
         }
 
         // Encrypt content before saving to database
-        var encryptedContent = !string.IsNullOrEmpty(content)
-            ? _encryptionService.Encrypt(content)
-            : content;
+        string? encryptedContent = content;
+        if (!string.IsNullOrEmpty(content))
+        {
+            _logger.LogInformation("Encrypting message content. Original length: {Length}", content.Length);
+            encryptedContent = _encryptionService.Encrypt(content);
+            _logger.LogInformation("Message encrypted. Encrypted length: {Length}, IsEncrypted: {IsEncrypted}",
+                encryptedContent?.Length ?? 0, encryptedContent != content);
+        }
 
         var message = new Message
         {

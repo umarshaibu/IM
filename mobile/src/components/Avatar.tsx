@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Image } from 'react-native';
 import { COLORS, FONTS } from '../utils/theme';
+import { getAbsoluteUrl } from '../utils/mediaUtils';
 
 interface AvatarProps {
   uri?: string | null;
@@ -17,6 +18,22 @@ const Avatar: React.FC<AvatarProps> = ({
   showOnline = false,
   isOnline = false,
 }) => {
+  const [imageError, setImageError] = useState(false);
+
+  // Convert relative URLs to absolute URLs
+  const imageUri = useMemo(() => {
+    const absoluteUrl = getAbsoluteUrl(uri);
+    if (uri) {
+      console.log('[Avatar] Converting URI:', uri, '-> Absolute URL:', absoluteUrl);
+    }
+    return absoluteUrl;
+  }, [uri]);
+
+  // Reset error state when URI changes
+  useEffect(() => {
+    setImageError(false);
+  }, [uri]);
+
   const getInitials = (name: string): string => {
     const words = name.trim().split(' ');
     if (words.length >= 2) {
@@ -43,13 +60,20 @@ const Avatar: React.FC<AvatarProps> = ({
 
   return (
     <View style={[styles.container, { width: size, height: size }]}>
-      {uri ? (
+      {imageUri && !imageError ? (
         <Image
-          source={{ uri }}
+          source={{ uri: imageUri }}
           style={[
             styles.image,
             { width: size, height: size, borderRadius: size / 2 },
           ]}
+          onLoad={() => {
+            console.log('[Avatar] Image loaded successfully:', imageUri);
+          }}
+          onError={(e) => {
+            console.log('[Avatar] Image load error for URI:', imageUri, 'Error:', e.nativeEvent?.error);
+            setImageError(true);
+          }}
         />
       ) : (
         <View
